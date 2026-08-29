@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"sort"
 
+	desjardinsChecking "samuellando.com/YNAFB/internal/importer/desjardins/checking"
+	desjardinsMastercard "samuellando.com/YNAFB/internal/importer/desjardins/mastercard"
 	"samuellando.com/YNAFB/internal/importer/statement"
 	wealthsimpleVisa "samuellando.com/YNAFB/internal/importer/wealthsimple/visa"
-	desjardinsChecking "samuellando.com/YNAFB/internal/importer/desjardins/checking"
 )
 
 func init() {
 	Register(desjardinsChecking.Parser{})
+	Register(desjardinsMastercard.Parser{})
 	Register(wealthsimpleVisa.Parser{})
 }
 

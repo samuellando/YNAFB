@@ -19,7 +19,9 @@ func (Parser) Match(data []byte) bool {
 	if err != nil {
 		return false
 	}
-	return strings.Contains(strings.ToUpper(doc.text()), "DESJARDINS")
+	// French Desjardins account statements ("RELEVÉ DE COMPTE"), distinct from
+	// the English Mastercard statements handled by the mastercard parser.
+	return strings.Contains(strings.ToUpper(doc.text()), "RELEV")
 }
 
 var (
@@ -70,9 +72,7 @@ func (Parser) Parse(data []byte) (statement.Statement, error) {
 		if pending == nil {
 			return
 		}
-		payee, note := payeeFromDesc(pending.desc)
-		pending.entry.Payee = payee
-		pending.entry.Note = note
+		pending.entry.Payee = counterpartyFromDesc(pending.desc)
 		stmt.Entries = append(stmt.Entries, pending.entry)
 		pending = nil
 	}
@@ -206,15 +206,17 @@ func normalizeHeader(s string) string {
 	return accentReplacer.Replace(strings.ToLower(strings.TrimSpace(s)))
 }
 
-func payeeFromDesc(desc string) (payee, note string) {
+// counterpartyFromDesc returns the counterparty from a description like
+// "Virement envoyé à / Maurice Lando /papa".
+func counterpartyFromDesc(desc string) string {
 	collapsed := strings.Join(strings.Fields(desc), " ")
-	if idx := strings.Index(collapsed, "/"); idx >= 0 {
-		payee = strings.Trim(strings.TrimSpace(collapsed[idx+1:]), "/ ")
-		if payee == "" {
-			payee = collapsed
-		}
-	} else {
+	parts := strings.Split(collapsed, "/")
+	payee := strings.TrimSpace(parts[0])
+	if len(parts) > 1 {
+		payee = strings.TrimSpace(parts[1])
+	}
+	if payee == "" {
 		payee = collapsed
 	}
-	return payee, collapsed
+	return payee
 }
