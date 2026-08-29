@@ -775,8 +775,8 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 				transaction.Date.Format("2006-01-02"),
 				stringValue(transaction.PayeeName),
 				"split",
-				strconv.FormatInt(totalOutflow, 10),
-				strconv.FormatInt(totalInflow, 10),
+				formatCents(totalOutflow),
+				formatCents(totalInflow),
 				strconv.FormatBool(transaction.Reconciled),
 				stringValue(transaction.Note),
 			); err != nil {
@@ -807,8 +807,8 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 
 		transaction := transactions[i]
 		target := ""
-		outflow := strconv.FormatInt(transaction.TotalOutflow, 10)
-		inflow := strconv.FormatInt(transaction.TotalInflow, 10)
+		outflow := formatCents(transaction.TotalOutflow)
+		inflow := formatCents(transaction.TotalInflow)
 		if splitCount == 1 {
 			target = transactionTarget(accountID, transaction)
 			outflow, inflow = displayedSplitAmounts(accountID, transaction)
@@ -895,22 +895,34 @@ func transactionTarget(accountID int64, transaction data.ListAccountTransactions
 
 func displayedSplitAmounts(accountID int64, transaction data.ListAccountTransactionsRow) (string, string) {
 	if isMirroredTransferRow(accountID, transaction) {
-		return nullableIntString(transaction.Inflow), nullableIntString(transaction.Outflow)
+		return nullableCentsString(transaction.Inflow), nullableCentsString(transaction.Outflow)
 	}
 
-	return nullableIntString(transaction.Outflow), nullableIntString(transaction.Inflow)
+	return nullableCentsString(transaction.Outflow), nullableCentsString(transaction.Inflow)
 }
 
 func isMirroredTransferRow(accountID int64, transaction data.ListAccountTransactionsRow) bool {
 	return transaction.TransactionAccount != accountID && transaction.OtherAccount.Valid && transaction.OtherAccount.Int64 == accountID
 }
 
-func nullableIntString(value sql.NullInt64) string {
+func nullableCentsString(value sql.NullInt64) string {
 	if !value.Valid {
 		return ""
 	}
 
-	return strconv.FormatInt(value.Int64, 10)
+	return formatCents(value.Int64)
+}
+
+func formatCents(cents int64) string {
+	negative := cents < 0
+	if negative {
+		cents = -cents
+	}
+	s := fmt.Sprintf("%d.%02d", cents/100, cents%100)
+	if negative {
+		s = "-" + s
+	}
+	return s
 }
 
 func nullableInt64Value(value sql.NullInt64) int64 {

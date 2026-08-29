@@ -43,4 +43,4 @@ LEFT JOIN transaction_split AS ts ON ts."transaction" = t.id
 LEFT JOIN account AS ao ON ao.id = ts.other_account
 LEFT JOIN category AS c ON c.id = ts.category
 WHERE t.account = ? OR ts.other_account = ?
-ORDER BY t.date DESC, t.id ASC, ts.id ASC;
+ORDER BY t.date DESC, payee ASC, t.id ASC, ts.id ASC;

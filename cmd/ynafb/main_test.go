@@ -146,7 +146,7 @@ func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
 
 	want := strings.Join([]string{
 		"ID  DATE        PAYEE         TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-28  Corner Store  Groceries  1250     0       false       snacks",
+		"1   2026-08-28  Corner Store  Groceries  12.50    0.00    false       snacks",
 		"",
 	}, "\n")
 
@@ -182,7 +182,7 @@ func TestAccountListTransactionsIncludesTransactionsWithoutSplits(t *testing.T) 
 
 	want := strings.Join([]string{
 		"ID  DATE        PAYEE        TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-28  Online Shop          4200     0       false       pending import",
+		"1   2026-08-28  Online Shop          42.00    0.00    false       pending import",
 		"",
 	}, "\n")
 
@@ -220,8 +220,8 @@ func TestAccountListTransactionsShowsMismatchedSingleSplitSeparately(t *testing.
 
 	want := strings.Join([]string{
 		"ID  DATE        PAYEE        TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-28  Online Shop  split      4200     0       false       import mismatch",
-		"                             Groceries  4000     0                   ",
+		"1   2026-08-28  Online Shop  split      42.00    0.00    false       import mismatch",
+		"                             Groceries  40.00    0.00                ",
 		"",
 	}, "\n")
 
@@ -317,11 +317,11 @@ func TestAccountListTransactions(t *testing.T) {
 
 	want := strings.Join([]string{
 		"ID  DATE        PAYEE   TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-28  Cafe    Groceries  1000     0       false       coffee",
-		"2   2026-08-29  Bank    Savings    1500     0       false       move money",
-		"3   2026-08-30  Market  split      2500     0       false       weekly shop",
-		"                        Groceries  2000     0                   ",
-		"                        Household  500      0                   ",
+		"3   2026-08-30  Market  split      25.00    0.00    false       weekly shop",
+		"                        Groceries  20.00    0.00                ",
+		"                        Household  5.00     0.00                ",
+		"2   2026-08-29  Bank    Savings    15.00    0.00    false       move money",
+		"1   2026-08-28  Cafe    Groceries  10.00    0.00    false       coffee",
 		"",
 	}, "\n")
 
@@ -366,8 +366,8 @@ func TestAccountListTransactionsShowsMirroredTransfersForOtherAccount(t *testing
 
 	want := strings.Join([]string{
 		"ID  DATE        PAYEE   TARGET   OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-09  superC  ws-visa  0        75      false       ",
-		"2   2026-08-09  superC  ws-visa  0        100     false       ",
+		"1   2026-08-09  superC  ws-visa  0.00     0.75    false       ",
+		"2   2026-08-09  superC  ws-visa  0.00     1.00    false       ",
 		"",
 	}, "\n")
 
