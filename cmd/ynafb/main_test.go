@@ -281,6 +281,52 @@ func TestAccountListTransactions(t *testing.T) {
 	}
 }
 
+func TestAccountListTransactionsShowsMirroredTransfersForOtherAccount(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "ws-visa"},
+		{"account", "create", "merry"},
+		{"category", "create", "groceries"},
+		{"payee", "create", "superC"},
+		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "100", "0", ""},
+		{"transaction-split", "create", "1", "25", "0", "--category", "groceries"},
+		{"transaction-split", "create", "1", "75", "0", "--other-account", "merry"},
+		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "200", "0", ""},
+		{"transaction-split", "create", "2", "100", "0", "--category", "groceries"},
+		{"transaction-split", "create", "2", "100", "0", "--other-account", "merry"},
+		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "250", "0", ""},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "merry")
+	if exitCode != 0 {
+		t.Fatalf("command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"ID  DATE        PAYEE   TARGET   OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"1   2026-08-09  superC  ws-visa  0        75      false       ",
+		"2   2026-08-09  superC  ws-visa  0        100     false       ",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
 func TestTransactionSplitCreateRejectsMultipleTargets(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 

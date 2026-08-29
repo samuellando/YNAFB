@@ -148,7 +148,10 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 				return err
 			}
 
-			transactions, err := queries.ListAccountTransactions(ctx, accountID)
+			transactions, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
+				Account:      accountID,
+				OtherAccount: sql.NullInt64{Int64: accountID, Valid: true},
+			})
 			if err != nil {
 				return err
 			}
@@ -689,10 +692,10 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 		}
 
 		splitCount := actualSplitCount(transactions[i:j])
-		if splitCount > 1 || hasMismatchedSingleSplit(transactions[i:j]) {
+		if splitCount > 1 || hasMismatchedSingleSplit(accountID, transactions[i:j]) {
 			transaction := transactions[i]
-			totalOutflow, totalInflow := splitTotals(transactions[i:j])
-			if splitCount == 1 {
+			totalOutflow, totalInflow := displayedTotals(accountID, transactions[i:j])
+			if splitCount == 1 && transaction.TransactionAccount == accountID {
 				totalOutflow = transaction.TotalOutflow
 				totalInflow = transaction.TotalInflow
 			}
@@ -712,14 +715,15 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 
 			for k := i; k < j; k++ {
 				transaction := transactions[k]
+				outflow, inflow := displayedSplitAmounts(accountID, transaction)
 				if err := writeAccountTransactionRow(
 					tw,
 					"",
 					"",
 					"",
 					transactionTarget(accountID, transaction),
-					nullableIntString(transaction.Outflow),
-					nullableIntString(transaction.Inflow),
+					outflow,
+					inflow,
 					"",
 					"",
 				); err != nil {
@@ -737,8 +741,7 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 		inflow := strconv.FormatInt(transaction.TotalInflow, 10)
 		if splitCount == 1 {
 			target = transactionTarget(accountID, transaction)
-			outflow = nullableIntString(transaction.Outflow)
-			inflow = nullableIntString(transaction.Inflow)
+			outflow, inflow = displayedSplitAmounts(accountID, transaction)
 		}
 
 		if err := writeAccountTransactionRow(
@@ -761,11 +764,17 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 	return tw.Flush()
 }
 
-func splitTotals(transactions []data.ListAccountTransactionsRow) (int64, int64) {
+func displayedTotals(accountID int64, transactions []data.ListAccountTransactionsRow) (int64, int64) {
 	var outflow int64
 	var inflow int64
 
 	for _, transaction := range transactions {
+		if isMirroredTransferRow(accountID, transaction) {
+			outflow += nullableInt64Value(transaction.Inflow)
+			inflow += nullableInt64Value(transaction.Outflow)
+			continue
+		}
+
 		outflow += nullableInt64Value(transaction.Outflow)
 		inflow += nullableInt64Value(transaction.Inflow)
 	}
@@ -784,12 +793,16 @@ func actualSplitCount(transactions []data.ListAccountTransactionsRow) int {
 	return count
 }
 
-func hasMismatchedSingleSplit(transactions []data.ListAccountTransactionsRow) bool {
+func hasMismatchedSingleSplit(accountID int64, transactions []data.ListAccountTransactionsRow) bool {
 	if actualSplitCount(transactions) != 1 {
 		return false
 	}
 
 	transaction := transactions[0]
+	if transaction.TransactionAccount != accountID {
+		return false
+	}
+
 	return nullableInt64Value(transaction.Outflow) != transaction.TotalOutflow || nullableInt64Value(transaction.Inflow) != transaction.TotalInflow
 }
 
@@ -799,11 +812,27 @@ func writeAccountTransactionRow(w io.Writer, id, date, payee, target, outflow, i
 }
 
 func transactionTarget(accountID int64, transaction data.ListAccountTransactionsRow) string {
+	if isMirroredTransferRow(accountID, transaction) {
+		return stringValue(transaction.TransactionAccountName)
+	}
+
 	if transaction.OtherAccount.Valid {
 		return stringValue(transaction.OtherAccountName)
 	}
 
 	return stringValue(transaction.CategoryName)
+}
+
+func displayedSplitAmounts(accountID int64, transaction data.ListAccountTransactionsRow) (string, string) {
+	if isMirroredTransferRow(accountID, transaction) {
+		return nullableIntString(transaction.Inflow), nullableIntString(transaction.Outflow)
+	}
+
+	return nullableIntString(transaction.Outflow), nullableIntString(transaction.Inflow)
+}
+
+func isMirroredTransferRow(accountID int64, transaction data.ListAccountTransactionsRow) bool {
+	return transaction.TransactionAccount != accountID && transaction.OtherAccount.Valid && transaction.OtherAccount.Int64 == accountID
 }
 
 func nullableIntString(value sql.NullInt64) string {
