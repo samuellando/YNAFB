@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -16,67 +17,69 @@ import (
 )
 
 func main() {
-	os.Exit(run())
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run() int {
-	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+func run(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("ynafb", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 
 	dbPath := fs.String("db", "./ynafb.db", "SQLite database path")
-	fs.Usage = usage
+	fs.Usage = func() {
+		usage(stderr)
+	}
 
-	if err := fs.Parse(os.Args[1:]); err != nil {
+	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
-		return fail(err)
+		return fail(stderr, err)
 	}
 
-	args := fs.Args()
-	if len(args) < 2 {
-		usage()
+	remaining := fs.Args()
+	if len(remaining) < 2 {
+		usage(stderr)
 		return 1
 	}
 
-	resource := args[0]
-	action := args[1]
+	resource := remaining[0]
+	action := remaining[1]
 	if action != "create" {
-		return fail(fmt.Errorf("unsupported action %q", action))
+		return fail(stderr, fmt.Errorf("unsupported action %q", action))
 	}
 
 	db, err := dbutil.Open(*dbPath)
 	if err != nil {
-		return fail(err)
+		return fail(stderr, err)
 	}
 	defer db.Close()
 
 	queries := data.New(db)
 	ctx := context.Background()
 
-	if err := createResource(ctx, queries, resource, args[2:]); err != nil {
-		return fail(err)
+	if err := createResource(ctx, queries, resource, remaining[2:], stdout); err != nil {
+		return fail(stderr, err)
 	}
 
 	return 0
 }
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "Usage:\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] budget create [name]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] account create [budget] [name]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] allocation create [budget] [category] [amount]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] category create [budget] [name]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] goal create [budget] [name] [type] [start] [end|null] [category] [amount]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] payee create [budget] [name]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] payee-default-split create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] transaction create [date] [account] [payee] [reconciled] [note]\n")
-	fmt.Fprintf(os.Stderr, "  ynafb [--db ./ynafb.db] transaction-split create [transaction] [to_account] [from_account] [category] [outflow] [inflow]\n")
-	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
+func usage(w io.Writer) {
+	fmt.Fprintf(w, "Usage:\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] account create [budget] [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] allocation create [budget] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] category create [budget] [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] goal create [budget] [name] [type] [start] [end|null] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee create [budget] [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee-default-split create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction create [date] [account] [payee] [reconciled] [note]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction-split create [transaction] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "\n")
+	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
 }
 
-func createResource(ctx context.Context, queries *data.Queries, resource string, args []string) error {
+func createResource(ctx context.Context, queries *data.Queries, resource string, args []string, stdout io.Writer) error {
 	switch resource {
 	case "budget":
 		if len(args) != 1 {
@@ -88,7 +91,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("budget", result.ID)
+		printCreated(stdout, "budget", result.ID)
 		return nil
 
 	case "account":
@@ -109,7 +112,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("account", result.ID)
+		printCreated(stdout, "account", result.ID)
 		return nil
 
 	case "allocation":
@@ -141,7 +144,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("allocation", result.ID)
+		printCreated(stdout, "allocation", result.ID)
 		return nil
 
 	case "category":
@@ -162,7 +165,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("category", result.ID)
+		printCreated(stdout, "category", result.ID)
 		return nil
 
 	case "goal":
@@ -208,7 +211,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("goal", result.ID)
+		printCreated(stdout, "goal", result.ID)
 		return nil
 
 	case "payee":
@@ -229,7 +232,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("payee", result.ID)
+		printCreated(stdout, "payee", result.ID)
 		return nil
 
 	case "payee-default-split":
@@ -279,7 +282,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("payee-default-split", result.ID)
+		printCreated(stdout, "payee-default-split", result.ID)
 		return nil
 
 	case "transaction":
@@ -318,7 +321,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("transaction", result.ID)
+		printCreated(stdout, "transaction", result.ID)
 		return nil
 
 	case "transaction-split":
@@ -368,7 +371,7 @@ func createResource(ctx context.Context, queries *data.Queries, resource string,
 			return err
 		}
 
-		printCreated("transaction-split", result.ID)
+		printCreated(stdout, "transaction-split", result.ID)
 		return nil
 
 	default:
@@ -409,11 +412,11 @@ func parseNullableTime(name, value string) (sql.NullTime, error) {
 	return sql.NullTime{Time: parsed, Valid: true}, nil
 }
 
-func printCreated(resource string, id int64) {
-	fmt.Printf("created %s %d\n", resource, id)
+func printCreated(w io.Writer, resource string, id int64) {
+	fmt.Fprintf(w, "created %s %d\n", resource, id)
 }
 
-func fail(err error) int {
-	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+func fail(w io.Writer, err error) int {
+	fmt.Fprintf(w, "error: %v\n", err)
 	return 1
 }
