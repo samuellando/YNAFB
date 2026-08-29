@@ -3,11 +3,10 @@ package dbutil
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"path/filepath"
-	"sort"
-	"strings"
+	"runtime"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -31,31 +30,22 @@ func Open(path string) (*sql.DB, error) {
 }
 
 func applyMigrations(db *sql.DB) error {
-	entries, err := os.ReadDir("migrations")
-	if err != nil {
-		return fmt.Errorf("read migrations directory: %w", err)
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return fmt.Errorf("set goose dialect: %w", err)
 	}
 
-	filenames := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
-			continue
-		}
-		filenames = append(filenames, entry.Name())
-	}
-
-	sort.Strings(filenames)
-
-	for _, filename := range filenames {
-		contents, err := os.ReadFile(filepath.Join("migrations", filename))
-		if err != nil {
-			return fmt.Errorf("read migration %s: %w", filename, err)
-		}
-
-		if _, err := db.Exec(string(contents)); err != nil {
-			return fmt.Errorf("apply migration %s: %w", filename, err)
-		}
+	if err := goose.Up(db, migrationsDir()); err != nil {
+		return fmt.Errorf("apply migrations: %w", err)
 	}
 
 	return nil
+}
+
+func migrationsDir() string {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return "migrations"
+	}
+
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", "migrations"))
 }

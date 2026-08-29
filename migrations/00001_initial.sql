@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE IF NOT EXISTS budget (
     id INTEGER PRIMARY KEY,
     name string NOT NULL UNIQUE
@@ -74,3 +75,14 @@ CREATE TABLE IF NOT EXISTS goal (
     amount INTEGER NOT NULL,
     UNIQUE (budget, name)
 );
+
+-- +goose Down
+DROP TABLE IF EXISTS goal;
+DROP TABLE IF EXISTS category;
+DROP TABLE IF EXISTS payee_default_split;
+DROP TABLE IF EXISTS payee;
+DROP TABLE IF EXISTS transaction_split;
+DROP TABLE IF EXISTS "transaction";
+DROP TABLE IF EXISTS account;
+DROP TABLE IF EXISTS allocation;
+DROP TABLE IF EXISTS budget;
