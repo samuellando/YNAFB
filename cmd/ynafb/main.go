@@ -22,6 +22,11 @@ type budgetContext struct {
 	Name string
 }
 
+type splitTargetArgs struct {
+	OtherAccount string
+	Category     string
+}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -78,8 +83,8 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [name] [type] [start] [end|null] [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee-default-split create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [reconciled] [note]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction-split create [transaction] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [total_out] [total_in] [note]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction-split create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
@@ -354,8 +359,8 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-		if len(args) != 5 {
-			return fmt.Errorf("transaction create requires [date] [account] [payee] [reconciled] [note]")
+		if len(args) != 6 {
+			return fmt.Errorf("transaction create requires [date] [account] [payee] [total_out] [total_in] [note]")
 		}
 
 		budget, err := resolveBudget(ctx, queries, budgetName)
@@ -373,24 +378,29 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return err
 		}
 
-		payee, err := resolvePayeeID(ctx, queries, budget, args[2])
+		payee, err := resolveOrCreatePayeeID(ctx, queries, budget, args[2])
 		if err != nil {
 			return err
 		}
 
-		reconciled, err := strconv.ParseBool(args[3])
+		totalOutflow, err := parseInt64("total_out", args[3])
 		if err != nil {
-			return fmt.Errorf("parse reconciled: %w", err)
+			return err
+		}
+
+		totalInflow, err := parseInt64("total_in", args[4])
+		if err != nil {
+			return err
 		}
 
 		result, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
 			Date:         date,
 			Account:      account,
 			Payee:        payee,
-			TotalOutflow: 0,
-			TotalInflow:  0,
-			Reconciled:   reconciled,
-			Note:         args[4],
+			TotalOutflow: totalOutflow,
+			TotalInflow:  totalInflow,
+			Reconciled:   false,
+			Note:         args[5],
 		})
 		if err != nil {
 			return err
@@ -404,8 +414,13 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-		if len(args) != 6 {
-			return fmt.Errorf("transaction-split create requires [transaction] [to_account] [from_account] [category] [outflow] [inflow]")
+		positionals, targetArgs, err := parseSplitTargetArgs(args)
+		if err != nil {
+			return err
+		}
+
+		if len(positionals) != 3 {
+			return fmt.Errorf("transaction-split create requires [transaction] [outflow] [inflow] and exactly one of --category or --other-account")
 		}
 
 		budget, err := resolveBudget(ctx, queries, budgetName)
@@ -413,43 +428,32 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return err
 		}
 
-		transactionID, err := parseInt64("transaction", args[0])
+		transactionID, err := parseInt64("transaction", positionals[0])
 		if err != nil {
 			return err
 		}
 
-		toAccount, err := resolveAccountID(ctx, queries, budget, args[1])
+		outflow, err := parseInt64("outflow", positionals[1])
 		if err != nil {
 			return err
 		}
 
-		fromAccount, err := resolveAccountID(ctx, queries, budget, args[2])
+		inflow, err := parseInt64("inflow", positionals[2])
 		if err != nil {
 			return err
 		}
 
-		category, err := resolveCategoryID(ctx, queries, budget, args[3])
-		if err != nil {
-			return err
-		}
-
-		outflow, err := parseInt64("outflow", args[4])
-		if err != nil {
-			return err
-		}
-
-		inflow, err := parseInt64("inflow", args[5])
+		otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, outflow, inflow, targetArgs)
 		if err != nil {
 			return err
 		}
 
 		result, err := queries.CreateTransactionSplit(ctx, data.CreateTransactionSplitParams{
-			Transaction: transactionID,
-			ToAccount:   toAccount,
-			FromAccount: fromAccount,
-			Category:    category,
-			Outflow:     outflow,
-			Inflow:      inflow,
+			Transaction:  transactionID,
+			OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
+			Category:     category,
+			Outflow:      outflow,
+			Inflow:       inflow,
 		})
 		if err != nil {
 			return err
@@ -494,6 +498,55 @@ func parseNullableTime(name, value string) (sql.NullTime, error) {
 	}
 
 	return sql.NullTime{Time: parsed, Valid: true}, nil
+}
+
+func parseSplitTargetArgs(args []string) ([]string, splitTargetArgs, error) {
+	positionals := make([]string, 0, len(args))
+	targets := splitTargetArgs{}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "--") {
+			positionals = append(positionals, arg)
+			continue
+		}
+
+		if i+1 >= len(args) {
+			return nil, splitTargetArgs{}, fmt.Errorf("missing value for %s", arg)
+		}
+
+		value := args[i+1]
+		i++
+
+		switch arg {
+		case "--other-account":
+			if targets.OtherAccount != "" {
+				return nil, splitTargetArgs{}, fmt.Errorf("--other-account may only be set once")
+			}
+			targets.OtherAccount = value
+		case "--category":
+			if targets.Category != "" {
+				return nil, splitTargetArgs{}, fmt.Errorf("--category may only be set once")
+			}
+			targets.Category = value
+		default:
+			return nil, splitTargetArgs{}, fmt.Errorf("unsupported flag %q", arg)
+		}
+	}
+
+	targetCount := 0
+	if targets.OtherAccount != "" {
+		targetCount++
+	}
+	if targets.Category != "" {
+		targetCount++
+	}
+
+	if targetCount != 1 {
+		return nil, splitTargetArgs{}, fmt.Errorf("set exactly one of --category or --other-account")
+	}
+
+	return positionals, targets, nil
 }
 
 func resolveBudget(ctx context.Context, queries *data.Queries, budgetName string) (budgetContext, error) {
@@ -573,6 +626,52 @@ func resolvePayeeID(ctx context.Context, queries *data.Queries, budget budgetCon
 	return payee.ID, nil
 }
 
+func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, budget budgetContext, payeeName string) (int64, error) {
+	payee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
+		Budget: budget.ID,
+		Name:   payeeName,
+	})
+	if err == nil {
+		return payee.ID, nil
+	}
+
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+
+	created, createErr := queries.CreatePayee(ctx, data.CreatePayeeParams{
+		Budget: budget.ID,
+		Name:   payeeName,
+	})
+	if createErr != nil {
+		return 0, createErr
+	}
+
+	return created.ID, nil
+}
+
+func resolveSplitTargets(ctx context.Context, queries *data.Queries, budget budgetContext, outflow, inflow int64, args splitTargetArgs) (int64, sql.NullInt64, error) {
+	if args.Category != "" {
+		categoryID, err := resolveCategoryID(ctx, queries, budget, args.Category)
+		if err != nil {
+			return 0, sql.NullInt64{}, err
+		}
+
+		return 0, sql.NullInt64{Int64: categoryID, Valid: true}, nil
+	}
+
+	if (outflow > 0) == (inflow > 0) {
+		return 0, sql.NullInt64{}, fmt.Errorf("transfer split with --other-account requires exactly one of outflow or inflow to be non-zero")
+	}
+
+	otherAccountID, err := resolveAccountID(ctx, queries, budget, args.OtherAccount)
+	if err != nil {
+		return 0, sql.NullInt64{}, err
+	}
+
+	return otherAccountID, sql.NullInt64{}, nil
+}
+
 func printCreated(w io.Writer, resource string, id int64) {
 	fmt.Fprintf(w, "created %s %d\n", resource, id)
 }
@@ -589,9 +688,14 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 			j++
 		}
 
-		if j-i > 1 {
+		splitCount := actualSplitCount(transactions[i:j])
+		if splitCount > 1 || hasMismatchedSingleSplit(transactions[i:j]) {
 			transaction := transactions[i]
 			totalOutflow, totalInflow := splitTotals(transactions[i:j])
+			if splitCount == 1 {
+				totalOutflow = transaction.TotalOutflow
+				totalInflow = transaction.TotalInflow
+			}
 			if err := writeAccountTransactionRow(
 				tw,
 				strconv.FormatInt(transaction.ID, 10),
@@ -614,8 +718,8 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 					"",
 					"",
 					transactionTarget(accountID, transaction),
-					strconv.FormatInt(transaction.Outflow, 10),
-					strconv.FormatInt(transaction.Inflow, 10),
+					nullableIntString(transaction.Outflow),
+					nullableIntString(transaction.Inflow),
 					"",
 					"",
 				); err != nil {
@@ -627,21 +731,28 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 			continue
 		}
 
-		for k := i; k < j; k++ {
-			transaction := transactions[k]
-			if err := writeAccountTransactionRow(
-				tw,
-				strconv.FormatInt(transaction.ID, 10),
-				transaction.Date.Format("2006-01-02"),
-				stringValue(transaction.PayeeName),
-				transactionTarget(accountID, transaction),
-				strconv.FormatInt(transaction.Outflow, 10),
-				strconv.FormatInt(transaction.Inflow, 10),
-				strconv.FormatBool(transaction.Reconciled),
-				stringValue(transaction.Note),
-			); err != nil {
-				return err
-			}
+		transaction := transactions[i]
+		target := ""
+		outflow := strconv.FormatInt(transaction.TotalOutflow, 10)
+		inflow := strconv.FormatInt(transaction.TotalInflow, 10)
+		if splitCount == 1 {
+			target = transactionTarget(accountID, transaction)
+			outflow = nullableIntString(transaction.Outflow)
+			inflow = nullableIntString(transaction.Inflow)
+		}
+
+		if err := writeAccountTransactionRow(
+			tw,
+			strconv.FormatInt(transaction.ID, 10),
+			transaction.Date.Format("2006-01-02"),
+			stringValue(transaction.PayeeName),
+			target,
+			outflow,
+			inflow,
+			strconv.FormatBool(transaction.Reconciled),
+			stringValue(transaction.Note),
+		); err != nil {
+			return err
 		}
 
 		i = j
@@ -655,11 +766,31 @@ func splitTotals(transactions []data.ListAccountTransactionsRow) (int64, int64) 
 	var inflow int64
 
 	for _, transaction := range transactions {
-		outflow += transaction.Outflow
-		inflow += transaction.Inflow
+		outflow += nullableInt64Value(transaction.Outflow)
+		inflow += nullableInt64Value(transaction.Inflow)
 	}
 
 	return outflow, inflow
+}
+
+func actualSplitCount(transactions []data.ListAccountTransactionsRow) int {
+	count := 0
+	for _, transaction := range transactions {
+		if transaction.SplitID.Valid {
+			count++
+		}
+	}
+
+	return count
+}
+
+func hasMismatchedSingleSplit(transactions []data.ListAccountTransactionsRow) bool {
+	if actualSplitCount(transactions) != 1 {
+		return false
+	}
+
+	transaction := transactions[0]
+	return nullableInt64Value(transaction.Outflow) != transaction.TotalOutflow || nullableInt64Value(transaction.Inflow) != transaction.TotalInflow
 }
 
 func writeAccountTransactionRow(w io.Writer, id, date, payee, target, outflow, inflow, reconciled, note string) error {
@@ -668,15 +799,27 @@ func writeAccountTransactionRow(w io.Writer, id, date, payee, target, outflow, i
 }
 
 func transactionTarget(accountID int64, transaction data.ListAccountTransactionsRow) string {
-	if transaction.ToAccount == accountID && transaction.FromAccount != accountID {
-		return stringValue(transaction.FromAccountName)
-	}
-
-	if transaction.FromAccount == accountID && transaction.ToAccount != accountID {
-		return stringValue(transaction.ToAccountName)
+	if transaction.OtherAccount.Valid {
+		return stringValue(transaction.OtherAccountName)
 	}
 
 	return stringValue(transaction.CategoryName)
+}
+
+func nullableIntString(value sql.NullInt64) string {
+	if !value.Valid {
+		return ""
+	}
+
+	return strconv.FormatInt(value.Int64, 10)
+}
+
+func nullableInt64Value(value sql.NullInt64) int64 {
+	if !value.Valid {
+		return 0
+	}
+
+	return value.Int64
 }
 
 func stringValue(value interface{}) string {

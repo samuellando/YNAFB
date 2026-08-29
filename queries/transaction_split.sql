@@ -1,13 +1,11 @@
 -- name: CreateTransactionSplit :one
 INSERT INTO transaction_split (
   "transaction",
-  to_account,
-  from_account,
+  other_account,
   category,
   outflow,
   inflow
 ) VALUES (
-  ?,
   ?,
   ?,
   ?,

@@ -33,11 +33,14 @@ CREATE TABLE IF NOT EXISTS "transaction" (
 CREATE TABLE IF NOT EXISTS transaction_split (
     id INTEGER PRIMARY KEY,
     "transaction" INTEGER NOT NULL REFERENCES "transaction" (id) ON DELETE CASCADE,
-    to_account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
-    from_account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
-    category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
+    other_account INTEGER REFERENCES account (id) ON DELETE CASCADE,
+    category INTEGER REFERENCES category (id) ON DELETE CASCADE,
     outflow INTEGER NOT NULL DEFAULT 0,
-    inflow INTEGER NOT NULL DEFAULT 0
+    inflow INTEGER NOT NULL DEFAULT 0,
+    CHECK (
+        (other_account IS NOT NULL AND category IS NULL) OR
+        (other_account IS NULL AND category IS NOT NULL)
+    )
 );
 
 CREATE TABLE IF NOT EXISTS payee (

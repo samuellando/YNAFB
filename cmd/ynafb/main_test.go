@@ -60,13 +60,13 @@ func TestCreateCommands(t *testing.T) {
 		{
 			name:  "transaction",
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"payee", "create", "Market"}},
-			args:  []string{"transaction", "create", "2026-08-28", "Checking", "Market", "false", "weekly shop"},
+			args:  []string{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "weekly shop"},
 			want:  "created transaction 1\n",
 		},
 		{
 			name:  "transaction-split",
-			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}, {"transaction", "create", "2026-08-28", "Checking", "Market", "false", "weekly shop"}},
-			args:  []string{"transaction-split", "create", "1", "Checking", "Checking", "Groceries", "2500", "0"},
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}, {"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "weekly shop"}},
+			args:  []string{"transaction-split", "create", "1", "2500", "0", "--category", "Groceries"},
 			want:  "created transaction-split 1\n",
 		},
 	}
@@ -98,6 +98,135 @@ func TestCreateCommands(t *testing.T) {
 	}
 }
 
+func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "create", "2026-08-28", "Checking", "Corner Store", "1250", "0", "snacks")
+	if exitCode != 0 {
+		t.Fatalf("transaction create failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	if stdout != "created transaction 1\n" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "transaction-split", "create", "1", "1250", "0", "--category", "Groceries")
+	if exitCode != 0 {
+		t.Fatalf("transaction-split create failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "list-transactions", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"ID  DATE        PAYEE         TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"1   2026-08-28  Corner Store  Groceries  1250     0       false       snacks",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestAccountListTransactionsIncludesTransactionsWithoutSplits(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "ws-visa"},
+		{"transaction", "create", "2026-08-28", "ws-visa", "Online Shop", "4200", "0", "pending import"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "ws-visa")
+	if exitCode != 0 {
+		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"ID  DATE        PAYEE        TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"1   2026-08-28  Online Shop          4200     0       false       pending import",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestAccountListTransactionsShowsMismatchedSingleSplitSeparately(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", "import mismatch"},
+		{"transaction-split", "create", "1", "4000", "0", "--category", "Groceries"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"ID  DATE        PAYEE        TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"1   2026-08-28  Online Shop  split      4200     0       false       import mismatch",
+		"                             Groceries  4000     0                   ",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
 func TestAccountListTransactions(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
@@ -110,15 +239,15 @@ func TestAccountListTransactions(t *testing.T) {
 		{"payee", "create", "Cafe"},
 		{"payee", "create", "Bank"},
 		{"payee", "create", "Market"},
-		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "true", "coffee"},
-		{"transaction-split", "create", "1", "Checking", "Checking", "Groceries", "1000", "0"},
-		{"transaction", "create", "2026-08-29", "Checking", "Bank", "false", "move money"},
-		{"transaction-split", "create", "2", "Savings", "Checking", "Groceries", "1500", "0"},
-		{"transaction", "create", "2026-08-30", "Checking", "Market", "false", "weekly shop"},
-		{"transaction-split", "create", "3", "Checking", "Checking", "Groceries", "2000", "0"},
-		{"transaction-split", "create", "3", "Checking", "Checking", "Household", "500", "0"},
-		{"transaction", "create", "2026-08-31", "Savings", "Market", "false", "should not appear"},
-		{"transaction-split", "create", "4", "Savings", "Savings", "Groceries", "9999", "0"},
+		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "1000", "0", "coffee"},
+		{"transaction-split", "create", "1", "1000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-29", "Checking", "Bank", "1500", "0", "move money"},
+		{"transaction-split", "create", "2", "1500", "0", "--other-account", "Savings"},
+		{"transaction", "create", "2026-08-30", "Checking", "Market", "2500", "0", "weekly shop"},
+		{"transaction-split", "create", "3", "2000", "0", "--category", "Groceries"},
+		{"transaction-split", "create", "3", "500", "0", "--category", "Household"},
+		{"transaction", "create", "2026-08-31", "Savings", "Market", "9999", "0", "should not appear"},
+		{"transaction-split", "create", "4", "9999", "0", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -135,7 +264,7 @@ func TestAccountListTransactions(t *testing.T) {
 
 	want := strings.Join([]string{
 		"ID  DATE        PAYEE   TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-28  Cafe    Groceries  1000     0       true        coffee",
+		"1   2026-08-28  Cafe    Groceries  1000     0       false       coffee",
 		"2   2026-08-29  Bank    Savings    1500     0       false       move money",
 		"3   2026-08-30  Market  split      2500     0       false       weekly shop",
 		"                        Groceries  2000     0                   ",
@@ -149,6 +278,40 @@ func TestAccountListTransactions(t *testing.T) {
 
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestTransactionSplitCreateRejectsMultipleTargets(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Groceries"},
+		{"payee", "create", "Market"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "weekly shop"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction-split", "create", "1", "2500", "0", "--category", "Groceries", "--other-account", "Savings")
+	if exitCode != 1 {
+		t.Fatalf("unexpected exit code: got %d want 1", exitCode)
+	}
+
+	if stdout != "" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+
+	want := "error: set exactly one of --category or --other-account\n"
+	if stderr != want {
+		t.Fatalf("unexpected stderr: got %q want %q", stderr, want)
 	}
 }
 
