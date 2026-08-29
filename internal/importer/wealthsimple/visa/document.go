@@ -1,4 +1,4 @@
-package wealthsimple
+package visa
 
 import "strings"
 

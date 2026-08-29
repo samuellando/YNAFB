@@ -1,4 +1,4 @@
-package wealthsimple
+package checking
 
 import (
 	"fmt"
@@ -8,90 +8,101 @@ import (
 	"time"
 )
 
-var monthNames = map[string]time.Month{
+var accentReplacer = strings.NewReplacer(
+	"é", "e", "è", "e", "ê", "e", "ë", "e",
+	"ô", "o", "ö", "o",
+	"û", "u", "ù", "u", "ü", "u",
+	"à", "a", "â", "a",
+	"î", "i", "ï", "i",
+	"ç", "c",
+)
+
+func normalizeMonth(s string) string {
+	return accentReplacer.Replace(strings.ToLower(strings.TrimSpace(s)))
+}
+
+var frenchMonths = map[string]time.Month{
 	"jan":       time.January,
-	"january":   time.January,
-	"feb":       time.February,
-	"february":  time.February,
+	"janv":      time.January,
+	"janvier":   time.January,
+	"fev":       time.February,
+	"fevr":      time.February,
+	"fevrier":   time.February,
 	"mar":       time.March,
-	"march":     time.March,
-	"apr":       time.April,
-	"april":     time.April,
-	"may":       time.May,
+	"mars":      time.March,
+	"avr":       time.April,
+	"avril":     time.April,
+	"mai":       time.May,
 	"jun":       time.June,
-	"june":      time.June,
+	"juin":      time.June,
 	"jul":       time.July,
-	"july":      time.July,
-	"aug":       time.August,
-	"august":    time.August,
+	"juil":      time.July,
+	"juillet":   time.July,
+	"aou":       time.August,
+	"aout":      time.August,
 	"sep":       time.September,
 	"sept":      time.September,
-	"september": time.September,
+	"septembre": time.September,
 	"oct":       time.October,
-	"october":   time.October,
+	"octobre":   time.October,
 	"nov":       time.November,
-	"november":  time.November,
+	"novembre":  time.November,
 	"dec":       time.December,
-	"december":  time.December,
+	"decembre":  time.December,
 }
 
 func parseMonth(s string) (time.Month, error) {
-	m, ok := monthNames[strings.ToLower(strings.TrimSpace(s))]
+	m, ok := frenchMonths[normalizeMonth(s)]
 	if !ok {
 		return 0, fmt.Errorf("unknown month %q", s)
 	}
 	return m, nil
 }
 
-// parseMonthDay parses strings like "Jul 16" into a month and day.
-func parseMonthDay(s string) (time.Month, int, error) {
+// parseDayMonth parses transaction dates like "1 JUL" (day then month).
+func parseDayMonth(s string) (time.Month, int, error) {
 	parts := strings.Fields(strings.TrimSpace(s))
 	if len(parts) != 2 {
 		return 0, 0, fmt.Errorf("invalid date %q", s)
 	}
-	month, err := parseMonth(parts[0])
-	if err != nil {
-		return 0, 0, err
-	}
-	day, err := strconv.Atoi(parts[1])
+	day, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid day in %q: %w", s, err)
+	}
+	month, err := parseMonth(parts[1])
+	if err != nil {
+		return 0, 0, err
 	}
 	return month, day, nil
 }
 
-const monthPattern = `(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)`
-
-// periodRe matches statement period strings like "Jul 15 — Aug 14, 2026".
-// The year is only present on the end date.
-var periodRe = regexp.MustCompile(monthPattern + `\s+(\d{1,2})\s*[—–\-−]\s*` + monthPattern + `\s+(\d{1,2}),?\s+(\d{4})`)
+// periodRe matches French statement periods like "du 1er juillet au 31 juillet 2026".
+var periodRe = regexp.MustCompile(`du\s+(\d{1,2})(?:er|e)?\s+([a-zA-Zûôéèàç]+)\s+au\s+(\d{1,2})(?:er|e)?\s+([a-zA-Zûôéèàç]+)\s+(\d{4})`)
 
 type period struct {
 	start time.Time
 	end   time.Time
 }
 
-// parsePeriod parses a statement period string into start/end times with year
-// inference so that "Dec 15 — Jan 14, 2026" maps December to 2025.
 func parsePeriod(s string) (period, error) {
 	m := periodRe.FindStringSubmatch(s)
 	if m == nil {
 		return period{}, fmt.Errorf("could not parse statement period from %q", s)
 	}
 
-	startMonth, err := parseMonth(m[1])
+	startDay, err := strconv.Atoi(m[1])
 	if err != nil {
 		return period{}, err
 	}
-	startDay, err := strconv.Atoi(m[2])
+	startMonth, err := parseMonth(m[2])
 	if err != nil {
 		return period{}, err
 	}
-	endMonth, err := parseMonth(m[3])
+	endDay, err := strconv.Atoi(m[3])
 	if err != nil {
 		return period{}, err
 	}
-	endDay, err := strconv.Atoi(m[4])
+	endMonth, err := parseMonth(m[4])
 	if err != nil {
 		return period{}, err
 	}
@@ -112,7 +123,6 @@ func parsePeriod(s string) (period, error) {
 }
 
 // resolveDate infers the year for a month/day pair using the statement period.
-// It prefers a year that keeps the date within the period.
 func (p period) resolveDate(month time.Month, day int) time.Time {
 	for _, year := range []int{p.end.Year(), p.start.Year()} {
 		d := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)

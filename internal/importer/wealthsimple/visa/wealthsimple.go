@@ -1,5 +1,5 @@
 // Package wealthsimple parses Wealthsimple credit card statements.
-package wealthsimple
+package visa
 
 import (
 	"fmt"

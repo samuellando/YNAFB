@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"sort"
 
-	"samuellando.com/YNAFB/internal/importer/wealthsimple"
 	"samuellando.com/YNAFB/internal/importer/statement"
+	wealthsimpleVisa "samuellando.com/YNAFB/internal/importer/wealthsimple/visa"
+	desjardinsChecking "samuellando.com/YNAFB/internal/importer/desjardins/checking"
 )
 
 func init() {
-	Register(wealthsimple.Parser{})
+	Register(desjardinsChecking.Parser{})
+	Register(wealthsimpleVisa.Parser{})
 }
 
 // Parser converts a raw statement (PDF bytes) into a normalized Statement.
