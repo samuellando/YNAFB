@@ -7,12 +7,14 @@ import (
 	desjardinsChecking "samuellando.com/YNAFB/internal/importer/desjardins/checking"
 	desjardinsMastercard "samuellando.com/YNAFB/internal/importer/desjardins/mastercard"
 	"samuellando.com/YNAFB/internal/importer/statement"
+	wealthsimpleChecking "samuellando.com/YNAFB/internal/importer/wealthsimple/checking"
 	wealthsimpleVisa "samuellando.com/YNAFB/internal/importer/wealthsimple/visa"
 )
 
 func init() {
 	Register(desjardinsChecking.Parser{})
 	Register(desjardinsMastercard.Parser{})
+	Register(wealthsimpleChecking.Parser{})
 	Register(wealthsimpleVisa.Parser{})
 }
 
