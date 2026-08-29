@@ -7,7 +7,14 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"samuellando.com/YNAFB/internal/importer"
+	"samuellando.com/YNAFB/internal/importer/testparser"
 )
+
+func init() {
+	importer.Register(testparser.Parser{})
+}
 
 func TestCreateCommands(t *testing.T) {
 	tests := []struct {
@@ -224,6 +231,52 @@ func TestAccountListTransactionsShowsMismatchedSingleSplitSeparately(t *testing.
 
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestAccountImport(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "ws-visa"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	statementFile := filepath.Join(t.TempDir(), "statement.txt")
+	if err := os.WriteFile(statementFile, []byte("ynafb-test-statement"), 0o644); err != nil {
+		t.Fatalf("write statement file: %v", err)
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "import", "ws-visa", statementFile)
+	if exitCode != 0 {
+		t.Fatalf("import failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	if stdout != "imported 2 transactions\n" {
+		t.Fatalf("unexpected import stdout: %q", stdout)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "list-transactions", "ws-visa")
+	if exitCode != 0 {
+		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	if !strings.Contains(stdout, "Test Merchant") {
+		t.Fatalf("expected Test Merchant in listing, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Incoming Transfer") {
+		t.Fatalf("expected Incoming Transfer in listing, got:\n%s", stdout)
 	}
 }
 
