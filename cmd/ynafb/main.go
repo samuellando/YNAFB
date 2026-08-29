@@ -15,6 +15,7 @@ import (
 
 	"samuellando.com/YNAFB/data"
 	dbutil "samuellando.com/YNAFB/internal/db"
+	"samuellando.com/YNAFB/internal/importer"
 )
 
 type budgetContext struct {
@@ -66,7 +67,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	queries := data.New(db)
 	ctx := context.Background()
 
-	if err := executeResourceAction(ctx, queries, resource, action, *budgetName, remaining[2:], stdout); err != nil {
+	if err := executeResourceAction(ctx, db, queries, resource, action, *budgetName, remaining[2:], stdout); err != nil {
 		return fail(stderr, err)
 	}
 
@@ -78,6 +79,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list-transactions [account]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account import [account] [pdf]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [name] [type] [start] [end|null] [category] [amount]\n")
@@ -90,7 +92,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
 }
 
-func executeResourceAction(ctx context.Context, queries *data.Queries, resource, action, budgetName string, args []string, stdout io.Writer) error {
+func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Queries, resource, action, budgetName string, args []string, stdout io.Writer) error {
 	if resource == "budget" {
 		if action != "create" {
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -157,6 +159,23 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			}
 
 			return printAccountTransactions(stdout, accountID, transactions)
+
+		case "import":
+			if len(args) != 2 {
+				return fmt.Errorf("account import requires [account] [pdf]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			accountID, err := resolveAccountID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			return importAccountTransactions(ctx, db, queries, budget, accountID, args[1], stdout)
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -651,6 +670,52 @@ func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, budget b
 	}
 
 	return created.ID, nil
+}
+
+func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, accountID int64, path string, stdout io.Writer) error {
+	stmt, err := importer.ImportFile(path)
+	if err != nil {
+		return err
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	txQueries := queries.WithTx(tx)
+	for _, entry := range stmt.Entries {
+		payeeName := strings.TrimSpace(entry.Payee)
+		if payeeName == "" {
+			payeeName = "unknown"
+		}
+
+		payeeID, err := resolveOrCreatePayeeID(ctx, txQueries, budget, payeeName)
+		if err != nil {
+			return err
+		}
+
+		_, err = txQueries.CreateTransaction(ctx, data.CreateTransactionParams{
+			Date:         entry.TransDate,
+			Account:      accountID,
+			Payee:        payeeID,
+			TotalOutflow: entry.Outflow,
+			TotalInflow:  entry.Inflow,
+			Reconciled:   false,
+			Note:         entry.Note,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(stdout, "imported %d transactions\n", len(stmt.Entries))
+	return nil
 }
 
 func resolveSplitTargets(ctx context.Context, queries *data.Queries, budget budgetContext, outflow, inflow int64, args splitTargetArgs) (int64, sql.NullInt64, error) {
