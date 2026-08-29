@@ -139,12 +139,16 @@ func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
 		t.Fatalf("transaction-split create failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
-	stdout, stderr, exitCode = invoke(t, dbPath, "account", "list-transactions", "Checking")
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "show", "Checking")
 	if exitCode != 0 {
-		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+		t.Fatalf("account show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
 	want := strings.Join([]string{
+		"Name: Checking",
+		"Balance: -12.50",
+		"Reconciled balance: 0.00",
+		"",
 		"ID  DATE        PAYEE         TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
 		"1   2026-08-28  Corner Store  Groceries  12.50    0.00    false       snacks",
 		"",
@@ -175,12 +179,16 @@ func TestAccountListTransactionsIncludesTransactionsWithoutSplits(t *testing.T) 
 		}
 	}
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "ws-visa")
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "show", "ws-visa")
 	if exitCode != 0 {
-		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+		t.Fatalf("account show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
 	want := strings.Join([]string{
+		"Name: ws-visa",
+		"Balance: -42.00",
+		"Reconciled balance: 0.00",
+		"",
 		"ID  DATE        PAYEE        TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE",
 		"1   2026-08-28  Online Shop          42.00    0.00    false       pending import",
 		"",
@@ -213,12 +221,16 @@ func TestAccountListTransactionsShowsMismatchedSingleSplitSeparately(t *testing.
 		}
 	}
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "Checking")
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "show", "Checking")
 	if exitCode != 0 {
-		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+		t.Fatalf("account show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
 	want := strings.Join([]string{
+		"Name: Checking",
+		"Balance: -42.00",
+		"Reconciled balance: 0.00",
+		"",
 		"ID  DATE        PAYEE        TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
 		"1   2026-08-28  Online Shop  split      42.00    0.00    false       import mismatch",
 		"                             Groceries  40.00    0.00                ",
@@ -267,9 +279,9 @@ func TestAccountImport(t *testing.T) {
 		t.Fatalf("unexpected stderr: %q", stderr)
 	}
 
-	stdout, stderr, exitCode = invoke(t, dbPath, "account", "list-transactions", "ws-visa")
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "show", "ws-visa")
 	if exitCode != 0 {
-		t.Fatalf("list-transactions failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+		t.Fatalf("account show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
 	if !strings.Contains(stdout, "Test Merchant") {
@@ -310,12 +322,16 @@ func TestAccountListTransactions(t *testing.T) {
 		}
 	}
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "Checking")
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "show", "Checking")
 	if exitCode != 0 {
 		t.Fatalf("command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
 	want := strings.Join([]string{
+		"Name: Checking",
+		"Balance: -50.00",
+		"Reconciled balance: 0.00",
+		"",
 		"ID  DATE        PAYEE   TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
 		"3   2026-08-30  Market  split      25.00    0.00    false       weekly shop",
 		"                        Groceries  20.00    0.00                ",
@@ -359,12 +375,16 @@ func TestAccountListTransactionsShowsMirroredTransfersForOtherAccount(t *testing
 		}
 	}
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "merry")
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "show", "merry")
 	if exitCode != 0 {
 		t.Fatalf("command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
 	want := strings.Join([]string{
+		"Name: merry",
+		"Balance: 1.75",
+		"Reconciled balance: 0.00",
+		"",
 		"ID  DATE        PAYEE   TARGET   OUTFLOW  INFLOW  RECONCILED  NOTE",
 		"1   2026-08-09  superC  ws-visa  0.00     0.75    false       ",
 		"2   2026-08-09  superC  ws-visa  0.00     1.00    false       ",
@@ -427,12 +447,12 @@ func TestAccountListTransactionsEmpty(t *testing.T) {
 		t.Fatalf("setup failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
-	stdout, stderr, exitCode = invoke(t, dbPath, "account", "list-transactions", "Checking")
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "show", "Checking")
 	if exitCode != 0 {
 		t.Fatalf("command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
-	want := "ID  DATE  PAYEE  TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE\n"
+	want := "Name: Checking\nBalance: 0.00\nReconciled balance: 0.00\n\nID  DATE  PAYEE  TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE\n"
 	if stdout != want {
 		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
 	}
@@ -443,7 +463,7 @@ func TestAccountListTransactionsEmpty(t *testing.T) {
 }
 
 func TestAccountListTransactionsMissingAccount(t *testing.T) {
-	stdout, stderr, exitCode := invoke(t, filepath.Join(t.TempDir(), "ynafb.db"), "account", "list-transactions")
+	stdout, stderr, exitCode := invoke(t, filepath.Join(t.TempDir(), "ynafb.db"), "account", "show")
 	if exitCode != 1 {
 		t.Fatalf("unexpected exit code: got %d want 1", exitCode)
 	}
@@ -452,7 +472,7 @@ func TestAccountListTransactionsMissingAccount(t *testing.T) {
 		t.Fatalf("unexpected stdout: %q", stdout)
 	}
 
-	want := "error: account list-transactions requires [account]\n"
+	want := "error: account show requires [account]\n"
 	if stderr != want {
 		t.Fatalf("unexpected stderr: got %q want %q", stderr, want)
 	}
@@ -506,13 +526,13 @@ func TestBudgetFlagSelectsBudget(t *testing.T) {
 		t.Fatalf("unexpected stderr: %q", stderr)
 	}
 
-	stdout, stderr, exitCode = invoke(t, dbPath, "--budget", "Travel Budget", "account", "list-transactions", "Checking")
+	stdout, stderr, exitCode = invoke(t, dbPath, "--budget", "Travel Budget", "account", "show", "Checking")
 	if exitCode != 0 {
 		t.Fatalf("list command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
-	if stdout != "ID  DATE  PAYEE  TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE\n" {
-		t.Fatalf("unexpected list stdout: %q", stdout)
+	if stdout != "Name: Checking\nBalance: 0.00\nReconciled balance: 0.00\n\nID  DATE  PAYEE  TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE\n" {
+		t.Fatalf("unexpected show stdout: %q", stdout)
 	}
 
 	if stderr != "" {
@@ -583,8 +603,8 @@ func TestListCommands(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"budget", "list"}, "NAME\nHome Budget\n"},
-		{[]string{"account", "list"}, "NAME\nChecking\nSavings\n"},
+		{[]string{"budget", "list"}, "NAME         BALANCE  RECONCILED BALANCE\nHome Budget  -35.00   0.00\n"},
+		{[]string{"account", "list"}, "NAME      BALANCE  RECONCILED BALANCE\nChecking  -25.00   0.00\nSavings   -10.00   0.00\n"},
 		{[]string{"category", "list"}, "NAME\nGroceries\nHousehold\n"},
 		{[]string{"payee", "list"}, "NAME\nCafe\nMarket\n"},
 		{[]string{"allocation", "list"}, "CATEGORY   AMOUNT\nGroceries  50.00\nHousehold  25.00\n"},
@@ -716,7 +736,7 @@ func TestCascadeDelete(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("budget list failed after delete: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "NAME\n" {
+	if stdout != "NAME  BALANCE  RECONCILED BALANCE\n" {
 		t.Fatalf("expected no budgets after budget delete, got %q", stdout)
 	}
 

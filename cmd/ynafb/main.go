@@ -82,7 +82,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account delete [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list-transactions [account]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account show [account]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account import [account] [pdf]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation list\n")
@@ -125,7 +125,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			return nil
 
 		case "list":
-			budgets, err := queries.ListBudgets(ctx)
+			budgets, err := queries.ListBudgetBalances(ctx)
 			if err != nil {
 				return err
 			}
@@ -184,12 +184,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			accounts, err := queries.ListAccountsByBudget(ctx, budget.ID)
+			accounts, err := queries.ListAccountBalances(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
 
-			return printNames(stdout, accounts, func(a data.Account) string { return stringValue(a.Name) })
+			return printAccountBalances(stdout, accounts)
 
 		case "delete":
 			if len(args) != 1 {
@@ -213,9 +213,9 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			fmt.Fprintf(stdout, "deleted account %q\n", args[0])
 			return nil
 
-		case "list-transactions":
+		case "show":
 			if len(args) != 1 {
-				return fmt.Errorf("account list-transactions requires [account]")
+				return fmt.Errorf("account show requires [account]")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -225,6 +225,15 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			accountID, err := resolveAccountID(ctx, queries, budget, args[0])
 			if err != nil {
+				return err
+			}
+
+			balances, err := queries.GetAccountBalances(ctx, accountID)
+			if err != nil {
+				return err
+			}
+
+			if err := printAccountSummary(stdout, args[0], balances.Balance, balances.ReconciledBalance); err != nil {
 				return err
 			}
 
@@ -1054,13 +1063,13 @@ func printCreated(w io.Writer, resource string, id int64) {
 	fmt.Fprintf(w, "created %s %d\n", resource, id)
 }
 
-func printBudgets(w io.Writer, budgets []data.Budget) error {
+func printBudgets(w io.Writer, budgets []data.ListBudgetBalancesRow) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "NAME"); err != nil {
+	if _, err := fmt.Fprintln(tw, "NAME\tBALANCE\tRECONCILED BALANCE"); err != nil {
 		return err
 	}
 	for _, b := range budgets {
-		if _, err := fmt.Fprintf(tw, "%s\n", stringValue(b.Name)); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", stringValue(b.Name), formatCents(b.Balance), formatCents(b.ReconciledBalance)); err != nil {
 			return err
 		}
 	}
@@ -1074,6 +1083,19 @@ func printNames[T any](w io.Writer, rows []T, name func(T) string) error {
 	}
 	for _, row := range rows {
 		if _, err := fmt.Fprintf(tw, "%s\n", name(row)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func printAccountBalances(w io.Writer, accounts []data.ListAccountBalancesRow) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "NAME\tBALANCE\tRECONCILED BALANCE"); err != nil {
+		return err
+	}
+	for _, a := range accounts {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", stringValue(a.Name), formatCents(a.Balance), formatCents(a.ReconciledBalance)); err != nil {
 			return err
 		}
 	}
@@ -1140,6 +1162,22 @@ func printTransactionsByBudget(w io.Writer, transactions []data.ListTransactions
 		}
 	}
 	return tw.Flush()
+}
+
+func printAccountSummary(w io.Writer, name string, balance, reconciledBalance int64) error {
+	if _, err := fmt.Fprintf(w, "Name: %s\n", name); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Balance: %s\n", formatCents(balance)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Reconciled balance: %s\n", formatCents(reconciledBalance)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	return nil
 }
 
 func printAccountTransactions(w io.Writer, accountID int64, transactions []data.ListAccountTransactionsRow) error {
