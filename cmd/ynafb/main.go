@@ -673,7 +673,12 @@ func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, budget b
 }
 
 func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, accountID int64, path string, stdout io.Writer) error {
-	stmt, err := importer.ImportFile(path)
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	stmt, err := importer.Parse(contents)
 	if err != nil {
 		return err
 	}

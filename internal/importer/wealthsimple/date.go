@@ -1,4 +1,4 @@
-package importer
+package wealthsimple
 
 import (
 	"fmt"

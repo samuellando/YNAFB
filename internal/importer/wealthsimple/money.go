@@ -1,8 +1,7 @@
-package importer
+package wealthsimple
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -16,10 +15,10 @@ func isMinusSign(r rune) bool {
 	return false
 }
 
-// ParseMoney converts a money string such as "$1,234.56", "–$99.00", or
+// parseMoney converts a money string such as "$1,234.56", "–$99.00", or
 // "(1,234.56)" into an amount in cents. A leading minus, en/em dash, or
 // surrounding parentheses indicate a negative value.
-func ParseMoney(s string) (int64, error) {
+func parseMoney(s string) (int64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, fmt.Errorf("empty amount")
@@ -95,29 +94,4 @@ func ParseMoney(s string) (int64, error) {
 		cents = -cents
 	}
 	return cents, nil
-}
-
-var trailingAmountRe = regexp.MustCompile(`([\x{2010}-\x{2015}\x{2212}-]\s*)?\$[\d,]+\.\d{2}\s*$`)
-
-// extractTrailingAmount strips a trailing money amount from a line, returning
-// the amount in cents and the remaining text.
-func extractTrailingAmount(s string) (int64, string, bool) {
-	loc := trailingAmountRe.FindStringIndex(s)
-	if loc == nil {
-		return 0, s, false
-	}
-	cents, err := ParseMoney(s[loc[0]:loc[1]])
-	if err != nil {
-		return 0, s, false
-	}
-	return cents, strings.TrimSpace(s[:loc[0]]), true
-}
-
-// applyAmount assigns signed cents to the entry's outflow/inflow fields.
-func applyAmount(e *Entry, cents int64) {
-	if cents < 0 {
-		e.Inflow = -cents
-	} else {
-		e.Outflow = cents
-	}
 }

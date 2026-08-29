@@ -3,16 +3,23 @@ package importer
 import (
 	"fmt"
 	"sort"
+
+	"samuellando.com/YNAFB/internal/importer/wealthsimple"
+	"samuellando.com/YNAFB/internal/importer/statement"
 )
 
-// Parser converts a structured statement document into a normalized Statement.
+func init() {
+	Register(wealthsimple.Parser{})
+}
+
+// Parser converts a raw statement (PDF bytes) into a normalized Statement.
 type Parser interface {
 	// Name returns a short identifier for the parser.
 	Name() string
-	// Match reports whether this parser can handle the given document.
-	Match(doc Document) bool
-	// Parse extracts a normalized Statement from the document.
-	Parse(doc Document) (Statement, error)
+	// Match reports whether this parser can handle the given statement data.
+	Match(data []byte) bool
+	// Parse extracts a normalized Statement from the data.
+	Parse(data []byte) (statement.Statement, error)
 }
 
 var parsers []Parser
@@ -34,21 +41,12 @@ func Parsers() []Parser {
 	return ordered
 }
 
-// Parse detects the bank and parses the statement document.
-func Parse(doc Document) (Statement, error) {
+// Parse detects the bank and parses the statement data.
+func Parse(data []byte) (statement.Statement, error) {
 	for _, p := range Parsers() {
-		if p.Match(doc) {
-			return p.Parse(doc)
+		if p.Match(data) {
+			return p.Parse(data)
 		}
 	}
-	return Statement{}, fmt.Errorf("unsupported statement format")
-}
-
-// ImportFile extracts text from a PDF file and parses it into a Statement.
-func ImportFile(path string) (Statement, error) {
-	doc, err := ExtractFile(path)
-	if err != nil {
-		return Statement{}, err
-	}
-	return Parse(doc)
+	return statement.Statement{}, fmt.Errorf("unsupported statement format")
 }
