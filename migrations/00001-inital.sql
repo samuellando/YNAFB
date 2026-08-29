@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS account (
     name STRING NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS transaction (
+CREATE TABLE IF NOT EXISTS "transaction" (
     id INTEGER PRIMARY KEY,
     date DATETIME NOT NULL,
     account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS transaction (
 
 CREATE TABLE IF NOT EXISTS transaction_split (
     id INTEGER PRIMARY KEY,
-    transaction INTEGER NOT NULL REFERENCES transaction (id) ON DELETE CASCADE,
+    "transaction" INTEGER NOT NULL REFERENCES "transaction" (id) ON DELETE CASCADE,
     to_account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
     from_account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
     category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,

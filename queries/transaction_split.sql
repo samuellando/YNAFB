@@ -1,6 +1,6 @@
 -- name: CreateTransactionSplit :one
 INSERT INTO transaction_split (
-  transaction,
+  "transaction",
   to_account,
   from_account,
   category,

@@ -1,5 +1,5 @@
 -- name: CreateTransaction :one
-INSERT INTO transaction (
+INSERT INTO "transaction" (
   date,
   account,
   payee,
