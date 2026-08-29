@@ -52,6 +52,7 @@ type Payee struct {
 
 type PayeeDefaultSplit struct {
 	ID          int64
+	Payee       int64
 	ToAccount   int64
 	FromAccount int64
 	Category    int64
@@ -60,12 +61,14 @@ type PayeeDefaultSplit struct {
 }
 
 type Transaction struct {
-	ID         int64
-	Date       time.Time
-	Account    int64
-	Payee      int64
-	Reconciled bool
-	Note       interface{}
+	ID           int64
+	Date         time.Time
+	Account      int64
+	Payee        int64
+	TotalOutflow int64
+	TotalInflow  int64
+	Reconciled   bool
+	Note         interface{}
 }
 
 type TransactionSplit struct {
