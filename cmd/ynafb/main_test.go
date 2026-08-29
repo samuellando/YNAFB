@@ -98,6 +98,104 @@ func TestCreateCommands(t *testing.T) {
 	}
 }
 
+func TestAccountListTransactions(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "1", "Checking"},
+		{"account", "create", "1", "Savings"},
+		{"category", "create", "1", "Groceries"},
+		{"category", "create", "1", "Household"},
+		{"payee", "create", "1", "Cafe"},
+		{"payee", "create", "1", "Bank"},
+		{"payee", "create", "1", "Market"},
+		{"transaction", "create", "2026-08-28", "1", "1", "true", "coffee"},
+		{"transaction-split", "create", "1", "1", "1", "1", "1000", "0"},
+		{"transaction", "create", "2026-08-29", "1", "2", "false", "move money"},
+		{"transaction-split", "create", "2", "2", "1", "1", "1500", "0"},
+		{"transaction", "create", "2026-08-30", "1", "3", "false", "weekly shop"},
+		{"transaction-split", "create", "3", "1", "1", "1", "2000", "0"},
+		{"transaction-split", "create", "3", "1", "1", "2", "500", "0"},
+		{"transaction", "create", "2026-08-31", "2", "3", "false", "should not appear"},
+		{"transaction-split", "create", "4", "2", "2", "1", "9999", "0"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "list-transactions", "1")
+	if exitCode != 0 {
+		t.Fatalf("command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"ID  DATE        PAYEE   TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"1   2026-08-28  Cafe    Groceries  1000     0       true        coffee",
+		"2   2026-08-29  Bank    Savings    1500     0       false       move money",
+		"3   2026-08-30  Market  split      2500     0       false       weekly shop",
+		"                        Groceries  2000     0                   ",
+		"                        Household  500      0                   ",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestAccountListTransactionsEmpty(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "create", "Home Budget")
+	if exitCode != 0 {
+		t.Fatalf("setup failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "create", "1", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("setup failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "list-transactions", "1")
+	if exitCode != 0 {
+		t.Fatalf("command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := "ID  DATE  PAYEE  TARGET  OUTFLOW  INFLOW  RECONCILED  NOTE\n"
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestAccountListTransactionsMissingAccount(t *testing.T) {
+	stdout, stderr, exitCode := invoke(t, filepath.Join(t.TempDir(), "ynafb.db"), "account", "list-transactions")
+	if exitCode != 1 {
+		t.Fatalf("unexpected exit code: got %d want 1", exitCode)
+	}
+
+	if stdout != "" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+
+	want := "error: account list-transactions requires [account]\n"
+	if stderr != want {
+		t.Fatalf("unexpected stderr: got %q want %q", stderr, want)
+	}
+}
+
 func TestUsageForMissingArguments(t *testing.T) {
 	stdout, stderr, exitCode := invoke(t, filepath.Join(t.TempDir(), "ynafb.db"))
 	if exitCode != 1 {
