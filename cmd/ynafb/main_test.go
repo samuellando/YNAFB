@@ -554,6 +554,182 @@ func TestUsageForMissingArguments(t *testing.T) {
 	}
 }
 
+func TestListCommands(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Groceries"},
+		{"category", "create", "Household"},
+		{"payee", "create", "Market"},
+		{"payee", "create", "Cafe"},
+		{"allocation", "create", "Groceries", "5000"},
+		{"allocation", "create", "Household", "2500"},
+		{"goal", "create", "Vacation", "target", "2026-09-01", "null", "Groceries", "100000"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
+		{"transaction", "create", "2026-08-29", "Savings", "Cafe", "1000", "0", "coffee"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"budget", "list"}, "NAME\nHome Budget\n"},
+		{[]string{"account", "list"}, "NAME\nChecking\nSavings\n"},
+		{[]string{"category", "list"}, "NAME\nGroceries\nHousehold\n"},
+		{[]string{"payee", "list"}, "NAME\nCafe\nMarket\n"},
+		{[]string{"allocation", "list"}, "CATEGORY   AMOUNT\nGroceries  50.00\nHousehold  25.00\n"},
+		{[]string{"goal", "list"}, "NAME      TYPE    START       END  CATEGORY   AMOUNT\nVacation  target  2026-09-01       Groceries  1000.00\n"},
+		{[]string{"transaction", "list"}, "ID  DATE        ACCOUNT   PAYEE   OUTFLOW  INFLOW  NOTE\n2   2026-08-29  Savings   Cafe    10.00    0.00    coffee\n1   2026-08-28  Checking  Market  25.00    0.00    shop\n"},
+	}
+
+	for _, tt := range tests {
+		stdout, stderr, exitCode := invoke(t, dbPath, tt.args...)
+		if exitCode != 0 {
+			t.Fatalf("command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(tt.args, " "), exitCode, stdout, stderr)
+		}
+		if stdout != tt.want {
+			t.Fatalf("command %q: got %q want %q", strings.Join(tt.args, " "), stdout, tt.want)
+		}
+		if stderr != "" {
+			t.Fatalf("command %q: unexpected stderr %q", strings.Join(tt.args, " "), stderr)
+		}
+	}
+}
+
+func TestDeleteCommands(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"payee", "create", "Market"},
+		{"allocation", "create", "Groceries", "5000"},
+		{"goal", "create", "Vacation", "target", "2026-09-01", "null", "Groceries", "100000"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
+		{"transaction-split", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"payee-default-split", "create", "Market", "Checking", "Checking", "Groceries", "100", "0"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"transaction-split", "delete", "1"}, "deleted transaction-split 1\n"},
+		{[]string{"payee-default-split", "delete", "1"}, "deleted payee-default-split 1\n"},
+		{[]string{"transaction", "delete", "1"}, "deleted transaction 1\n"},
+		{[]string{"allocation", "delete", "Groceries"}, "deleted allocation \"Groceries\"\n"},
+		{[]string{"goal", "delete", "Vacation"}, "deleted goal \"Vacation\"\n"},
+		{[]string{"payee", "delete", "Market"}, "deleted payee \"Market\"\n"},
+		{[]string{"category", "delete", "Groceries"}, "deleted category \"Groceries\"\n"},
+		{[]string{"account", "delete", "Checking"}, "deleted account \"Checking\"\n"},
+	}
+
+	for _, tt := range tests {
+		stdout, stderr, exitCode := invoke(t, dbPath, tt.args...)
+		if exitCode != 0 {
+			t.Fatalf("command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(tt.args, " "), exitCode, stdout, stderr)
+		}
+		if stdout != tt.want {
+			t.Fatalf("command %q: got %q want %q", strings.Join(tt.args, " "), stdout, tt.want)
+		}
+		if stderr != "" {
+			t.Fatalf("command %q: unexpected stderr %q", strings.Join(tt.args, " "), stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "list")
+	if exitCode != 0 {
+		t.Fatalf("transaction list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "ID  DATE  ACCOUNT  PAYEE  OUTFLOW  INFLOW  NOTE\n" {
+		t.Fatalf("expected empty transaction list after deletes, got %q", stdout)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "budget", "delete", "Home Budget")
+	if exitCode != 0 {
+		t.Fatalf("budget delete failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "deleted budget \"Home Budget\"\n" {
+		t.Fatalf("unexpected budget delete stdout %q", stdout)
+	}
+}
+
+func TestCascadeDelete(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"payee", "create", "Market"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
+		{"transaction-split", "create", "1", "2500", "0", "--category", "Groceries"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "delete", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("account delete failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+
+	// Verify transaction is gone (cascade delete)
+	stdout, stderr, exitCode = invoke(t, dbPath, "transaction", "list")
+	if exitCode != 0 {
+		t.Fatalf("transaction list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "ID  DATE  ACCOUNT  PAYEE  OUTFLOW  INFLOW  NOTE\n" {
+		t.Fatalf("expected cascaded transactions to be gone, got %q", stdout)
+	}
+
+	// Delete budget - this should cascade delete everything
+	stdout, stderr, exitCode = invoke(t, dbPath, "budget", "delete", "Home Budget")
+	if exitCode != 0 {
+		t.Fatalf("budget delete failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+
+	// After budget deletion, verify budget is gone
+	stdout, stderr, exitCode = invoke(t, dbPath, "budget", "list")
+	if exitCode != 0 {
+		t.Fatalf("budget list failed after delete: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "NAME\n" {
+		t.Fatalf("expected no budgets after budget delete, got %q", stdout)
+	}
+
+	// After budget deletion, we can't list accounts (no budget context)
+	// This is expected behavior - verify we can't list accounts
+	stdout, stderr, exitCode = invoke(t, dbPath, "account", "list")
+	if exitCode == 0 {
+		t.Fatalf("account list should fail when no budget exists, got stdout=%q", stdout)
+	}
+	if !strings.Contains(stderr, "no budgets exist") {
+		t.Fatalf("expected 'no budgets exist' error, got stderr=%q", stderr)
+	}
+}
 func invoke(t *testing.T, dbPath string, args ...string) (string, string, int) {
 	t.Helper()
 

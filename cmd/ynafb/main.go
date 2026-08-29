@@ -77,16 +77,32 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 func usage(w io.Writer) {
 	fmt.Fprintf(w, "Usage:\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list-transactions [account]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account import [account] [pdf]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation delete [category]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [name] [type] [start] [end|null] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee-default-split create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee-default-split delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [total_out] [total_in] [note]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction-split create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction-split delete [id]\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
@@ -94,21 +110,48 @@ func usage(w io.Writer) {
 
 func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Queries, resource, action, budgetName string, args []string, stdout io.Writer) error {
 	if resource == "budget" {
-		if action != "create" {
+		switch action {
+		case "create":
+			if len(args) != 1 {
+				return fmt.Errorf("budget create requires [name]")
+			}
+
+			result, err := queries.CreateBudget(ctx, args[0])
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "budget", result.ID)
+			return nil
+
+		case "list":
+			budgets, err := queries.ListBudgets(ctx)
+			if err != nil {
+				return err
+			}
+
+			return printBudgets(stdout, budgets)
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("budget delete requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteBudget(ctx, budget.ID); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted budget %q\n", budget.Name)
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		if len(args) != 1 {
-			return fmt.Errorf("budget create requires [name]")
-		}
-
-		result, err := queries.CreateBudget(ctx, args[0])
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "budget", result.ID)
-		return nil
 	}
 
 	switch resource {
@@ -133,6 +176,41 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			printCreated(stdout, "account", result.ID)
+			return nil
+
+		case "list":
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			accounts, err := queries.ListAccountsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printNames(stdout, accounts, func(a data.Account) string { return stringValue(a.Name) })
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("account delete requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			accountID, err := resolveAccountID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteAccount(ctx, accountID); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted account %q\n", args[0])
 			return nil
 
 		case "list-transactions":
@@ -182,307 +260,534 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 		}
 
 	case "allocation":
-		if action != "create" {
+		switch action {
+		case "create":
+			if len(args) != 2 {
+				return fmt.Errorf("allocation create requires [category] [amount]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			category, err := resolveCategoryID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			amount, err := parseInt64("amount", args[1])
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
+				Budget:   budget.ID,
+				Category: category,
+				Amount:   amount,
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "allocation", result.ID)
+			return nil
+
+		case "list":
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			allocations, err := queries.ListAllocationsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printAllocations(stdout, allocations)
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("allocation delete requires [category]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			category, err := resolveCategoryID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteAllocationByCategory(ctx, data.DeleteAllocationByCategoryParams{
+				Budget:   budget.ID,
+				Category: category,
+			}); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted allocation %q\n", args[0])
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		if len(args) != 2 {
-			return fmt.Errorf("allocation create requires [category] [amount]")
-		}
-
-		budget, err := resolveBudget(ctx, queries, budgetName)
-		if err != nil {
-			return err
-		}
-
-		category, err := resolveCategoryID(ctx, queries, budget, args[0])
-		if err != nil {
-			return err
-		}
-
-		amount, err := parseInt64("amount", args[1])
-		if err != nil {
-			return err
-		}
-
-		result, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
-			Budget:   budget.ID,
-			Category: category,
-			Amount:   amount,
-		})
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "allocation", result.ID)
-		return nil
 
 	case "category":
-		if action != "create" {
+		switch action {
+		case "create":
+			if len(args) != 1 {
+				return fmt.Errorf("category create requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
+				Budget: budget.ID,
+				Name:   args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "category", result.ID)
+			return nil
+
+		case "list":
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			categories, err := queries.ListCategoriesByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printNames(stdout, categories, func(c data.Category) string { return stringValue(c.Name) })
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("category delete requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			categoryID, err := resolveCategoryID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteCategory(ctx, categoryID); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted category %q\n", args[0])
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		if len(args) != 1 {
-			return fmt.Errorf("category create requires [name]")
-		}
-
-		budget, err := resolveBudget(ctx, queries, budgetName)
-		if err != nil {
-			return err
-		}
-
-		result, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-			Budget: budget.ID,
-			Name:   args[0],
-		})
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "category", result.ID)
-		return nil
 
 	case "goal":
-		if action != "create" {
+		switch action {
+		case "create":
+			if len(args) != 6 {
+				return fmt.Errorf("goal create requires [name] [type] [start] [end|null] [category] [amount]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			start, err := parseTime("start", args[2])
+			if err != nil {
+				return err
+			}
+
+			end, err := parseNullableTime("end", args[3])
+			if err != nil {
+				return err
+			}
+
+			category, err := resolveCategoryID(ctx, queries, budget, args[4])
+			if err != nil {
+				return err
+			}
+
+			amount, err := parseInt64("amount", args[5])
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreateGoal(ctx, data.CreateGoalParams{
+				Budget:   budget.ID,
+				Name:     args[0],
+				Type:     args[1],
+				Start:    start,
+				End:      end,
+				Category: category,
+				Amount:   amount,
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "goal", result.ID)
+			return nil
+
+		case "list":
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			goals, err := queries.ListGoalsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printGoals(stdout, goals)
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("goal delete requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			goal, err := queries.GetGoalByName(ctx, data.GetGoalByNameParams{
+				Budget: budget.ID,
+				Name:   args[0],
+			})
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("unknown goal %q in budget %q", args[0], budget.Name)
+				}
+				return err
+			}
+
+			if err := queries.DeleteGoal(ctx, goal.ID); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted goal %q\n", args[0])
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		if len(args) != 6 {
-			return fmt.Errorf("goal create requires [name] [type] [start] [end|null] [category] [amount]")
-		}
-
-		budget, err := resolveBudget(ctx, queries, budgetName)
-		if err != nil {
-			return err
-		}
-
-		start, err := parseTime("start", args[2])
-		if err != nil {
-			return err
-		}
-
-		end, err := parseNullableTime("end", args[3])
-		if err != nil {
-			return err
-		}
-
-		category, err := resolveCategoryID(ctx, queries, budget, args[4])
-		if err != nil {
-			return err
-		}
-
-		amount, err := parseInt64("amount", args[5])
-		if err != nil {
-			return err
-		}
-
-		result, err := queries.CreateGoal(ctx, data.CreateGoalParams{
-			Budget:   budget.ID,
-			Name:     args[0],
-			Type:     args[1],
-			Start:    start,
-			End:      end,
-			Category: category,
-			Amount:   amount,
-		})
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "goal", result.ID)
-		return nil
 
 	case "payee":
-		if action != "create" {
+		switch action {
+		case "create":
+			if len(args) != 1 {
+				return fmt.Errorf("payee create requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
+				Budget: budget.ID,
+				Name:   args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "payee", result.ID)
+			return nil
+
+		case "list":
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			payees, err := queries.ListPayeesByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printNames(stdout, payees, func(p data.Payee) string { return stringValue(p.Name) })
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("payee delete requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			payeeID, err := resolvePayeeID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeletePayee(ctx, payeeID); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted payee %q\n", args[0])
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		if len(args) != 1 {
-			return fmt.Errorf("payee create requires [name]")
-		}
-
-		budget, err := resolveBudget(ctx, queries, budgetName)
-		if err != nil {
-			return err
-		}
-
-		result, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-			Budget: budget.ID,
-			Name:   args[0],
-		})
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "payee", result.ID)
-		return nil
 
 	case "payee-default-split":
-		if action != "create" {
+		switch action {
+		case "create":
+			if len(args) != 6 {
+				return fmt.Errorf("payee-default-split create requires [payee] [to_account] [from_account] [category] [outflow] [inflow]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			payee, err := resolvePayeeID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			toAccount, err := resolveAccountID(ctx, queries, budget, args[1])
+			if err != nil {
+				return err
+			}
+
+			fromAccount, err := resolveAccountID(ctx, queries, budget, args[2])
+			if err != nil {
+				return err
+			}
+
+			category, err := resolveCategoryID(ctx, queries, budget, args[3])
+			if err != nil {
+				return err
+			}
+
+			outflow, err := parseInt64("outflow", args[4])
+			if err != nil {
+				return err
+			}
+
+			inflow, err := parseInt64("inflow", args[5])
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreatePayeeDefaultSplit(ctx, data.CreatePayeeDefaultSplitParams{
+				Payee:       payee,
+				ToAccount:   toAccount,
+				FromAccount: fromAccount,
+				Category:    category,
+				Outflow:     outflow,
+				Inflow:      inflow,
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "payee-default-split", result.ID)
+			return nil
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("payee-default-split delete requires [id]")
+			}
+
+			id, err := parseInt64("id", args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeletePayeeDefaultSplit(ctx, id); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted payee-default-split %d\n", id)
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		if len(args) != 6 {
-			return fmt.Errorf("payee-default-split create requires [payee] [to_account] [from_account] [category] [outflow] [inflow]")
-		}
-
-		budget, err := resolveBudget(ctx, queries, budgetName)
-		if err != nil {
-			return err
-		}
-
-		payee, err := resolvePayeeID(ctx, queries, budget, args[0])
-		if err != nil {
-			return err
-		}
-
-		toAccount, err := resolveAccountID(ctx, queries, budget, args[1])
-		if err != nil {
-			return err
-		}
-
-		fromAccount, err := resolveAccountID(ctx, queries, budget, args[2])
-		if err != nil {
-			return err
-		}
-
-		category, err := resolveCategoryID(ctx, queries, budget, args[3])
-		if err != nil {
-			return err
-		}
-
-		outflow, err := parseInt64("outflow", args[4])
-		if err != nil {
-			return err
-		}
-
-		inflow, err := parseInt64("inflow", args[5])
-		if err != nil {
-			return err
-		}
-
-		result, err := queries.CreatePayeeDefaultSplit(ctx, data.CreatePayeeDefaultSplitParams{
-			Payee:       payee,
-			ToAccount:   toAccount,
-			FromAccount: fromAccount,
-			Category:    category,
-			Outflow:     outflow,
-			Inflow:      inflow,
-		})
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "payee-default-split", result.ID)
-		return nil
 
 	case "transaction":
-		if action != "create" {
+		switch action {
+		case "create":
+			if len(args) != 6 {
+				return fmt.Errorf("transaction create requires [date] [account] [payee] [total_out] [total_in] [note]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			date, err := parseTime("date", args[0])
+			if err != nil {
+				return err
+			}
+
+			account, err := resolveAccountID(ctx, queries, budget, args[1])
+			if err != nil {
+				return err
+			}
+
+			payee, err := resolveOrCreatePayeeID(ctx, queries, budget, args[2])
+			if err != nil {
+				return err
+			}
+
+			totalOutflow, err := parseInt64("total_out", args[3])
+			if err != nil {
+				return err
+			}
+
+			totalInflow, err := parseInt64("total_in", args[4])
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+				Date:         date,
+				Account:      account,
+				Payee:        payee,
+				TotalOutflow: totalOutflow,
+				TotalInflow:  totalInflow,
+				Reconciled:   false,
+				Note:         args[5],
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "transaction", result.ID)
+			return nil
+
+		case "list":
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			transactions, err := queries.ListTransactionsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printTransactionsByBudget(stdout, transactions)
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("transaction delete requires [id]")
+			}
+
+			id, err := parseInt64("id", args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteTransaction(ctx, id); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted transaction %d\n", id)
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		if len(args) != 6 {
-			return fmt.Errorf("transaction create requires [date] [account] [payee] [total_out] [total_in] [note]")
-		}
-
-		budget, err := resolveBudget(ctx, queries, budgetName)
-		if err != nil {
-			return err
-		}
-
-		date, err := parseTime("date", args[0])
-		if err != nil {
-			return err
-		}
-
-		account, err := resolveAccountID(ctx, queries, budget, args[1])
-		if err != nil {
-			return err
-		}
-
-		payee, err := resolveOrCreatePayeeID(ctx, queries, budget, args[2])
-		if err != nil {
-			return err
-		}
-
-		totalOutflow, err := parseInt64("total_out", args[3])
-		if err != nil {
-			return err
-		}
-
-		totalInflow, err := parseInt64("total_in", args[4])
-		if err != nil {
-			return err
-		}
-
-		result, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-			Date:         date,
-			Account:      account,
-			Payee:        payee,
-			TotalOutflow: totalOutflow,
-			TotalInflow:  totalInflow,
-			Reconciled:   false,
-			Note:         args[5],
-		})
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "transaction", result.ID)
-		return nil
 
 	case "transaction-split":
-		if action != "create" {
+		switch action {
+		case "create":
+			positionals, targetArgs, err := parseSplitTargetArgs(args)
+			if err != nil {
+				return err
+			}
+
+			if len(positionals) != 3 {
+				return fmt.Errorf("transaction-split create requires [transaction] [outflow] [inflow] and exactly one of --category or --other-account")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			transactionID, err := parseInt64("transaction", positionals[0])
+			if err != nil {
+				return err
+			}
+
+			outflow, err := parseInt64("outflow", positionals[1])
+			if err != nil {
+				return err
+			}
+
+			inflow, err := parseInt64("inflow", positionals[2])
+			if err != nil {
+				return err
+			}
+
+			otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, outflow, inflow, targetArgs)
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreateTransactionSplit(ctx, data.CreateTransactionSplitParams{
+				Transaction:  transactionID,
+				OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
+				Category:     category,
+				Outflow:      outflow,
+				Inflow:       inflow,
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "transaction-split", result.ID)
+			return nil
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("transaction-split delete requires [id]")
+			}
+
+			id, err := parseInt64("id", args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteTransactionSplit(ctx, id); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted transaction-split %d\n", id)
+			return nil
+
+		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
-
-		positionals, targetArgs, err := parseSplitTargetArgs(args)
-		if err != nil {
-			return err
-		}
-
-		if len(positionals) != 3 {
-			return fmt.Errorf("transaction-split create requires [transaction] [outflow] [inflow] and exactly one of --category or --other-account")
-		}
-
-		budget, err := resolveBudget(ctx, queries, budgetName)
-		if err != nil {
-			return err
-		}
-
-		transactionID, err := parseInt64("transaction", positionals[0])
-		if err != nil {
-			return err
-		}
-
-		outflow, err := parseInt64("outflow", positionals[1])
-		if err != nil {
-			return err
-		}
-
-		inflow, err := parseInt64("inflow", positionals[2])
-		if err != nil {
-			return err
-		}
-
-		otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, outflow, inflow, targetArgs)
-		if err != nil {
-			return err
-		}
-
-		result, err := queries.CreateTransactionSplit(ctx, data.CreateTransactionSplitParams{
-			Transaction:  transactionID,
-			OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
-			Category:     category,
-			Outflow:      outflow,
-			Inflow:       inflow,
-		})
-		if err != nil {
-			return err
-		}
-
-		printCreated(stdout, "transaction-split", result.ID)
-		return nil
 
 	default:
 		return fmt.Errorf("unsupported resource %q", resource)
@@ -747,6 +1052,94 @@ func resolveSplitTargets(ctx context.Context, queries *data.Queries, budget budg
 
 func printCreated(w io.Writer, resource string, id int64) {
 	fmt.Fprintf(w, "created %s %d\n", resource, id)
+}
+
+func printBudgets(w io.Writer, budgets []data.Budget) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "NAME"); err != nil {
+		return err
+	}
+	for _, b := range budgets {
+		if _, err := fmt.Fprintf(tw, "%s\n", stringValue(b.Name)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func printNames[T any](w io.Writer, rows []T, name func(T) string) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "NAME"); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if _, err := fmt.Fprintf(tw, "%s\n", name(row)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func printAllocations(w io.Writer, allocations []data.ListAllocationsByBudgetRow) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "CATEGORY\tAMOUNT"); err != nil {
+		return err
+	}
+	for _, a := range allocations {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\n", stringValue(a.CategoryName), formatCents(a.Amount)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "NAME\tTYPE\tSTART\tEND\tCATEGORY\tAMOUNT"); err != nil {
+		return err
+	}
+	for _, g := range goals {
+		end := ""
+		if g.End.Valid {
+			end = g.End.Time.Format("2006-01-02")
+		}
+		if _, err := fmt.Fprintf(
+			tw,
+			"%s\t%s\t%s\t%s\t%s\t%s\n",
+			stringValue(g.Name),
+			stringValue(g.Type),
+			g.Start.Format("2006-01-02"),
+			end,
+			stringValue(g.CategoryName),
+			formatCents(g.Amount),
+		); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func printTransactionsByBudget(w io.Writer, transactions []data.ListTransactionsByBudgetRow) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "ID\tDATE\tACCOUNT\tPAYEE\tOUTFLOW\tINFLOW\tNOTE"); err != nil {
+		return err
+	}
+	for _, t := range transactions {
+		if _, err := fmt.Fprintf(
+			tw,
+			"%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			t.ID,
+			t.Date.Format("2006-01-02"),
+			stringValue(t.AccountName),
+			stringValue(t.PayeeName),
+			formatCents(t.TotalOutflow),
+			formatCents(t.TotalInflow),
+			stringValue(t.Note),
+		); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
 }
 
 func printAccountTransactions(w io.Writer, accountID int64, transactions []data.ListAccountTransactionsRow) error {

@@ -22,3 +22,8 @@ WHERE budget = ? AND name = ?;
 SELECT id, budget, name
 FROM payee
 WHERE budget = ? AND name = ?;
+
+-- name: GetGoalByName :one
+SELECT id, budget, name, type, start, "end", category, amount
+FROM goal
+WHERE budget = ? AND name = ?;
