@@ -1,19 +1,21 @@
 CREATE TABLE IF NOT EXISTS budget (
     id INTEGER PRIMARY KEY,
-    name string NOT NULL
+    name string NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS allocation (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
     category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
-    amount INTEGER NOT NULL
+    amount INTEGER NOT NULL,
+    UNIQUE (budget, category)
 );
 
 CREATE TABLE IF NOT EXISTS account (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name STRING NOT NULL
+    name STRING NOT NULL,
+    UNIQUE (budget, name)
 );
 
 CREATE TABLE IF NOT EXISTS "transaction" (
@@ -40,7 +42,8 @@ CREATE TABLE IF NOT EXISTS transaction_split (
 CREATE TABLE IF NOT EXISTS payee (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name STRING NOT NULL
+    name STRING NOT NULL,
+    UNIQUE (budget, name)
 );
 
 CREATE TABLE IF NOT EXISTS payee_default_split (
@@ -56,7 +59,8 @@ CREATE TABLE IF NOT EXISTS payee_default_split (
 CREATE TABLE IF NOT EXISTS category (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name STRING NOT NULL
+    name STRING NOT NULL,
+    UNIQUE (budget, name)
 );
 
 CREATE TABLE IF NOT EXISTS goal (
@@ -67,5 +71,6 @@ CREATE TABLE IF NOT EXISTS goal (
     start DATETIME NOT NULL,
     end DATETIME,
     category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
-    amount INTEGER NOT NULL
+    amount INTEGER NOT NULL,
+    UNIQUE (budget, name)
 );

@@ -1,0 +1,7 @@
+# sqlc generated artifacts
+data/*.sql.go
+data/db.go
+data/models.go
+
+# local SQLite database
+ynafb.db

@@ -17,6 +17,11 @@ import (
 	dbutil "samuellando.com/YNAFB/internal/db"
 )
 
+type budgetContext struct {
+	ID   int64
+	Name string
+}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -26,6 +31,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 
 	dbPath := fs.String("db", "./ynafb.db", "SQLite database path")
+	budgetName := fs.String("budget", "", "Budget name")
 	fs.Usage = func() {
 		usage(stderr)
 	}
@@ -55,7 +61,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	queries := data.New(db)
 	ctx := context.Background()
 
-	if err := executeResourceAction(ctx, queries, resource, action, remaining[2:], stdout); err != nil {
+	if err := executeResourceAction(ctx, queries, resource, action, *budgetName, remaining[2:], stdout); err != nil {
 		return fail(stderr, err)
 	}
 
@@ -65,66 +71,22 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 func usage(w io.Writer) {
 	fmt.Fprintf(w, "Usage:\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget create [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] account create [budget] [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] account list-transactions [account]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] allocation create [budget] [category] [amount]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] category create [budget] [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] goal create [budget] [name] [type] [start] [end|null] [category] [amount]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee create [budget] [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee-default-split create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction create [date] [account] [payee] [reconciled] [note]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction-split create [transaction] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list-transactions [account]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [name] [type] [start] [end|null] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee-default-split create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [reconciled] [note]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction-split create [transaction] [to_account] [from_account] [category] [outflow] [inflow]\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
+	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
 }
 
-func executeResourceAction(ctx context.Context, queries *data.Queries, resource, action string, args []string, stdout io.Writer) error {
-	switch resource {
-	case "account":
-		switch action {
-		case "create":
-			if len(args) != 2 {
-				return fmt.Errorf("account create requires [budget] [name]")
-			}
-
-			budget, err := parseInt64("budget", args[0])
-			if err != nil {
-				return err
-			}
-
-			result, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-				Budget: budget,
-				Name:   args[1],
-			})
-			if err != nil {
-				return err
-			}
-
-			printCreated(stdout, "account", result.ID)
-			return nil
-
-		case "list-transactions":
-			if len(args) != 1 {
-				return fmt.Errorf("account list-transactions requires [account]")
-			}
-
-			accountID, err := parseInt64("account", args[0])
-			if err != nil {
-				return err
-			}
-
-			transactions, err := queries.ListAccountTransactions(ctx, accountID)
-			if err != nil {
-				return err
-			}
-
-			return printAccountTransactions(stdout, accountID, transactions)
-
-		default:
-			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
-		}
-
-	case "budget":
+func executeResourceAction(ctx context.Context, queries *data.Queries, resource, action, budgetName string, args []string, stdout io.Writer) error {
+	if resource == "budget" {
 		if action != "create" {
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
@@ -140,33 +102,84 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 
 		printCreated(stdout, "budget", result.ID)
 		return nil
+	}
+
+	switch resource {
+	case "account":
+		switch action {
+		case "create":
+			if len(args) != 1 {
+				return fmt.Errorf("account create requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreateAccount(ctx, data.CreateAccountParams{
+				Budget: budget.ID,
+				Name:   args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "account", result.ID)
+			return nil
+
+		case "list-transactions":
+			if len(args) != 1 {
+				return fmt.Errorf("account list-transactions requires [account]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			accountID, err := resolveAccountID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			transactions, err := queries.ListAccountTransactions(ctx, accountID)
+			if err != nil {
+				return err
+			}
+
+			return printAccountTransactions(stdout, accountID, transactions)
+
+		default:
+			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
+		}
 
 	case "allocation":
 		if action != "create" {
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-		if len(args) != 3 {
-			return fmt.Errorf("allocation create requires [budget] [category] [amount]")
+		if len(args) != 2 {
+			return fmt.Errorf("allocation create requires [category] [amount]")
 		}
 
-		budget, err := parseInt64("budget", args[0])
+		budget, err := resolveBudget(ctx, queries, budgetName)
 		if err != nil {
 			return err
 		}
 
-		category, err := parseInt64("category", args[1])
+		category, err := resolveCategoryID(ctx, queries, budget, args[0])
 		if err != nil {
 			return err
 		}
 
-		amount, err := parseInt64("amount", args[2])
+		amount, err := parseInt64("amount", args[1])
 		if err != nil {
 			return err
 		}
 
 		result, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
-			Budget:   budget,
+			Budget:   budget.ID,
 			Category: category,
 			Amount:   amount,
 		})
@@ -182,18 +195,18 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-		if len(args) != 2 {
-			return fmt.Errorf("category create requires [budget] [name]")
+		if len(args) != 1 {
+			return fmt.Errorf("category create requires [name]")
 		}
 
-		budget, err := parseInt64("budget", args[0])
+		budget, err := resolveBudget(ctx, queries, budgetName)
 		if err != nil {
 			return err
 		}
 
 		result, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-			Budget: budget,
-			Name:   args[1],
+			Budget: budget.ID,
+			Name:   args[0],
 		})
 		if err != nil {
 			return err
@@ -207,39 +220,39 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-		if len(args) != 7 {
-			return fmt.Errorf("goal create requires [budget] [name] [type] [start] [end|null] [category] [amount]")
+		if len(args) != 6 {
+			return fmt.Errorf("goal create requires [name] [type] [start] [end|null] [category] [amount]")
 		}
 
-		budget, err := parseInt64("budget", args[0])
+		budget, err := resolveBudget(ctx, queries, budgetName)
 		if err != nil {
 			return err
 		}
 
-		start, err := parseTime("start", args[3])
+		start, err := parseTime("start", args[2])
 		if err != nil {
 			return err
 		}
 
-		end, err := parseNullableTime("end", args[4])
+		end, err := parseNullableTime("end", args[3])
 		if err != nil {
 			return err
 		}
 
-		category, err := parseInt64("category", args[5])
+		category, err := resolveCategoryID(ctx, queries, budget, args[4])
 		if err != nil {
 			return err
 		}
 
-		amount, err := parseInt64("amount", args[6])
+		amount, err := parseInt64("amount", args[5])
 		if err != nil {
 			return err
 		}
 
 		result, err := queries.CreateGoal(ctx, data.CreateGoalParams{
-			Budget:   budget,
-			Name:     args[1],
-			Type:     args[2],
+			Budget:   budget.ID,
+			Name:     args[0],
+			Type:     args[1],
 			Start:    start,
 			End:      end,
 			Category: category,
@@ -257,18 +270,18 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-		if len(args) != 2 {
-			return fmt.Errorf("payee create requires [budget] [name]")
+		if len(args) != 1 {
+			return fmt.Errorf("payee create requires [name]")
 		}
 
-		budget, err := parseInt64("budget", args[0])
+		budget, err := resolveBudget(ctx, queries, budgetName)
 		if err != nil {
 			return err
 		}
 
 		result, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-			Budget: budget,
-			Name:   args[1],
+			Budget: budget.ID,
+			Name:   args[0],
 		})
 		if err != nil {
 			return err
@@ -286,22 +299,27 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("payee-default-split create requires [payee] [to_account] [from_account] [category] [outflow] [inflow]")
 		}
 
-		payee, err := parseInt64("payee", args[0])
+		budget, err := resolveBudget(ctx, queries, budgetName)
 		if err != nil {
 			return err
 		}
 
-		toAccount, err := parseInt64("to_account", args[1])
+		payee, err := resolvePayeeID(ctx, queries, budget, args[0])
 		if err != nil {
 			return err
 		}
 
-		fromAccount, err := parseInt64("from_account", args[2])
+		toAccount, err := resolveAccountID(ctx, queries, budget, args[1])
 		if err != nil {
 			return err
 		}
 
-		category, err := parseInt64("category", args[3])
+		fromAccount, err := resolveAccountID(ctx, queries, budget, args[2])
+		if err != nil {
+			return err
+		}
+
+		category, err := resolveCategoryID(ctx, queries, budget, args[3])
 		if err != nil {
 			return err
 		}
@@ -340,17 +358,22 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("transaction create requires [date] [account] [payee] [reconciled] [note]")
 		}
 
+		budget, err := resolveBudget(ctx, queries, budgetName)
+		if err != nil {
+			return err
+		}
+
 		date, err := parseTime("date", args[0])
 		if err != nil {
 			return err
 		}
 
-		account, err := parseInt64("account", args[1])
+		account, err := resolveAccountID(ctx, queries, budget, args[1])
 		if err != nil {
 			return err
 		}
 
-		payee, err := parseInt64("payee", args[2])
+		payee, err := resolvePayeeID(ctx, queries, budget, args[2])
 		if err != nil {
 			return err
 		}
@@ -385,22 +408,27 @@ func executeResourceAction(ctx context.Context, queries *data.Queries, resource,
 			return fmt.Errorf("transaction-split create requires [transaction] [to_account] [from_account] [category] [outflow] [inflow]")
 		}
 
+		budget, err := resolveBudget(ctx, queries, budgetName)
+		if err != nil {
+			return err
+		}
+
 		transactionID, err := parseInt64("transaction", args[0])
 		if err != nil {
 			return err
 		}
 
-		toAccount, err := parseInt64("to_account", args[1])
+		toAccount, err := resolveAccountID(ctx, queries, budget, args[1])
 		if err != nil {
 			return err
 		}
 
-		fromAccount, err := parseInt64("from_account", args[2])
+		fromAccount, err := resolveAccountID(ctx, queries, budget, args[2])
 		if err != nil {
 			return err
 		}
 
-		category, err := parseInt64("category", args[3])
+		category, err := resolveCategoryID(ctx, queries, budget, args[3])
 		if err != nil {
 			return err
 		}
@@ -466,6 +494,83 @@ func parseNullableTime(name, value string) (sql.NullTime, error) {
 	}
 
 	return sql.NullTime{Time: parsed, Valid: true}, nil
+}
+
+func resolveBudget(ctx context.Context, queries *data.Queries, budgetName string) (budgetContext, error) {
+	if budgetName != "" {
+		budget, err := queries.GetBudgetByName(ctx, budgetName)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return budgetContext{}, fmt.Errorf("unknown budget %q", budgetName)
+			}
+
+			return budgetContext{}, err
+		}
+
+		return budgetContext{ID: budget.ID, Name: stringValue(budget.Name)}, nil
+	}
+
+	budgets, err := queries.ListBudgets(ctx)
+	if err != nil {
+		return budgetContext{}, err
+	}
+
+	switch len(budgets) {
+	case 0:
+		return budgetContext{}, fmt.Errorf("no budgets exist; create one with `ynafb budget create [name]`")
+	case 1:
+		return budgetContext{ID: budgets[0].ID, Name: stringValue(budgets[0].Name)}, nil
+	default:
+		return budgetContext{}, fmt.Errorf("multiple budgets exist; pass --budget [name]")
+	}
+}
+
+func resolveAccountID(ctx context.Context, queries *data.Queries, budget budgetContext, accountName string) (int64, error) {
+	account, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
+		Budget: budget.ID,
+		Name:   accountName,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("unknown account %q in budget %q", accountName, budget.Name)
+		}
+
+		return 0, err
+	}
+
+	return account.ID, nil
+}
+
+func resolveCategoryID(ctx context.Context, queries *data.Queries, budget budgetContext, categoryName string) (int64, error) {
+	category, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
+		Budget: budget.ID,
+		Name:   categoryName,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("unknown category %q in budget %q", categoryName, budget.Name)
+		}
+
+		return 0, err
+	}
+
+	return category.ID, nil
+}
+
+func resolvePayeeID(ctx context.Context, queries *data.Queries, budget budgetContext, payeeName string) (int64, error) {
+	payee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
+		Budget: budget.ID,
+		Name:   payeeName,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("unknown payee %q in budget %q", payeeName, budget.Name)
+		}
+
+		return 0, err
+	}
+
+	return payee.ID, nil
 }
 
 func printCreated(w io.Writer, resource string, id int64) {
