@@ -53,11 +53,13 @@ CREATE TABLE IF NOT EXISTS payee (
 CREATE TABLE IF NOT EXISTS payee_default_split (
     id INTEGER PRIMARY KEY,
     payee INTEGER NOT NULL REFERENCES payee (id) ON DELETE CASCADE,
-    to_account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
-    from_account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
-    category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
-    outflow INTEGER NOT NULL,
-    inflow INTEGER NOT NULL
+    other_account INTEGER REFERENCES account (id) ON DELETE CASCADE,
+    category INTEGER REFERENCES category (id) ON DELETE CASCADE,
+    percent INTEGER NOT NULL,
+    CHECK (
+        (other_account IS NOT NULL AND category IS NULL) OR
+        (other_account IS NULL AND category IS NOT NULL)
+    )
 );
 
 CREATE TABLE IF NOT EXISTS category (

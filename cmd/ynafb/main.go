@@ -564,8 +564,13 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 	case "payee-default-split":
 		switch action {
 		case "create":
-			if len(args) != 6 {
-				return fmt.Errorf("payee-default-split create requires [payee] [to_account] [from_account] [category] [outflow] [inflow]")
+			positionals, targetArgs, err := parseSplitTargetArgs(args)
+			if err != nil {
+				return err
+			}
+
+			if len(positionals) != 2 {
+				return fmt.Errorf("payee-default-split create requires [payee] [percent] and exactly one of --category or --other-account")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -578,38 +583,22 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			toAccount, err := resolveAccountID(ctx, queries, budget, args[1])
+			percent, err := parseInt64("percent", positionals[1])
 			if err != nil {
 				return err
 			}
 
-			fromAccount, err := resolveAccountID(ctx, queries, budget, args[2])
+			otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, targetArgs)
 			if err != nil {
 				return err
 			}
 
-			category, err := resolveCategoryID(ctx, queries, budget, args[3])
-			if err != nil {
-				return err
-			}
-
-			outflow, err := parseInt64("outflow", args[4])
-			if err != nil {
-				return err
-			}
-
-			inflow, err := parseInt64("inflow", args[5])
-			if err != nil {
-				return err
-			}
 
 			result, err := queries.CreatePayeeDefaultSplit(ctx, data.CreatePayeeDefaultSplitParams{
-				Payee:       payee,
-				ToAccount:   toAccount,
-				FromAccount: fromAccount,
-				Category:    category,
-				Outflow:     outflow,
-				Inflow:      inflow,
+				Payee: payee,
+				OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
+				Category:     category,
+				Percent: percent,
 			})
 			if err != nil {
 				return err
@@ -758,7 +747,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, outflow, inflow, targetArgs)
+			otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, targetArgs)
 			if err != nil {
 				return err
 			}
@@ -1037,7 +1026,7 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 	return nil
 }
 
-func resolveSplitTargets(ctx context.Context, queries *data.Queries, budget budgetContext, outflow, inflow int64, args splitTargetArgs) (int64, sql.NullInt64, error) {
+func resolveSplitTargets(ctx context.Context, queries *data.Queries, budget budgetContext, args splitTargetArgs) (int64, sql.NullInt64, error) {
 	if args.Category != "" {
 		categoryID, err := resolveCategoryID(ctx, queries, budget, args.Category)
 		if err != nil {
@@ -1045,10 +1034,6 @@ func resolveSplitTargets(ctx context.Context, queries *data.Queries, budget budg
 		}
 
 		return 0, sql.NullInt64{Int64: categoryID, Valid: true}, nil
-	}
-
-	if (outflow > 0) == (inflow > 0) {
-		return 0, sql.NullInt64{}, fmt.Errorf("transfer split with --other-account requires exactly one of outflow or inflow to be non-zero")
 	}
 
 	otherAccountID, err := resolveAccountID(ctx, queries, budget, args.OtherAccount)

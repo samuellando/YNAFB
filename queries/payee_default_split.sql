@@ -1,14 +1,10 @@
 -- name: CreatePayeeDefaultSplit :one
 INSERT INTO payee_default_split (
   payee,
-  to_account,
-  from_account,
+  other_account,
   category,
-  outflow,
-  inflow
+  percent
 ) VALUES (
-  ?,
-  ?,
   ?,
   ?,
   ?,
