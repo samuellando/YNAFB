@@ -26,10 +26,10 @@ WHERE budget = ? AND category = ?;
 DELETE FROM "transaction"
 WHERE id = ?;
 
--- name: DeleteTransactionSplit :exec
-DELETE FROM transaction_split
+-- name: DeleteTransactionCategory :exec
+DELETE FROM transaction_category
 WHERE id = ?;
 
--- name: DeletePayeeDefaultSplit :exec
-DELETE FROM payee_default_split
+-- name: DeletePayeeDefaultCategory :exec
+DELETE FROM payee_default_category
 WHERE id = ?;

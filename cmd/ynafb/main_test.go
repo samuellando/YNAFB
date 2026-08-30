@@ -59,10 +59,10 @@ func TestCreateCommands(t *testing.T) {
 			want:  "created payee 1\n",
 		},
 		{
-			name:  "payee-default-split",
+			name:  "payee-default-category",
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}},
-			args:  []string{"payee-default-split", "create", "Market", "Checking", "Checking", "Groceries", "2500", "0"},
-			want:  "created payee-default-split 1\n",
+			args:  []string{"payee-default-category", "create", "Market", "Checking", "Checking", "Groceries", "2500", "0"},
+			want:  "created payee-default-category 1\n",
 		},
 		{
 			name:  "transaction",
@@ -71,10 +71,10 @@ func TestCreateCommands(t *testing.T) {
 			want:  "created transaction 1\n",
 		},
 		{
-			name:  "transaction-split",
+			name:  "transaction-category",
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}, {"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "weekly shop"}},
-			args:  []string{"transaction-split", "create", "1", "2500", "0", "--category", "Groceries"},
-			want:  "created transaction-split 1\n",
+			args:  []string{"transaction-category", "create", "1", "2500", "0", "--category", "Groceries"},
+			want:  "created transaction-category 1\n",
 		},
 	}
 
@@ -134,9 +134,9 @@ func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
 		t.Fatalf("unexpected stderr: %q", stderr)
 	}
 
-	stdout, stderr, exitCode = invoke(t, dbPath, "transaction-split", "create", "1", "1250", "0", "--category", "Groceries")
+	stdout, stderr, exitCode = invoke(t, dbPath, "transaction-category", "create", "1", "1250", "0", "--category", "Groceries")
 	if exitCode != 0 {
-		t.Fatalf("transaction-split create failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+		t.Fatalf("transaction-category create failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
 	stdout, stderr, exitCode = invoke(t, dbPath, "account", "show", "Checking")
@@ -163,7 +163,7 @@ func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
 	}
 }
 
-func TestAccountListTransactionsIncludesTransactionsWithoutSplits(t *testing.T) {
+func TestAccountListTransactionsIncludesTransactionsWithoutCategories(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
 	setup := [][]string{
@@ -203,7 +203,7 @@ func TestAccountListTransactionsIncludesTransactionsWithoutSplits(t *testing.T) 
 	}
 }
 
-func TestAccountListTransactionsShowsMismatchedSingleSplitSeparately(t *testing.T) {
+func TestAccountListTransactionsShowsMismatchedSingleCategorySeparately(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
 	setup := [][]string{
@@ -211,7 +211,7 @@ func TestAccountListTransactionsShowsMismatchedSingleSplitSeparately(t *testing.
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
 		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", "import mismatch"},
-		{"transaction-split", "create", "1", "4000", "0", "--category", "Groceries"},
+		{"transaction-category", "create", "1", "4000", "0", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -231,8 +231,8 @@ func TestAccountListTransactionsShowsMismatchedSingleSplitSeparately(t *testing.
 		"Balance: -42.00",
 		"Reconciled balance: 0.00",
 		"",
-		"ID  DATE        PAYEE        TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-28  Online Shop  split      42.00    0.00    false       import mismatch",
+"ID  DATE        PAYEE        TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"1   2026-08-28  Online Shop  category   42.00    0.00    false       import mismatch",
 		"                             Groceries  40.00    0.00                ",
 		"",
 	}, "\n")
@@ -305,14 +305,14 @@ func TestAccountListTransactions(t *testing.T) {
 		{"payee", "create", "Bank"},
 		{"payee", "create", "Market"},
 		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "1000", "0", "coffee"},
-		{"transaction-split", "create", "1", "1000", "0", "--category", "Groceries"},
+		{"transaction-category", "create", "1", "1000", "0", "--category", "Groceries"},
 		{"transaction", "create", "2026-08-29", "Checking", "Bank", "1500", "0", "move money"},
-		{"transaction-split", "create", "2", "1500", "0", "--other-account", "Savings"},
+		{"transaction-category", "create", "2", "1500", "0", "--other-account", "Savings"},
 		{"transaction", "create", "2026-08-30", "Checking", "Market", "2500", "0", "weekly shop"},
-		{"transaction-split", "create", "3", "2000", "0", "--category", "Groceries"},
-		{"transaction-split", "create", "3", "500", "0", "--category", "Household"},
+		{"transaction-category", "create", "3", "2000", "0", "--category", "Groceries"},
+		{"transaction-category", "create", "3", "500", "0", "--category", "Household"},
 		{"transaction", "create", "2026-08-31", "Savings", "Market", "9999", "0", "should not appear"},
-		{"transaction-split", "create", "4", "9999", "0", "--category", "Groceries"},
+		{"transaction-category", "create", "4", "9999", "0", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -332,8 +332,8 @@ func TestAccountListTransactions(t *testing.T) {
 		"Balance: -50.00",
 		"Reconciled balance: 0.00",
 		"",
-		"ID  DATE        PAYEE   TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"3   2026-08-30  Market  split      25.00    0.00    false       weekly shop",
+"ID  DATE        PAYEE   TARGET     OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"3   2026-08-30  Market  category   25.00    0.00    false       weekly shop",
 		"                        Groceries  20.00    0.00                ",
 		"                        Household  5.00     0.00                ",
 		"2   2026-08-29  Bank    Savings    15.00    0.00    false       move money",
@@ -360,11 +360,11 @@ func TestAccountListTransactionsShowsMirroredTransfersForOtherAccount(t *testing
 		{"category", "create", "groceries"},
 		{"payee", "create", "superC"},
 		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "100", "0", ""},
-		{"transaction-split", "create", "1", "25", "0", "--category", "groceries"},
-		{"transaction-split", "create", "1", "75", "0", "--other-account", "merry"},
+		{"transaction-category", "create", "1", "25", "0", "--category", "groceries"},
+		{"transaction-category", "create", "1", "75", "0", "--other-account", "merry"},
 		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "200", "0", ""},
-		{"transaction-split", "create", "2", "100", "0", "--category", "groceries"},
-		{"transaction-split", "create", "2", "100", "0", "--other-account", "merry"},
+		{"transaction-category", "create", "2", "100", "0", "--category", "groceries"},
+		{"transaction-category", "create", "2", "100", "0", "--other-account", "merry"},
 		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "250", "0", ""},
 	}
 
@@ -400,7 +400,7 @@ func TestAccountListTransactionsShowsMirroredTransfersForOtherAccount(t *testing
 	}
 }
 
-func TestTransactionSplitCreateRejectsMultipleTargets(t *testing.T) {
+func TestTransactionCategoryCreateRejectsMultipleTargets(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
 	setup := [][]string{
@@ -419,7 +419,7 @@ func TestTransactionSplitCreateRejectsMultipleTargets(t *testing.T) {
 		}
 	}
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "transaction-split", "create", "1", "2500", "0", "--category", "Groceries", "--other-account", "Savings")
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction-category", "create", "1", "2500", "0", "--category", "Groceries", "--other-account", "Savings")
 	if exitCode != 1 {
 		t.Fatalf("unexpected exit code: got %d want 1", exitCode)
 	}
@@ -637,8 +637,8 @@ func TestDeleteCommands(t *testing.T) {
 		{"allocation", "create", "Groceries", "5000"},
 		{"goal", "create", "Vacation", "target", "2026-09-01", "null", "Groceries", "100000"},
 		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction-split", "create", "1", "2000", "0", "--category", "Groceries"},
-		{"payee-default-split", "create", "Market", "Checking", "Checking", "Groceries", "100", "0"},
+		{"transaction-category", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"payee-default-category", "create", "Market", "Checking", "Checking", "Groceries", "100", "0"},
 	}
 
 	for _, args := range setup {
@@ -652,8 +652,8 @@ func TestDeleteCommands(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"transaction-split", "delete", "1"}, "deleted transaction-split 1\n"},
-		{[]string{"payee-default-split", "delete", "1"}, "deleted payee-default-split 1\n"},
+		{[]string{"transaction-category", "delete", "1"}, "deleted transaction-category 1\n"},
+		{[]string{"payee-default-category", "delete", "1"}, "deleted payee-default-category 1\n"},
 		{[]string{"transaction", "delete", "1"}, "deleted transaction 1\n"},
 		{[]string{"allocation", "delete", "Groceries"}, "deleted allocation \"Groceries\"\n"},
 		{[]string{"goal", "delete", "Vacation"}, "deleted goal \"Vacation\"\n"},
@@ -701,7 +701,7 @@ func TestCascadeDelete(t *testing.T) {
 		{"category", "create", "Groceries"},
 		{"payee", "create", "Market"},
 		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction-split", "create", "1", "2500", "0", "--category", "Groceries"},
+		{"transaction-category", "create", "1", "2500", "0", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {

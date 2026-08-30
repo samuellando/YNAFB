@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS "transaction" (
     note STRING NOT NULL DEFAULT ''
 );
 
-CREATE TABLE IF NOT EXISTS transaction_split (
+CREATE TABLE IF NOT EXISTS transaction_category (
     id INTEGER PRIMARY KEY,
     "transaction" INTEGER NOT NULL REFERENCES "transaction" (id) ON DELETE CASCADE,
     other_account INTEGER REFERENCES account (id) ON DELETE CASCADE,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS payee (
     UNIQUE (budget, name)
 );
 
-CREATE TABLE IF NOT EXISTS payee_default_split (
+CREATE TABLE IF NOT EXISTS payee_default_category (
     id INTEGER PRIMARY KEY,
     payee INTEGER NOT NULL REFERENCES payee (id) ON DELETE CASCADE,
     other_account INTEGER REFERENCES account (id) ON DELETE CASCADE,
@@ -84,9 +84,9 @@ CREATE TABLE IF NOT EXISTS goal (
 -- +goose Down
 DROP TABLE IF EXISTS goal;
 DROP TABLE IF EXISTS category;
-DROP TABLE IF EXISTS payee_default_split;
+DROP TABLE IF EXISTS payee_default_category;
 DROP TABLE IF EXISTS payee;
-DROP TABLE IF EXISTS transaction_split;
+DROP TABLE IF EXISTS transaction_category;
 DROP TABLE IF EXISTS "transaction";
 DROP TABLE IF EXISTS account;
 DROP TABLE IF EXISTS allocation;

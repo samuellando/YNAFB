@@ -23,7 +23,7 @@ type budgetContext struct {
 	Name string
 }
 
-type splitTargetArgs struct {
+type categoryTargetArgs struct {
 	OtherAccount string
 	Category     string
 }
@@ -96,13 +96,13 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee delete [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee-default-split create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee-default-split delete [id]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee-default-category create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee-default-category delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [total_out] [total_in] [note]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction delete [id]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction-split create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction-split delete [id]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction-category create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction-category delete [id]\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
@@ -561,16 +561,16 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-	case "payee-default-split":
+	case "payee-default-category":
 		switch action {
 		case "create":
-			positionals, targetArgs, err := parseSplitTargetArgs(args)
+			positionals, targetArgs, err := parseCategoryTargetArgs(args)
 			if err != nil {
 				return err
 			}
 
 			if len(positionals) != 2 {
-				return fmt.Errorf("payee-default-split create requires [payee] [percent] and exactly one of --category or --other-account")
+				return fmt.Errorf("payee-default-category create requires [payee] [percent] and exactly one of --category or --other-account")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -588,13 +588,13 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, targetArgs)
+			otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
 			if err != nil {
 				return err
 			}
 
 
-			result, err := queries.CreatePayeeDefaultSplit(ctx, data.CreatePayeeDefaultSplitParams{
+			result, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 				Payee: payee,
 				OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
 				Category:     category,
@@ -604,12 +604,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			printCreated(stdout, "payee-default-split", result.ID)
+			printCreated(stdout, "payee-default-category", result.ID)
 			return nil
 
 		case "delete":
 			if len(args) != 1 {
-				return fmt.Errorf("payee-default-split delete requires [id]")
+				return fmt.Errorf("payee-default-category delete requires [id]")
 			}
 
 			id, err := parseInt64("id", args[0])
@@ -617,11 +617,11 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			if err := queries.DeletePayeeDefaultSplit(ctx, id); err != nil {
+			if err := queries.DeletePayeeDefaultCategory(ctx, id); err != nil {
 				return err
 			}
 
-			fmt.Fprintf(stdout, "deleted payee-default-split %d\n", id)
+			fmt.Fprintf(stdout, "deleted payee-default-category %d\n", id)
 			return nil
 
 		default:
@@ -715,16 +715,16 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
 		}
 
-	case "transaction-split":
+	case "transaction-category":
 		switch action {
 		case "create":
-			positionals, targetArgs, err := parseSplitTargetArgs(args)
+			positionals, targetArgs, err := parseCategoryTargetArgs(args)
 			if err != nil {
 				return err
 			}
 
 			if len(positionals) != 3 {
-				return fmt.Errorf("transaction-split create requires [transaction] [outflow] [inflow] and exactly one of --category or --other-account")
+				return fmt.Errorf("transaction-category create requires [transaction] [outflow] [inflow] and exactly one of --category or --other-account")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -747,12 +747,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			otherAccount, category, err := resolveSplitTargets(ctx, queries, budget, targetArgs)
+			otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
 			if err != nil {
 				return err
 			}
 
-			result, err := queries.CreateTransactionSplit(ctx, data.CreateTransactionSplitParams{
+			result, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
 				Transaction:  transactionID,
 				OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
 				Category:     category,
@@ -763,12 +763,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			printCreated(stdout, "transaction-split", result.ID)
+			printCreated(stdout, "transaction-category", result.ID)
 			return nil
 
 		case "delete":
 			if len(args) != 1 {
-				return fmt.Errorf("transaction-split delete requires [id]")
+				return fmt.Errorf("transaction-category delete requires [id]")
 			}
 
 			id, err := parseInt64("id", args[0])
@@ -776,11 +776,11 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			if err := queries.DeleteTransactionSplit(ctx, id); err != nil {
+			if err := queries.DeleteTransactionCategory(ctx, id); err != nil {
 				return err
 			}
 
-			fmt.Fprintf(stdout, "deleted transaction-split %d\n", id)
+			fmt.Fprintf(stdout, "deleted transaction-category %d\n", id)
 			return nil
 
 		default:
@@ -825,9 +825,9 @@ func parseNullableTime(name, value string) (sql.NullTime, error) {
 	return sql.NullTime{Time: parsed, Valid: true}, nil
 }
 
-func parseSplitTargetArgs(args []string) ([]string, splitTargetArgs, error) {
+func parseCategoryTargetArgs(args []string) ([]string, categoryTargetArgs, error) {
 	positionals := make([]string, 0, len(args))
-	targets := splitTargetArgs{}
+	targets := categoryTargetArgs{}
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -837,7 +837,7 @@ func parseSplitTargetArgs(args []string) ([]string, splitTargetArgs, error) {
 		}
 
 		if i+1 >= len(args) {
-			return nil, splitTargetArgs{}, fmt.Errorf("missing value for %s", arg)
+			return nil, categoryTargetArgs{}, fmt.Errorf("missing value for %s", arg)
 		}
 
 		value := args[i+1]
@@ -846,16 +846,16 @@ func parseSplitTargetArgs(args []string) ([]string, splitTargetArgs, error) {
 		switch arg {
 		case "--other-account":
 			if targets.OtherAccount != "" {
-				return nil, splitTargetArgs{}, fmt.Errorf("--other-account may only be set once")
+				return nil, categoryTargetArgs{}, fmt.Errorf("--other-account may only be set once")
 			}
 			targets.OtherAccount = value
 		case "--category":
 			if targets.Category != "" {
-				return nil, splitTargetArgs{}, fmt.Errorf("--category may only be set once")
+				return nil, categoryTargetArgs{}, fmt.Errorf("--category may only be set once")
 			}
 			targets.Category = value
 		default:
-			return nil, splitTargetArgs{}, fmt.Errorf("unsupported flag %q", arg)
+			return nil, categoryTargetArgs{}, fmt.Errorf("unsupported flag %q", arg)
 		}
 	}
 
@@ -868,7 +868,7 @@ func parseSplitTargetArgs(args []string) ([]string, splitTargetArgs, error) {
 	}
 
 	if targetCount != 1 {
-		return nil, splitTargetArgs{}, fmt.Errorf("set exactly one of --category or --other-account")
+		return nil, categoryTargetArgs{}, fmt.Errorf("set exactly one of --category or --other-account")
 	}
 
 	return positionals, targets, nil
@@ -1026,7 +1026,7 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 	return nil
 }
 
-func resolveSplitTargets(ctx context.Context, queries *data.Queries, budget budgetContext, args splitTargetArgs) (int64, sql.NullInt64, error) {
+func resolveCategoryTargets(ctx context.Context, queries *data.Queries, budget budgetContext, args categoryTargetArgs) (int64, sql.NullInt64, error) {
 	if args.Category != "" {
 		categoryID, err := resolveCategoryID(ctx, queries, budget, args.Category)
 		if err != nil {
@@ -1177,11 +1177,11 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 			j++
 		}
 
-		splitCount := actualSplitCount(transactions[i:j])
-		if splitCount > 1 || hasMismatchedSingleSplit(accountID, transactions[i:j]) {
+		categoryCount := actualCategoryCount(transactions[i:j])
+		if categoryCount > 1 || hasMismatchedSingleCategory(accountID, transactions[i:j]) {
 			transaction := transactions[i]
 			totalOutflow, totalInflow := displayedTotals(accountID, transactions[i:j])
-			if splitCount == 1 && transaction.TransactionAccount == accountID {
+			if categoryCount == 1 && transaction.TransactionAccount == accountID {
 				totalOutflow = transaction.TotalOutflow
 				totalInflow = transaction.TotalInflow
 			}
@@ -1190,7 +1190,7 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 				strconv.FormatInt(transaction.ID, 10),
 				transaction.Date.Format("2006-01-02"),
 				stringValue(transaction.PayeeName),
-				"split",
+				"category",
 				formatCents(totalOutflow),
 				formatCents(totalInflow),
 				strconv.FormatBool(transaction.Reconciled),
@@ -1201,7 +1201,7 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 
 			for k := i; k < j; k++ {
 				transaction := transactions[k]
-				outflow, inflow := displayedSplitAmounts(accountID, transaction)
+				outflow, inflow := displayedCategoryAmounts(accountID, transaction)
 				if err := writeAccountTransactionRow(
 					tw,
 					"",
@@ -1225,9 +1225,9 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 		target := ""
 		outflow := formatCents(transaction.TotalOutflow)
 		inflow := formatCents(transaction.TotalInflow)
-		if splitCount == 1 {
+		if categoryCount == 1 {
 			target = transactionTarget(accountID, transaction)
-			outflow, inflow = displayedSplitAmounts(accountID, transaction)
+			outflow, inflow = displayedCategoryAmounts(accountID, transaction)
 		}
 
 		if err := writeAccountTransactionRow(
@@ -1268,10 +1268,10 @@ func displayedTotals(accountID int64, transactions []data.ListAccountTransaction
 	return outflow, inflow
 }
 
-func actualSplitCount(transactions []data.ListAccountTransactionsRow) int {
+func actualCategoryCount(transactions []data.ListAccountTransactionsRow) int {
 	count := 0
 	for _, transaction := range transactions {
-		if transaction.SplitID.Valid {
+		if transaction.CategoryID.Valid {
 			count++
 		}
 	}
@@ -1279,8 +1279,8 @@ func actualSplitCount(transactions []data.ListAccountTransactionsRow) int {
 	return count
 }
 
-func hasMismatchedSingleSplit(accountID int64, transactions []data.ListAccountTransactionsRow) bool {
-	if actualSplitCount(transactions) != 1 {
+func hasMismatchedSingleCategory(accountID int64, transactions []data.ListAccountTransactionsRow) bool {
+	if actualCategoryCount(transactions) != 1 {
 		return false
 	}
 
@@ -1309,7 +1309,7 @@ func transactionTarget(accountID int64, transaction data.ListAccountTransactions
 	return stringValue(transaction.CategoryName)
 }
 
-func displayedSplitAmounts(accountID int64, transaction data.ListAccountTransactionsRow) (string, string) {
+func displayedCategoryAmounts(accountID int64, transaction data.ListAccountTransactionsRow) (string, string) {
 	if isMirroredTransferRow(accountID, transaction) {
 		return nullableCentsString(transaction.Inflow), nullableCentsString(transaction.Outflow)
 	}

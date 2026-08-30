@@ -1,5 +1,5 @@
--- name: CreateTransactionSplit :one
-INSERT INTO transaction_split (
+-- name: CreateTransactionCategory :one
+INSERT INTO transaction_category (
   "transaction",
   other_account,
   category,
