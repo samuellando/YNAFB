@@ -1,14 +1,12 @@
 -- name: CreateGoal :one
 INSERT INTO goal (
   budget,
-  name,
   type,
   start,
-  end,
+  "end",
   category,
   amount
 ) VALUES (
-  ?,
   ?,
   ?,
   ?,

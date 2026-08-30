@@ -19,21 +19,22 @@ ORDER BY name;
 -- name: ListGoalsByBudget :many
 SELECT
   g.id,
-  g.name,
   g.type,
   g.start,
-  g.end,
+  g."end",
+  g.category AS category_id,
   c.name AS category_name,
   g.amount
 FROM goal AS g
 JOIN category AS c ON c.id = g.category
 WHERE g.budget = ?
-ORDER BY g.name;
+ORDER BY c.name;
 
 -- name: ListAllocationsByBudget :many
 SELECT
   a.id,
   a.month,
+  a.category AS category_id,
   c.name AS category_name,
   a.amount
 FROM allocation AS a

@@ -87,6 +87,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account show [account]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account reconcile [account] [date]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account import [account] [pdf]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account categorize [account]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [month] [category] [amount]\n")
@@ -95,9 +96,9 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category delete [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [name] [type] [start] [end|null] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [type] [start] [end|null] [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal list\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal delete [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal delete [category]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee delete [name]\n")
@@ -109,7 +110,8 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction category create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction category delete [id]\n")
 	fmt.Fprintf(w, "\n")
-	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
+	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates (monthly goals).\n")
+	fmt.Fprintf(w, "Goal months are YYYY-MM; save goals require an end month.\n")
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
 }
 
@@ -192,7 +194,17 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			return printBudgetMonthCategories(stdout, rows)
+			goals, err := queries.ListGoalsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			allocations, err := queries.ListAllocationsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printBudgetMonthCategories(stdout, rows, goals, buildCategoryAllocations(allocations), month)
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -291,6 +303,28 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			return printAccountTransactions(stdout, accountID, transactions)
+
+		case "reconcile":
+			if len(args) != 2 {
+				return fmt.Errorf("account reconcile requires [account] [date]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			accountID, err := resolveAccountID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			date, err := parseTime("date", args[1])
+			if err != nil {
+				return err
+			}
+
+			return reconcileAccount(ctx, queries, budget, accountID, args[0], date, stdin, stdout)
 
 		case "import":
 			if len(args) != 2 {
@@ -483,8 +517,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 	case "goal":
 		switch action {
 		case "create":
-			if len(args) != 6 {
-				return fmt.Errorf("goal create requires [name] [type] [start] [end|null] [category] [amount]")
+			if len(args) != 5 {
+				return fmt.Errorf("goal create requires [type] [start] [end|null] [category] [amount]")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -492,30 +526,42 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			start, err := parseTime("start", args[2])
+			goalType := strings.ToLower(args[0])
+			if goalType != "monthly" && goalType != "save" {
+				return fmt.Errorf("goal create: unknown goal type %q (expected monthly or save)", args[0])
+			}
+
+			start, err := parseMonth("start", args[1])
 			if err != nil {
 				return err
 			}
 
-			end, err := parseNullableTime("end", args[3])
+			end, err := parseNullableMonth("end", args[2])
 			if err != nil {
 				return err
 			}
 
-			category, err := resolveCategoryID(ctx, queries, budget, args[4])
+			if goalType == "save" && !end.Valid {
+				return fmt.Errorf("goal create: save goals require an end month")
+			}
+
+			if end.Valid && end.Time.Before(start) {
+				return fmt.Errorf("goal create: end month must not be before start month")
+			}
+
+			category, err := resolveCategoryID(ctx, queries, budget, args[3])
 			if err != nil {
 				return err
 			}
 
-			amount, err := parseInt64("amount", args[5])
+			amount, err := parseAmount(args[4])
 			if err != nil {
 				return err
 			}
 
 			result, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 				Budget:   budget.ID,
-				Name:     args[0],
-				Type:     args[1],
+				Type:     goalType,
 				Start:    start,
 				End:      end,
 				Category: category,
@@ -539,11 +585,16 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			return printGoals(stdout, goals)
+			allocations, err := queries.ListAllocationsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printGoals(stdout, goals, buildCategoryAllocations(allocations), monthStart(time.Now()))
 
 		case "delete":
 			if len(args) != 1 {
-				return fmt.Errorf("goal delete requires [name]")
+				return fmt.Errorf("goal delete requires [category]")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -551,13 +602,18 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			goal, err := queries.GetGoalByName(ctx, data.GetGoalByNameParams{
-				Budget: budget.ID,
-				Name:   args[0],
+			categoryID, err := resolveCategoryID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			goal, err := queries.GetGoalByCategory(ctx, data.GetGoalByCategoryParams{
+				Budget:   budget.ID,
+				Category: categoryID,
 			})
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return fmt.Errorf("unknown goal %q in budget %q", args[0], budget.Name)
+					return fmt.Errorf("no goal for category %q in budget %q", args[0], budget.Name)
 				}
 				return err
 			}
@@ -566,7 +622,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			fmt.Fprintf(stdout, "deleted goal %q\n", args[0])
+			fmt.Fprintf(stdout, "deleted goal for category %q\n", args[0])
 			return nil
 
 		default:
@@ -919,6 +975,19 @@ func parseMonth(name, value string) (time.Time, error) {
 	return parsed, nil
 }
 
+func parseNullableMonth(name, value string) (sql.NullTime, error) {
+	if strings.EqualFold(value, "null") {
+		return sql.NullTime{}, nil
+	}
+
+	parsed, err := parseMonth(name, value)
+	if err != nil {
+		return sql.NullTime{}, err
+	}
+
+	return sql.NullTime{Time: parsed, Valid: true}, nil
+}
+
 func parseCategoryTargetArgs(args []string) ([]string, categoryTargetArgs, error) {
 	positionals := make([]string, 0, len(args))
 	targets := categoryTargetArgs{}
@@ -1117,6 +1186,52 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 	}
 
 	fmt.Fprintf(stdout, "imported %d transactions\n", len(stmt.Entries))
+	return nil
+}
+
+func reconcileAccount(ctx context.Context, queries *data.Queries, budget budgetContext, accountID int64, accountName string, date time.Time, stdin io.Reader, stdout io.Writer) error {
+	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		AccountID: accountID,
+		Date:      date,
+	})
+	if err != nil {
+		return err
+	}
+
+	if _, err := fmt.Fprintf(stdout, "Balance as of %s: %s\n", date.Format("2006-01-02"), formatCents(balance)); err != nil {
+		return err
+	}
+
+	reader := bufio.NewReader(stdin)
+	ans, err := prompt(reader, stdout, "Statement balance: ")
+	if err != nil {
+		return err
+	}
+	if ans == "" {
+		if _, err := fmt.Fprintln(stdout, "cancelled"); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	statement, err := parseAmount(ans)
+	if err != nil {
+		return err
+	}
+
+	if statement != balance {
+		return fmt.Errorf("balance mismatch: statement %s != calculated %s", formatCents(statement), formatCents(balance))
+	}
+
+	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		AccountID: accountID,
+		Date:      date,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(stdout, "reconciled %d transactions through %s in %q\n", n, date.Format("2006-01-02"), accountName)
 	return nil
 }
 
@@ -1842,13 +1957,23 @@ func printBudgetMonths(w io.Writer, months []string) error {
 	return tw.Flush()
 }
 
-func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow) error {
+func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "CATEGORY\tALLOCATED\tSPENT\tREMAINING"); err != nil {
+	if _, err := fmt.Fprintln(tw, "CATEGORY\tGOAL\tALLOCATED\tSPENT\tREMAINING"); err != nil {
 		return err
 	}
+
+	goalsByCategory := make(map[int64]data.ListGoalsByBudgetRow)
+	for _, g := range goals {
+		goalsByCategory[g.CategoryID] = g
+	}
+
 	for _, r := range rows {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", stringValue(r.Name), formatCents(r.Allocated), formatCents(r.Spent), formatCents(r.Allocated-r.Spent)); err != nil {
+		goal := ""
+		if g, ok := goalsByCategory[r.ID]; ok && goalActiveInMonth(g, month) {
+			goal = formatCents(goalMonthlyValue(g, allocations, month))
+		}
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(r.Spent), formatCents(r.Allocated-r.Spent)); err != nil {
 			return err
 		}
 	}
@@ -1907,30 +2032,94 @@ func printAllocations(w io.Writer, allocations []data.ListAllocationsByBudgetRow
 	return tw.Flush()
 }
 
-func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow) error {
+func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, now time.Time) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "NAME\tTYPE\tSTART\tEND\tCATEGORY\tAMOUNT"); err != nil {
+	if _, err := fmt.Fprintln(tw, "TYPE\tCATEGORY\tSTART\tEND\tAMOUNT\tMONTHLY"); err != nil {
 		return err
 	}
 	for _, g := range goals {
 		end := ""
 		if g.End.Valid {
-			end = g.End.Time.Format("2006-01-02")
+			end = g.End.Time.Format("2006-01")
 		}
 		if _, err := fmt.Fprintf(
 			tw,
 			"%s\t%s\t%s\t%s\t%s\t%s\n",
-			stringValue(g.Name),
 			stringValue(g.Type),
-			g.Start.Format("2006-01-02"),
-			end,
 			stringValue(g.CategoryName),
+			g.Start.Format("2006-01"),
+			end,
 			formatCents(g.Amount),
+			formatCents(goalMonthlyValue(g, allocations, now)),
 		); err != nil {
 			return err
 		}
 	}
 	return tw.Flush()
+}
+
+func buildCategoryAllocations(rows []data.ListAllocationsByBudgetRow) map[int64]map[time.Time]int64 {
+	byCategory := make(map[int64]map[time.Time]int64)
+	for _, r := range rows {
+		if byCategory[r.CategoryID] == nil {
+			byCategory[r.CategoryID] = make(map[time.Time]int64)
+		}
+		byCategory[r.CategoryID][r.Month] = r.Amount
+	}
+	return byCategory
+}
+
+func monthStart(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+}
+
+func monthsRemaining(from, end time.Time) int {
+	if from.After(end) {
+		return 0
+	}
+	return (end.Year()-from.Year())*12 + int(end.Month()-from.Month()) + 1
+}
+
+func goalActiveInMonth(g data.ListGoalsByBudgetRow, month time.Time) bool {
+	if month.Before(g.Start) {
+		return false
+	}
+	if g.End.Valid && g.End.Time.Before(month) {
+		return false
+	}
+	return true
+}
+
+func goalMonthlyValue(g data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) int64 {
+	if !goalActiveInMonth(g, month) {
+		return 0
+	}
+
+	if stringValue(g.Type) == "save" {
+		if !g.End.Valid {
+			return 0
+		}
+
+		var allocated int64
+		for allocMonth, amount := range allocations[g.CategoryID] {
+			if !allocMonth.Before(g.Start) && allocMonth.Before(month) {
+				allocated += amount
+			}
+		}
+
+		months := monthsRemaining(month, g.End.Time)
+		if months <= 0 {
+			return 0
+		}
+
+		value := (g.Amount - allocated) / int64(months)
+		if value < 0 {
+			value = 0
+		}
+		return value
+	}
+
+	return g.Amount
 }
 
 func printTransactionsByBudget(w io.Writer, transactions []data.ListTransactionsByBudgetRow) error {
