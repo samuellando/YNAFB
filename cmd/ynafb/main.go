@@ -96,13 +96,13 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee delete [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee-default-category create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee-default-category delete [id]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee default-category create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee default-category delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [total_out] [total_in] [note]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction delete [id]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction-category create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction-category delete [id]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction category create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction category delete [id]\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates.\n")
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
@@ -557,72 +557,77 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			fmt.Fprintf(stdout, "deleted payee %q\n", args[0])
 			return nil
 
-		default:
-			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
-		}
-
-	case "payee-default-category":
-		switch action {
-		case "create":
-			positionals, targetArgs, err := parseCategoryTargetArgs(args)
-			if err != nil {
-				return err
+		case "default-category":
+			if len(args) < 1 {
+				return fmt.Errorf("payee default-category requires a subcommand (create|delete)")
 			}
 
-			if len(positionals) != 2 {
-				return fmt.Errorf("payee-default-category create requires [payee] [percent] and exactly one of --category or --other-account")
+			subAction := args[0]
+			subArgs := args[1:]
+			switch subAction {
+			case "create":
+				positionals, targetArgs, err := parseCategoryTargetArgs(subArgs)
+				if err != nil {
+					return err
+				}
+
+				if len(positionals) != 2 {
+					return fmt.Errorf("payee default-category create requires [payee] [percent] and exactly one of --category or --other-account")
+				}
+
+				budget, err := resolveBudget(ctx, queries, budgetName)
+				if err != nil {
+					return err
+				}
+
+				payee, err := resolvePayeeID(ctx, queries, budget, subArgs[0])
+				if err != nil {
+					return err
+				}
+
+				percent, err := parseInt64("percent", positionals[1])
+				if err != nil {
+					return err
+				}
+
+				otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
+				if err != nil {
+					return err
+				}
+
+				result, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+					Payee:        payee,
+					OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
+					Category:     category,
+					Percent:      percent,
+				})
+				if err != nil {
+					return err
+				}
+
+				printCreated(stdout, "payee default-category", result.ID)
+				return nil
+
+			case "delete":
+				if len(subArgs) != 1 {
+					return fmt.Errorf("payee default-category delete requires [id]")
+				}
+
+				id, err := parseInt64("id", subArgs[0])
+				if err != nil {
+					return err
+				}
+
+				if err := queries.DeletePayeeDefaultCategory(ctx, id); err != nil {
+					return err
+				}
+
+				fmt.Fprintf(stdout, "deleted payee default-category %d\n", id)
+				return nil
+
+			default:
+				return fmt.Errorf("unsupported action %q for resource %q", subAction, "payee default-category")
 			}
-
-			budget, err := resolveBudget(ctx, queries, budgetName)
-			if err != nil {
-				return err
-			}
-
-			payee, err := resolvePayeeID(ctx, queries, budget, args[0])
-			if err != nil {
-				return err
-			}
-
-			percent, err := parseInt64("percent", positionals[1])
-			if err != nil {
-				return err
-			}
-
-			otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
-			if err != nil {
-				return err
-			}
-
-
-			result, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-				Payee: payee,
-				OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
-				Category:     category,
-				Percent: percent,
-			})
-			if err != nil {
-				return err
-			}
-
-			printCreated(stdout, "payee-default-category", result.ID)
-			return nil
-
-		case "delete":
-			if len(args) != 1 {
-				return fmt.Errorf("payee-default-category delete requires [id]")
-			}
-
-			id, err := parseInt64("id", args[0])
-			if err != nil {
-				return err
-			}
-
-			if err := queries.DeletePayeeDefaultCategory(ctx, id); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(stdout, "deleted payee-default-category %d\n", id)
-			return nil
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -711,77 +716,83 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			fmt.Fprintf(stdout, "deleted transaction %d\n", id)
 			return nil
 
-		default:
-			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
-		}
-
-	case "transaction-category":
-		switch action {
-		case "create":
-			positionals, targetArgs, err := parseCategoryTargetArgs(args)
-			if err != nil {
-				return err
+		case "category":
+			if len(args) < 1 {
+				return fmt.Errorf("transaction category requires a subcommand (create|delete)")
 			}
 
-			if len(positionals) != 3 {
-				return fmt.Errorf("transaction-category create requires [transaction] [outflow] [inflow] and exactly one of --category or --other-account")
+			subAction := args[0]
+			subArgs := args[1:]
+			switch subAction {
+			case "create":
+				positionals, targetArgs, err := parseCategoryTargetArgs(subArgs)
+				if err != nil {
+					return err
+				}
+
+				if len(positionals) != 3 {
+					return fmt.Errorf("transaction category create requires [transaction] [outflow] [inflow] and exactly one of --category or --other-account")
+				}
+
+				budget, err := resolveBudget(ctx, queries, budgetName)
+				if err != nil {
+					return err
+				}
+
+				transactionID, err := parseInt64("transaction", positionals[0])
+				if err != nil {
+					return err
+				}
+
+				outflow, err := parseInt64("outflow", positionals[1])
+				if err != nil {
+					return err
+				}
+
+				inflow, err := parseInt64("inflow", positionals[2])
+				if err != nil {
+					return err
+				}
+
+				otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
+				if err != nil {
+					return err
+				}
+
+				result, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
+					Transaction:  transactionID,
+					OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
+					Category:     category,
+					Outflow:      outflow,
+					Inflow:       inflow,
+				})
+				if err != nil {
+					return err
+				}
+
+				printCreated(stdout, "transaction category", result.ID)
+				return nil
+
+			case "delete":
+				if len(subArgs) != 1 {
+					return fmt.Errorf("transaction category delete requires [id]")
+				}
+
+				id, err := parseInt64("id", subArgs[0])
+				if err != nil {
+					return err
+				}
+
+				if err := queries.DeleteTransactionCategory(ctx, id); err != nil {
+					return err
+				}
+
+				fmt.Fprintf(stdout, "deleted transaction category %d\n", id)
+				return nil
+
+			default:
+				return fmt.Errorf("unsupported action %q for resource %q", subAction, "transaction category")
 			}
-
-			budget, err := resolveBudget(ctx, queries, budgetName)
-			if err != nil {
-				return err
-			}
-
-			transactionID, err := parseInt64("transaction", positionals[0])
-			if err != nil {
-				return err
-			}
-
-			outflow, err := parseInt64("outflow", positionals[1])
-			if err != nil {
-				return err
-			}
-
-			inflow, err := parseInt64("inflow", positionals[2])
-			if err != nil {
-				return err
-			}
-
-			otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
-			if err != nil {
-				return err
-			}
-
-			result, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-				Transaction:  transactionID,
-				OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
-				Category:     category,
-				Outflow:      outflow,
-				Inflow:       inflow,
-			})
-			if err != nil {
-				return err
-			}
-
-			printCreated(stdout, "transaction-category", result.ID)
-			return nil
-
-		case "delete":
-			if len(args) != 1 {
-				return fmt.Errorf("transaction-category delete requires [id]")
-			}
-
-			id, err := parseInt64("id", args[0])
-			if err != nil {
-				return err
-			}
-
-			if err := queries.DeleteTransactionCategory(ctx, id); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(stdout, "deleted transaction-category %d\n", id)
-			return nil
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
