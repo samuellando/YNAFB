@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
@@ -29,10 +30,10 @@ type categoryTargetArgs struct {
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout io.Writer, stderr io.Writer) int {
+func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ynafb", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -67,7 +68,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	queries := data.New(db)
 	ctx := context.Background()
 
-	if err := executeResourceAction(ctx, db, queries, resource, action, *budgetName, remaining[2:], stdout); err != nil {
+	if err := executeResourceAction(ctx, db, queries, resource, action, *budgetName, stdin, remaining[2:], stdout); err != nil {
 		return fail(stderr, err)
 	}
 
@@ -84,6 +85,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account show [account]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account import [account] [pdf]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account categorize [account]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation delete [category]\n")
@@ -96,7 +98,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee delete [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee default-category create [payee] [to_account] [from_account] [category] [outflow] [inflow]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee default-category create [payee] [percent] [--category name | --other-account name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee default-category delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [total_out] [total_in] [note]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction list\n")
@@ -108,7 +110,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
 }
 
-func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Queries, resource, action, budgetName string, args []string, stdout io.Writer) error {
+func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Queries, resource, action, budgetName string, stdin io.Reader, args []string, stdout io.Writer) error {
 	if resource == "budget" {
 		switch action {
 		case "create":
@@ -263,6 +265,23 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			return importAccountTransactions(ctx, db, queries, budget, accountID, args[1], stdout)
+
+		case "categorize":
+			if len(args) != 1 {
+				return fmt.Errorf("account categorize requires [account]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			accountID, err := resolveAccountID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			return categorizeAccount(ctx, db, queries, budget, accountID, args[0], stdin, stdout)
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -1037,6 +1056,676 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 	return nil
 }
 
+type categorizeTransaction struct {
+	ID                     int64
+	Date                   time.Time
+	TransactionAccount     int64
+	TransactionAccountName string
+	PayeeName              string
+	TotalOutflow           int64
+	TotalInflow            int64
+	Reconciled             bool
+	Note                   string
+	rows                   []data.ListAccountTransactionsRow
+}
+
+type categorizeRow struct {
+	id         int64
+	transfer   bool
+	targetID   int64
+	targetName string
+	outflow    int64
+	inflow     int64
+}
+
+func categorizeAccount(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, accountID int64, accountName string, stdin io.Reader, stdout io.Writer) error {
+	transactions, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
+		Account:      accountID,
+		OtherAccount: sql.NullInt64{Int64: accountID, Valid: true},
+	})
+	if err != nil {
+		return err
+	}
+
+	queue := categorizeQueue(accountID, transactions)
+	if len(queue) == 0 {
+		fmt.Fprintln(stdout, "No transactions need categorization")
+		return nil
+	}
+
+	reader := bufio.NewReader(stdin)
+	fmt.Fprintf(stdout, "Categorizing %d transactions in %q\n", len(queue), accountName)
+
+	var categorized, skipped int
+	for i, tx := range queue {
+		if _, err := fmt.Fprintln(stdout, "────────────────────────────────────────"); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "[%d/%d]\n", i+1, len(queue))
+
+		working := loadCategorizations(tx.rows)
+		prefilled := false
+		if len(working) == 0 {
+			working, prefilled = prefillFromDefaults(ctx, queries, budget, tx)
+		}
+
+	transactionLoop:
+		for {
+			if err := printCategorizeTransaction(stdout, accountID, tx, working); err != nil {
+				return err
+			}
+			remainingOut, remainingIn := categorizeRemaining(tx, working)
+			if _, err := fmt.Fprintf(stdout, "Remaining: %s out / %s in\n", formatCents(remainingOut), formatCents(remainingIn)); err != nil {
+				return err
+			}
+			if prefilled {
+				if _, err := fmt.Fprintln(stdout, "(pre-filled from payee default)"); err != nil {
+					return err
+				}
+			}
+
+			cmd, err := prompt(reader, stdout, "(a)dd  (d)elete  (s)kip  (o)k  (q)uit > ")
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					fmt.Fprintln(stdout, "→ quit")
+					return nil
+				}
+				return err
+			}
+
+			switch cmd {
+			case "a", "add":
+				if err := categorizeAdd(ctx, queries, budget, reader, stdout, tx, &working); err != nil {
+					return err
+				}
+			case "d", "delete":
+				if err := categorizeDelete(reader, stdout, &working); err != nil {
+					return err
+				}
+			case "s", "skip":
+				if _, err := fmt.Fprintln(stdout, "→ skipped"); err != nil {
+					return err
+				}
+				skipped++
+				break transactionLoop
+			case "o", "ok":
+				remainingOut, remainingIn := categorizeRemaining(tx, working)
+				if remainingOut != 0 || remainingIn != 0 {
+					if _, err := fmt.Fprintf(stdout, "totals don't match: remaining %s out / %s in\n", formatCents(remainingOut), formatCents(remainingIn)); err != nil {
+						return err
+					}
+					continue
+				}
+				if err := replaceTransactionCategories(ctx, db, queries, tx.ID, working); err != nil {
+					return err
+				}
+				categorized++
+				if err := categorizeSaveDefault(ctx, db, queries, budget, reader, stdout, tx, working); err != nil {
+					return err
+				}
+				break transactionLoop
+			case "q", "quit":
+				if _, err := fmt.Fprintf(stdout, "→ quit (%d categorized, %d skipped)\n", categorized, skipped); err != nil {
+					return err
+				}
+				return nil
+			default:
+				if _, err := fmt.Fprintln(stdout, "invalid option"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	fmt.Fprintf(stdout, "\nDone — %d categorized, %d skipped\n", categorized, skipped)
+	return nil
+}
+
+func categorizeQueue(accountID int64, transactions []data.ListAccountTransactionsRow) []categorizeTransaction {
+	var queue []categorizeTransaction
+	for i := 0; i < len(transactions); {
+		j := i + 1
+		for j < len(transactions) && transactions[j].ID == transactions[i].ID {
+			j++
+		}
+
+		rows := transactions[i:j]
+		if categorizeNeedsAttention(accountID, rows) {
+			t := rows[0]
+			queue = append(queue, categorizeTransaction{
+				ID:                     t.ID,
+				Date:                   t.Date,
+				TransactionAccount:     t.TransactionAccount,
+				TransactionAccountName: stringValue(t.TransactionAccountName),
+				PayeeName:              stringValue(t.PayeeName),
+				TotalOutflow:           t.TotalOutflow,
+				TotalInflow:            t.TotalInflow,
+				Reconciled:             t.Reconciled,
+				Note:                   stringValue(t.Note),
+				rows:                   rows,
+			})
+		}
+
+		i = j
+	}
+	return queue
+}
+
+func categorizeNeedsAttention(accountID int64, rows []data.ListAccountTransactionsRow) bool {
+	if rows[0].TransactionAccount != accountID {
+		return false
+	}
+
+	var out, in int64
+	for _, r := range rows {
+		if r.CategoryID.Valid {
+			out += nullableInt64Value(r.Outflow)
+			in += nullableInt64Value(r.Inflow)
+		}
+	}
+
+	return out != rows[0].TotalOutflow || in != rows[0].TotalInflow
+}
+
+func loadCategorizations(rows []data.ListAccountTransactionsRow) []categorizeRow {
+	var working []categorizeRow
+	for _, r := range rows {
+		if !r.CategoryID.Valid {
+			continue
+		}
+
+		row := categorizeRow{
+			id:      r.CategoryID.Int64,
+			outflow: nullableInt64Value(r.Outflow),
+			inflow:  nullableInt64Value(r.Inflow),
+		}
+		if r.OtherAccount.Valid {
+			row.transfer = true
+			row.targetID = r.OtherAccount.Int64
+			row.targetName = stringValue(r.OtherAccountName)
+		} else {
+			row.transfer = false
+			row.targetID = r.Category.Int64
+			row.targetName = stringValue(r.CategoryName)
+		}
+		working = append(working, row)
+	}
+	return working
+}
+
+func prefillFromDefaults(ctx context.Context, queries *data.Queries, budget budgetContext, tx categorizeTransaction) ([]categorizeRow, bool) {
+	payeeID, err := resolvePayeeID(ctx, queries, budget, tx.PayeeName)
+	if err != nil {
+		return nil, false
+	}
+
+	defaults, err := queries.ListPayeeDefaultCategoriesByPayee(ctx, payeeID)
+	if err != nil || len(defaults) == 0 {
+		return nil, false
+	}
+
+	total := tx.TotalOutflow
+	useOutflow := true
+	if total == 0 {
+		total = tx.TotalInflow
+		useOutflow = false
+	}
+	if total <= 0 {
+		return nil, false
+	}
+
+	amounts := defaultAmounts(defaults, total)
+	working := make([]categorizeRow, 0, len(defaults))
+	for i, d := range defaults {
+		row := categorizeRow{}
+		if useOutflow {
+			row.outflow = amounts[i]
+		} else {
+			row.inflow = amounts[i]
+		}
+		if d.OtherAccount.Valid {
+			row.transfer = true
+			row.targetID = d.OtherAccount.Int64
+			row.targetName = stringValue(d.OtherAccountName)
+		} else {
+			row.transfer = false
+			row.targetID = d.Category.Int64
+			row.targetName = stringValue(d.CategoryName)
+		}
+		working = append(working, row)
+	}
+	return working, true
+}
+
+func defaultAmounts(defaults []data.ListPayeeDefaultCategoriesByPayeeRow, total int64) []int64 {
+	amounts := make([]int64, len(defaults))
+	var allocated int64
+	for i, d := range defaults {
+		if i == len(defaults)-1 {
+			amounts[i] = total - allocated
+		} else {
+			amounts[i] = total * d.Percent / 100
+			allocated += amounts[i]
+		}
+	}
+	return amounts
+}
+
+func categorizeRemaining(tx categorizeTransaction, working []categorizeRow) (int64, int64) {
+	var out, in int64
+	for _, row := range working {
+		out += row.outflow
+		in += row.inflow
+	}
+	return tx.TotalOutflow - out, tx.TotalInflow - in
+}
+
+func printCategorizeTransaction(stdout io.Writer, accountID int64, tx categorizeTransaction, working []categorizeRow) error {
+	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "ID\tDATE\tPAYEE\tTARGET\tOUTFLOW\tINFLOW\tRECONCILED\tNOTE"); err != nil {
+		return err
+	}
+	if err := printTransaction(tw, accountID, synthesizeRows(tx, working)); err != nil {
+		return err
+	}
+	return tw.Flush()
+}
+
+func synthesizeRows(tx categorizeTransaction, working []categorizeRow) []data.ListAccountTransactionsRow {
+	base := data.ListAccountTransactionsRow{
+		ID:                     tx.ID,
+		Date:                   tx.Date,
+		TransactionAccount:     tx.TransactionAccount,
+		TransactionAccountName: tx.TransactionAccountName,
+		PayeeName:              tx.PayeeName,
+		TotalOutflow:           tx.TotalOutflow,
+		TotalInflow:            tx.TotalInflow,
+		Reconciled:             tx.Reconciled,
+		Note:                   tx.Note,
+	}
+
+	if len(working) == 0 {
+		return []data.ListAccountTransactionsRow{base}
+	}
+
+	rows := make([]data.ListAccountTransactionsRow, 0, len(working))
+	for i, row := range working {
+		r := base
+		r.CategoryID = sql.NullInt64{Int64: int64(i + 1), Valid: true}
+		r.Outflow = sql.NullInt64{Int64: row.outflow, Valid: true}
+		r.Inflow = sql.NullInt64{Int64: row.inflow, Valid: true}
+		if row.transfer {
+			r.OtherAccount = sql.NullInt64{Int64: row.targetID, Valid: true}
+			r.OtherAccountName = row.targetName
+		} else {
+			r.Category = sql.NullInt64{Int64: row.targetID, Valid: true}
+			r.CategoryName = row.targetName
+		}
+		rows = append(rows, r)
+	}
+	return rows
+}
+
+func categorizeAdd(ctx context.Context, queries *data.Queries, budget budgetContext, reader *bufio.Reader, stdout io.Writer, tx categorizeTransaction, working *[]categorizeRow) error {
+	target, err := prompt(reader, stdout, "  Target (category, or @account for a transfer): ")
+	if err != nil {
+		return err
+	}
+
+	row := categorizeRow{}
+	if strings.HasPrefix(target, "@") {
+		name := strings.TrimPrefix(target, "@")
+		id, err := resolveAccountID(ctx, queries, budget, name)
+		if err != nil {
+			fmt.Fprintf(stdout, "  %v\n", err)
+			return nil
+		}
+		row.transfer = true
+		row.targetID = id
+		row.targetName = name
+	} else {
+		if target == "" {
+			fmt.Fprintln(stdout, "  target required")
+			return nil
+		}
+		id, err := resolveOrCreateCategoryID(ctx, queries, budget, target, reader, stdout)
+		if err != nil {
+			fmt.Fprintf(stdout, "  %v\n", err)
+			return nil
+		}
+		row.transfer = false
+		row.targetID = id
+		row.targetName = target
+	}
+
+	remainingOut, remainingIn := categorizeRemaining(tx, *working)
+	outflow, err := promptAmount(reader, stdout, fmt.Sprintf("  Outflow [%s]: ", formatCents(remainingOut)), remainingOut)
+	if err != nil {
+		return err
+	}
+	inflow, err := promptAmount(reader, stdout, fmt.Sprintf("  Inflow [%s]: ", formatCents(remainingIn)), remainingIn)
+	if err != nil {
+		return err
+	}
+	row.outflow = outflow
+	row.inflow = inflow
+	*working = append(*working, row)
+
+	fmt.Fprintf(stdout, "  → added: %s  %s out / %s in\n", categorizeTargetLabel(row), formatCents(row.outflow), formatCents(row.inflow))
+	return nil
+}
+
+func resolveOrCreateCategoryID(ctx context.Context, queries *data.Queries, budget budgetContext, name string, reader *bufio.Reader, stdout io.Writer) (int64, error) {
+	category, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{Budget: budget.ID, Name: name})
+	if err == nil {
+		return category.ID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+
+	ans, err := prompt(reader, stdout, fmt.Sprintf("  Category %q doesn't exist. Create it? [y/n]: ", name))
+	if err != nil {
+		return 0, err
+	}
+	if !strings.EqualFold(ans, "y") {
+		return 0, fmt.Errorf("category %q not created", name)
+	}
+
+	created, err := queries.CreateCategory(ctx, data.CreateCategoryParams{Budget: budget.ID, Name: name})
+	if err != nil {
+		return 0, err
+	}
+
+	fmt.Fprintf(stdout, "  → created category %q\n", name)
+	return created.ID, nil
+}
+
+func categorizeDelete(reader *bufio.Reader, stdout io.Writer, working *[]categorizeRow) error {
+	if len(*working) == 0 {
+		fmt.Fprintln(stdout, "  no categorizations to delete")
+		return nil
+	}
+
+	for i, row := range *working {
+		fmt.Fprintf(stdout, "  %d. %s  %s out / %s in\n", i+1, categorizeTargetLabel(row), formatCents(row.outflow), formatCents(row.inflow))
+	}
+
+	ans, err := prompt(reader, stdout, fmt.Sprintf("  Delete which? [1-%d]: ", len(*working)))
+	if err != nil {
+		return err
+	}
+	n, err := strconv.Atoi(ans)
+	if err != nil || n < 1 || n > len(*working) {
+		fmt.Fprintln(stdout, "  invalid selection")
+		return nil
+	}
+
+	removed := (*working)[n-1]
+	*working = append((*working)[:n-1], (*working)[n:]...)
+	fmt.Fprintf(stdout, "  → removed: %s\n", categorizeTargetLabel(removed))
+	return nil
+}
+
+func categorizeSaveDefault(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, reader *bufio.Reader, stdout io.Writer, tx categorizeTransaction, working []categorizeRow) error {
+	if len(working) == 0 {
+		fmt.Fprintln(stdout, "→ categorized")
+		return nil
+	}
+
+	payeeID, err := resolvePayeeID(ctx, queries, budget, tx.PayeeName)
+	if err != nil {
+		fmt.Fprintln(stdout, "→ categorized")
+		return nil
+	}
+
+	total := tx.TotalOutflow
+	if total == 0 {
+		total = tx.TotalInflow
+	}
+	if total <= 0 {
+		fmt.Fprintln(stdout, "→ categorized")
+		return nil
+	}
+
+	percents := categorizePercents(tx, working)
+
+	defaults, err := queries.ListPayeeDefaultCategoriesByPayee(ctx, payeeID)
+	if err != nil {
+		return err
+	}
+
+	if defaultsMatch(tx, defaults, working) {
+		fmt.Fprintln(stdout, "→ categorized (matches existing default)")
+		return nil
+	}
+
+	ans, err := prompt(reader, stdout, fmt.Sprintf("  Save as default categorization for %q? [y/n]: ", tx.PayeeName))
+	if err != nil {
+		return err
+	}
+	if !strings.EqualFold(ans, "y") {
+		fmt.Fprintln(stdout, "→ categorized")
+		return nil
+	}
+
+	if err := replacePayeeDefaults(ctx, db, queries, payeeID, working, percents); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "→ saved default for %q\n", tx.PayeeName)
+	return nil
+}
+
+func categorizePercents(tx categorizeTransaction, working []categorizeRow) map[string]int64 {
+	total := tx.TotalOutflow
+	useOutflow := true
+	if total == 0 {
+		total = tx.TotalInflow
+		useOutflow = false
+	}
+
+	percents := make(map[string]int64, len(working))
+	var allocated int64
+	for i, row := range working {
+		var amount int64
+		if useOutflow {
+			amount = row.outflow
+		} else {
+			amount = row.inflow
+		}
+
+		if i == len(working)-1 {
+			percents[categorizeKey(row)] = 100 - allocated
+		} else {
+			p := amount * 100 / total
+			allocated += p
+			percents[categorizeKey(row)] = p
+		}
+	}
+	return percents
+}
+
+func categorizeTargetLabel(row categorizeRow) string {
+	if row.transfer {
+		return "@" + row.targetName
+	}
+	return row.targetName
+}
+
+func categorizeKey(row categorizeRow) string {
+	if row.transfer {
+		return fmt.Sprintf("account:%d", row.targetID)
+	}
+	return fmt.Sprintf("category:%d", row.targetID)
+}
+
+func defaultsMatch(tx categorizeTransaction, defaults []data.ListPayeeDefaultCategoriesByPayeeRow, working []categorizeRow) bool {
+	if len(defaults) != len(working) {
+		return false
+	}
+
+	total := tx.TotalOutflow
+	useOutflow := true
+	if total == 0 {
+		total = tx.TotalInflow
+		useOutflow = false
+	}
+	if total <= 0 {
+		return false
+	}
+
+	amounts := defaultAmounts(defaults, total)
+
+	expected := make(map[string]int64, len(defaults))
+	for i, d := range defaults {
+		var key string
+		if d.OtherAccount.Valid {
+			key = fmt.Sprintf("account:%d", d.OtherAccount.Int64)
+		} else {
+			key = fmt.Sprintf("category:%d", d.Category.Int64)
+		}
+		expected[key] = amounts[i]
+	}
+
+	actual := make(map[string]int64, len(working))
+	for _, row := range working {
+		amount := row.outflow
+		if !useOutflow {
+			amount = row.inflow
+		}
+		actual[categorizeKey(row)] = amount
+	}
+
+	for key, amount := range expected {
+		if actual[key] != amount {
+			return false
+		}
+	}
+	return true
+}
+
+func replaceTransactionCategories(ctx context.Context, db *sql.DB, queries *data.Queries, transactionID int64, working []categorizeRow) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	txQueries := queries.WithTx(tx)
+	if err := txQueries.DeleteTransactionCategoriesByTransaction(ctx, transactionID); err != nil {
+		return err
+	}
+	for _, row := range working {
+		if _, err := txQueries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
+			Transaction:  transactionID,
+			OtherAccount: categorizeOtherAccount(row),
+			Category:     categorizeCategory(row),
+			Outflow:      row.outflow,
+			Inflow:       row.inflow,
+		}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func replacePayeeDefaults(ctx context.Context, db *sql.DB, queries *data.Queries, payeeID int64, working []categorizeRow, percents map[string]int64) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	txQueries := queries.WithTx(tx)
+	if err := txQueries.DeletePayeeDefaultCategoriesByPayee(ctx, payeeID); err != nil {
+		return err
+	}
+	for _, row := range working {
+		if _, err := txQueries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+			Payee:        payeeID,
+			OtherAccount: categorizeOtherAccount(row),
+			Category:     categorizeCategory(row),
+			Percent:      percents[categorizeKey(row)],
+		}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func categorizeOtherAccount(row categorizeRow) sql.NullInt64 {
+	if row.transfer {
+		return sql.NullInt64{Int64: row.targetID, Valid: true}
+	}
+	return sql.NullInt64{}
+}
+
+func categorizeCategory(row categorizeRow) sql.NullInt64 {
+	if row.transfer {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: row.targetID, Valid: true}
+}
+
+func prompt(reader *bufio.Reader, stdout io.Writer, msg string) (string, error) {
+	if _, err := fmt.Fprint(stdout, msg); err != nil {
+		return "", err
+	}
+	line, err := reader.ReadString('\n')
+	if err != nil && !(errors.Is(err, io.EOF) && line != "") {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
+}
+
+func promptAmount(reader *bufio.Reader, stdout io.Writer, msg string, defaultVal int64) (int64, error) {
+	s, err := prompt(reader, stdout, msg)
+	if err != nil {
+		return 0, err
+	}
+	if s == "" {
+		return defaultVal, nil
+	}
+	return parseAmount(s)
+}
+
+func parseAmount(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "$")
+	negative := strings.HasPrefix(s, "-")
+	if negative {
+		s = s[1:]
+	}
+
+	parts := strings.SplitN(s, ".", 2)
+	whole, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid amount %q", s)
+	}
+
+	fraction := int64(0)
+	if len(parts) == 2 {
+		frac := parts[1]
+		if len(frac) > 2 {
+			frac = frac[:2]
+		}
+		for len(frac) < 2 {
+			frac += "0"
+		}
+		f, err := strconv.ParseInt(frac, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid amount %q", s)
+		}
+		fraction = f
+	}
+
+	cents := whole*100 + fraction
+	if negative {
+		cents = -cents
+	}
+	return cents, nil
+}
+
 func resolveCategoryTargets(ctx context.Context, queries *data.Queries, budget budgetContext, args categoryTargetArgs) (int64, sql.NullInt64, error) {
 	if args.Category != "" {
 		categoryID, err := resolveCategoryID(ctx, queries, budget, args.Category)
@@ -1188,70 +1877,7 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 			j++
 		}
 
-		categoryCount := actualCategoryCount(transactions[i:j])
-		if categoryCount > 1 || hasMismatchedSingleCategory(accountID, transactions[i:j]) {
-			transaction := transactions[i]
-			totalOutflow, totalInflow := displayedTotals(accountID, transactions[i:j])
-			if categoryCount == 1 && transaction.TransactionAccount == accountID {
-				totalOutflow = transaction.TotalOutflow
-				totalInflow = transaction.TotalInflow
-			}
-			if err := writeAccountTransactionRow(
-				tw,
-				strconv.FormatInt(transaction.ID, 10),
-				transaction.Date.Format("2006-01-02"),
-				stringValue(transaction.PayeeName),
-				"category",
-				formatCents(totalOutflow),
-				formatCents(totalInflow),
-				strconv.FormatBool(transaction.Reconciled),
-				stringValue(transaction.Note),
-			); err != nil {
-				return err
-			}
-
-			for k := i; k < j; k++ {
-				transaction := transactions[k]
-				outflow, inflow := displayedCategoryAmounts(accountID, transaction)
-				if err := writeAccountTransactionRow(
-					tw,
-					"",
-					"",
-					"",
-					transactionTarget(accountID, transaction),
-					outflow,
-					inflow,
-					"",
-					"",
-				); err != nil {
-					return err
-				}
-			}
-
-			i = j
-			continue
-		}
-
-		transaction := transactions[i]
-		target := ""
-		outflow := formatCents(transaction.TotalOutflow)
-		inflow := formatCents(transaction.TotalInflow)
-		if categoryCount == 1 {
-			target = transactionTarget(accountID, transaction)
-			outflow, inflow = displayedCategoryAmounts(accountID, transaction)
-		}
-
-		if err := writeAccountTransactionRow(
-			tw,
-			strconv.FormatInt(transaction.ID, 10),
-			transaction.Date.Format("2006-01-02"),
-			stringValue(transaction.PayeeName),
-			target,
-			outflow,
-			inflow,
-			strconv.FormatBool(transaction.Reconciled),
-			stringValue(transaction.Note),
-		); err != nil {
+		if err := printTransaction(tw, accountID, transactions[i:j]); err != nil {
 			return err
 		}
 
@@ -1259,6 +1885,75 @@ func printAccountTransactions(w io.Writer, accountID int64, transactions []data.
 	}
 
 	return tw.Flush()
+}
+
+func printTransaction(w io.Writer, accountID int64, transactions []data.ListAccountTransactionsRow) error {
+	categoryCount := actualCategoryCount(transactions)
+	if categoryCount > 1 || hasMismatchedSingleCategory(accountID, transactions) {
+		transaction := transactions[0]
+		totalOutflow, totalInflow := displayedTotals(accountID, transactions)
+		if categoryCount == 1 && transaction.TransactionAccount == accountID {
+			totalOutflow = transaction.TotalOutflow
+			totalInflow = transaction.TotalInflow
+		}
+		if err := writeAccountTransactionRow(
+			w,
+			strconv.FormatInt(transaction.ID, 10),
+			transaction.Date.Format("2006-01-02"),
+			stringValue(transaction.PayeeName),
+			"category",
+			formatCents(totalOutflow),
+			formatCents(totalInflow),
+			strconv.FormatBool(transaction.Reconciled),
+			stringValue(transaction.Note),
+		); err != nil {
+			return err
+		}
+
+		for _, transaction := range transactions {
+			outflow, inflow := displayedCategoryAmounts(accountID, transaction)
+			if err := writeAccountTransactionRow(
+				w,
+				"",
+				"",
+				"",
+				transactionTarget(accountID, transaction),
+				outflow,
+				inflow,
+				"",
+				"",
+			); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	transaction := transactions[0]
+	target := ""
+	outflow := formatCents(transaction.TotalOutflow)
+	inflow := formatCents(transaction.TotalInflow)
+	if categoryCount == 1 {
+		target = transactionTarget(accountID, transaction)
+		outflow, inflow = displayedCategoryAmounts(accountID, transaction)
+	}
+
+	if err := writeAccountTransactionRow(
+		w,
+		strconv.FormatInt(transaction.ID, 10),
+		transaction.Date.Format("2006-01-02"),
+		stringValue(transaction.PayeeName),
+		target,
+		outflow,
+		inflow,
+		strconv.FormatBool(transaction.Reconciled),
+		stringValue(transaction.Note),
+	); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func displayedTotals(accountID int64, transactions []data.ListAccountTransactionsRow) (int64, int64) {
@@ -1310,11 +2005,11 @@ func writeAccountTransactionRow(w io.Writer, id, date, payee, target, outflow, i
 
 func transactionTarget(accountID int64, transaction data.ListAccountTransactionsRow) string {
 	if isMirroredTransferRow(accountID, transaction) {
-		return stringValue(transaction.TransactionAccountName)
+		return "@" + stringValue(transaction.TransactionAccountName)
 	}
 
 	if transaction.OtherAccount.Valid {
-		return stringValue(transaction.OtherAccountName)
+		return "@" + stringValue(transaction.OtherAccountName)
 	}
 
 	return stringValue(transaction.CategoryName)

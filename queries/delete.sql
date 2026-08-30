@@ -33,3 +33,11 @@ WHERE id = ?;
 -- name: DeletePayeeDefaultCategory :exec
 DELETE FROM payee_default_category
 WHERE id = ?;
+
+-- name: DeletePayeeDefaultCategoriesByPayee :exec
+DELETE FROM payee_default_category
+WHERE payee = ?;
+
+-- name: DeleteTransactionCategoriesByTransaction :exec
+DELETE FROM transaction_category
+WHERE "transaction" = ?;

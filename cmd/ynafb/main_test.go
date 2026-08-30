@@ -61,7 +61,7 @@ func TestCreateCommands(t *testing.T) {
 		{
 			name:  "payee default-category",
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}},
-			args:  []string{"payee", "default-category", "create", "Market", "Checking", "Checking", "Groceries", "2500", "0"},
+			args:  []string{"payee", "default-category", "create", "Market", "100", "--category", "Groceries"},
 			want:  "created payee default-category 1\n",
 		},
 		{
@@ -336,7 +336,7 @@ func TestAccountListTransactions(t *testing.T) {
 		"3   2026-08-30  Market  category   25.00    0.00    false       weekly shop",
 		"                        Groceries  20.00    0.00                ",
 		"                        Household  5.00     0.00                ",
-		"2   2026-08-29  Bank    Savings    15.00    0.00    false       move money",
+		"2   2026-08-29  Bank    @Savings   15.00    0.00    false       move money",
 		"1   2026-08-28  Cafe    Groceries  10.00    0.00    false       coffee",
 		"",
 	}, "\n")
@@ -385,9 +385,9 @@ func TestAccountListTransactionsShowsMirroredTransfersForOtherAccount(t *testing
 		"Balance: 1.75",
 		"Reconciled balance: 0.00",
 		"",
-		"ID  DATE        PAYEE   TARGET   OUTFLOW  INFLOW  RECONCILED  NOTE",
-		"1   2026-08-09  superC  ws-visa  0.00     0.75    false       ",
-		"2   2026-08-09  superC  ws-visa  0.00     1.00    false       ",
+		"ID  DATE        PAYEE   TARGET    OUTFLOW  INFLOW  RECONCILED  NOTE",
+		"1   2026-08-09  superC  @ws-visa  0.00     0.75    false       ",
+		"2   2026-08-09  superC  @ws-visa  0.00     1.00    false       ",
 		"",
 	}, "\n")
 
@@ -638,7 +638,7 @@ func TestDeleteCommands(t *testing.T) {
 		{"goal", "create", "Vacation", "target", "2026-09-01", "null", "Groceries", "100000"},
 		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
 		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
-		{"payee", "default-category", "create", "Market", "Checking", "Checking", "Groceries", "100", "0"},
+		{"payee", "default-category", "create", "Market", "100", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -750,7 +750,752 @@ func TestCascadeDelete(t *testing.T) {
 		t.Fatalf("expected 'no budgets exist' error, got stderr=%q", stderr)
 	}
 }
+
+func TestAccountCategorize(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Groceries"},
+		{"category", "create", "Household"},
+		{"transaction", "create", "2026-08-29", "Checking", "Grocery Mart", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", "import mismatch"},
+		{"payee", "default-category", "create", "Grocery Mart", "80", "--category", "Groceries"},
+		{"payee", "default-category", "create", "Grocery Mart", "20", "--category", "Household"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	input := strings.Join([]string{
+		"o",
+		"a",
+		"Groceries",
+		"42.00",
+		"",
+		"o",
+		"y",
+	}, "\n")
+
+	stdout, stderr, exitCode := invokeWithInput(t, dbPath, input, "account", "categorize", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("account categorize failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+
+	if !strings.Contains(stdout, "(pre-filled from payee default)") {
+		t.Fatalf("expected pre-fill note, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "matches existing default") {
+		t.Fatalf("expected matches existing default message, got %q", stdout)
+	}
+	if !strings.Contains(stdout, `saved default for "Online Shop"`) {
+		t.Fatalf("expected saved default message, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "Done — 2 categorized, 0 skipped") {
+		t.Fatalf("expected Done summary, got %q", stdout)
+	}
+
+	show, stderr, exitCode := invoke(t, dbPath, "account", "show", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("account show failed with exit code %d, stdout=%q stderr=%q", exitCode, show, stderr)
+	}
+	if !strings.Contains(show, "Groceries") {
+		t.Fatalf("expected transactions categorized as Groceries, got %q", show)
+	}
+}
+
+func TestAccountCategorizeCreatesCategory(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", ""},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	input := strings.Join([]string{
+		"a",
+		"Brand New",
+		"y",
+		"42.00",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout, stderr, exitCode := invokeWithInput(t, dbPath, input, "account", "categorize", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("account categorize failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+
+	if !strings.Contains(stdout, `created category "Brand New"`) {
+		t.Fatalf("expected category created message, got %q", stdout)
+	}
+
+	show, stderr, exitCode := invoke(t, dbPath, "account", "show", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("account show failed with exit code %d, stdout=%q stderr=%q", exitCode, show, stderr)
+	}
+	if !strings.Contains(show, "Brand New") {
+		t.Fatalf("expected transaction categorized as Brand New, got %q", show)
+	}
+}
+
+func TestAccountCategorizePrefillMatchesDefaultDoesNotPrompt(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "merry"},
+		{"category", "create", "groceries"},
+		{"transaction", "create", "2026-07-26", "Checking", "IGA #8644", "2957", "0", ""},
+		{"payee", "default-category", "create", "IGA #8644", "50", "--category", "groceries"},
+		{"payee", "default-category", "create", "IGA #8644", "50", "--other-account", "merry"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invokeWithInput(t, dbPath, "o\n", "account", "categorize", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("account categorize failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+
+	if !strings.Contains(stdout, "matches existing default") {
+		t.Fatalf("expected matches existing default message, got %q", stdout)
+	}
+	if strings.Contains(stdout, "Save as default") {
+		t.Fatalf("did not expect save-as-default prompt for unchanged pre-fill, got %q", stdout)
+	}
+}
+
+func TestAccountCategorizeUnknownAccountErrors(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", ""},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	input := strings.Join([]string{
+		"a",
+		"@Nope",
+		"o",
+		"q",
+	}, "\n")
+
+	stdout, stderr, exitCode := invokeWithInput(t, dbPath, input, "account", "categorize", "Checking")
+	if exitCode != 0 {
+		t.Fatalf("account categorize failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	if !strings.Contains(stdout, `unknown account "Nope"`) {
+		t.Fatalf("expected unknown account error, got %q", stdout)
+	}
+}
+
+func runCommands(t *testing.T, dbPath string, commands [][]string) {
+	t.Helper()
+
+	for _, args := range commands {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+}
+
+func runCategorize(t *testing.T, dbPath, input, account string) string {
+	t.Helper()
+
+	stdout, stderr, exitCode := invokeWithInput(t, dbPath, input, "account", "categorize", account)
+	if exitCode != 0 {
+		t.Fatalf("account categorize failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+	return stdout
+}
+
+func showAccount(t *testing.T, dbPath, account string) string {
+	t.Helper()
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "account", "show", account)
+	if exitCode != 0 {
+		t.Fatalf("account show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+	return stdout
+}
+
+func TestAccountCategorizeSkipsFullyCategorized(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "category", "create", "1", "4200", "0", "--category", "Groceries"},
+	})
+
+	stdout := runCategorize(t, dbPath, "", "Checking")
+	if !strings.Contains(stdout, "No transactions need categorization") {
+		t.Fatalf("expected no-transactions message, got %q", stdout)
+	}
+}
+
+func TestAccountCategorizeInflowTransaction(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Income"},
+		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
+	})
+
+	input := strings.Join([]string{
+		"a",
+		"Income",
+		"",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "Done — 1 categorized, 0 skipped") {
+		t.Fatalf("expected Done summary, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "Income") {
+		t.Fatalf("expected inflow transaction categorized as Income, got %q", show)
+	}
+}
+
+func TestAccountCategorizeExcludesMirroredTransfers(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"transaction", "create", "2026-08-28", "Savings", "Me", "0", "500", ""},
+		{"transaction", "category", "create", "1", "0", "500", "--other-account", "Checking"},
+	})
+
+	stdout := runCategorize(t, dbPath, "", "Checking")
+	if !strings.Contains(stdout, "No transactions need categorization") {
+		t.Fatalf("expected mirrored transfer to be excluded, got %q", stdout)
+	}
+}
+
+func TestAccountCategorizeAddTransfer(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"transaction", "create", "2026-08-28", "Checking", "Bank", "1500", "0", "move"},
+	})
+
+	input := strings.Join([]string{
+		"a",
+		"@Savings",
+		"",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "→ added: @Savings") {
+		t.Fatalf("expected transfer added message, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "@Savings") {
+		t.Fatalf("expected transfer target @Savings, got %q", show)
+	}
+}
+
+func TestAccountCategorizeEmptyAmountDefaultsToRemaining(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+	})
+
+	input := strings.Join([]string{
+		"a",
+		"Groceries",
+		"",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "→ added: Groceries  42.00 out / 0.00 in") {
+		t.Fatalf("expected defaulted remaining amount in add message, got %q", stdout)
+	}
+}
+
+func TestAccountCategorizeCancelCategoryCreation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+	})
+
+	input := strings.Join([]string{
+		"a",
+		"New Cat",
+		"n",
+		"s",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if strings.Contains(stdout, `created category "New Cat"`) {
+		t.Fatalf("did not expect category to be created, got %q", stdout)
+	}
+	if !strings.Contains(stdout, `category "New Cat" not created`) {
+		t.Fatalf("expected category not-created message, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "→ skipped") {
+		t.Fatalf("expected skip after cancelled create, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if strings.Contains(show, "New Cat") {
+		t.Fatalf("did not expect New Cat to persist, got %q", show)
+	}
+}
+
+func TestParseAmount(t *testing.T) {
+	tests := []struct {
+		input string
+		want  int64
+		err   bool
+	}{
+		{"42", 4200, false},
+		{"42.00", 4200, false},
+		{"$42.00", 4200, false},
+		{"42.5", 4250, false},
+		{"42.999", 4299, false},
+		{"-4.20", -420, false},
+		{"0", 0, false},
+		{"0.00", 0, false},
+		{"abc", 0, true},
+		{"", 0, true},
+	}
+
+	for _, tt := range tests {
+		got, err := parseAmount(tt.input)
+		if tt.err {
+			if err == nil {
+				t.Errorf("parseAmount(%q) expected error, got %d", tt.input, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("parseAmount(%q) unexpected error: %v", tt.input, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("parseAmount(%q) = %d, want %d", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestAccountCategorizeDeleteExisting(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Groceries"},
+		{"category", "create", "Household"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"transaction", "category", "create", "1", "1000", "0", "--category", "Household"},
+	})
+
+	input := strings.Join([]string{
+		"d",
+		"1",
+		"a",
+		"@Savings",
+		"",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "→ removed: Groceries") {
+		t.Fatalf("expected removed message, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "Household") {
+		t.Fatalf("expected Household to remain, got %q", show)
+	}
+	if !strings.Contains(show, "@Savings") {
+		t.Fatalf("expected @Savings added, got %q", show)
+	}
+	if strings.Contains(show, "Groceries") {
+		t.Fatalf("did not expect deleted Groceries to persist, got %q", show)
+	}
+}
+
+func TestAccountCategorizeDeleteInvalidIndex(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+	})
+
+	input := strings.Join([]string{
+		"d",
+		"5",
+		"s",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "invalid selection") {
+		t.Fatalf("expected invalid selection message, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "→ skipped") {
+		t.Fatalf("expected skip after invalid delete, got %q", stdout)
+	}
+}
+
+func TestAccountCategorizeDeleteEmpty(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+	})
+
+	input := strings.Join([]string{
+		"d",
+		"s",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "no categorizations to delete") {
+		t.Fatalf("expected no-categorizations message, got %q", stdout)
+	}
+}
+
+func TestAccountCategorizeOkMismatchStaysInLoop(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+	})
+
+	input := strings.Join([]string{
+		"o",
+		"a",
+		"@Savings",
+		"",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "totals don't match: remaining 22.00 out / 0.00 in") {
+		t.Fatalf("expected totals-don't-match message, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "Done — 1 categorized, 0 skipped") {
+		t.Fatalf("expected Done summary, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "@Savings") {
+		t.Fatalf("expected @Savings persisted after fix, got %q", show)
+	}
+	if !strings.Contains(show, "Groceries") {
+		t.Fatalf("expected Groceries persisted, got %q", show)
+	}
+}
+
+func TestAccountCategorizeOkPersistsOnExistingPartial(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"category", "create", "Household"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "category", "create", "1", "4000", "0", "--category", "Groceries"},
+	})
+
+	input := strings.Join([]string{
+		"a",
+		"Household",
+		"",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "Done — 1 categorized, 0 skipped") {
+		t.Fatalf("expected Done summary, got %q", stdout)
+	}
+
+	second := runCategorize(t, dbPath, "", "Checking")
+	if !strings.Contains(second, "No transactions need categorization") {
+		t.Fatalf("expected transaction complete after ok, got %q", second)
+	}
+}
+
+func TestAccountCategorizeSaveDefaultNo(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+	})
+
+	input := strings.Join([]string{
+		"a",
+		"Groceries",
+		"",
+		"",
+		"o",
+		"n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "→ categorized") {
+		t.Fatalf("expected categorized message, got %q", stdout)
+	}
+	if strings.Contains(stdout, "saved default") {
+		t.Fatalf("did not expect default saved, got %q", stdout)
+	}
+
+	runCommands(t, dbPath, [][]string{
+		{"transaction", "create", "2026-08-29", "Checking", "Market", "4200", "0", ""},
+	})
+
+	second := runCategorize(t, dbPath, "q\n", "Checking")
+	if strings.Contains(second, "(pre-filled from payee default)") {
+		t.Fatalf("did not expect pre-fill since default not saved, got %q", second)
+	}
+}
+
+func TestAccountCategorizeSaveDefaultPercentRounding(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "A"},
+		{"category", "create", "B"},
+		{"category", "create", "C"},
+		{"transaction", "create", "2026-08-28", "Checking", "Three Way", "1000", "0", ""},
+	})
+
+	input := strings.Join([]string{
+		"a", "A", "3.33", "",
+		"a", "B", "3.33", "",
+		"a", "C", "3.34", "",
+		"o", "y",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, `saved default for "Three Way"`) {
+		t.Fatalf("expected saved default message, got %q", stdout)
+	}
+
+	runCommands(t, dbPath, [][]string{
+		{"transaction", "create", "2026-08-29", "Checking", "Three Way", "1000", "0", ""},
+	})
+
+	second := runCategorize(t, dbPath, "o\n", "Checking")
+	if !strings.Contains(second, "(pre-filled from payee default)") {
+		t.Fatalf("expected pre-fill from saved default, got %q", second)
+	}
+	if !strings.Contains(second, "matches existing default") {
+		t.Fatalf("expected matches existing default, got %q", second)
+	}
+}
+
+func TestAccountCategorizeSkipLeavesUnchanged(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+	})
+
+	stdout := runCategorize(t, dbPath, "s\n", "Checking")
+	if !strings.Contains(stdout, "Done — 0 categorized, 1 skipped") {
+		t.Fatalf("expected Done summary, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "Groceries") {
+		t.Fatalf("expected existing category unchanged after skip, got %q", show)
+	}
+}
+
+func TestAccountCategorizeQuitMidFlow(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-29", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "4200", "0", ""},
+	})
+
+	input := strings.Join([]string{
+		"a", "Groceries", "", "",
+		"o", "n",
+		"q",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "→ quit (1 categorized, 0 skipped)") {
+		t.Fatalf("expected quit summary, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "Groceries") {
+		t.Fatalf("expected first transaction categorized, got %q", show)
+	}
+}
+
+func TestAccountCategorizeEOFQuits(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+	})
+
+	stdout := runCategorize(t, dbPath, "", "Checking")
+	if !strings.Contains(stdout, "→ quit") {
+		t.Fatalf("expected quit on EOF, got %q", stdout)
+	}
+	if strings.Contains(stdout, "Done —") {
+		t.Fatalf("did not expect Done summary on EOF, got %q", stdout)
+	}
+
+	show := showAccount(t, dbPath, "Checking")
+	if strings.Contains(show, "Groceries") {
+		t.Fatalf("expected transaction to remain uncategorized after EOF, got %q", show)
+	}
+}
+
+func TestAccountCategorizeOrderingAndCounts(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-30", "Checking", "Newest", "4200", "0", ""},
+		{"transaction", "create", "2026-08-29", "Checking", "Middle", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Oldest", "4200", "0", ""},
+	})
+
+	input := strings.Join([]string{
+		"a", "Groceries", "", "",
+		"o", "n",
+		"s",
+		"a", "Groceries", "", "",
+		"o", "n",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "Done — 2 categorized, 1 skipped") {
+		t.Fatalf("expected Done summary, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "2026-08-30") {
+		t.Fatalf("expected newest transaction processed first, got %q", stdout)
+	}
+}
+
 func invoke(t *testing.T, dbPath string, args ...string) (string, string, int) {
+	t.Helper()
+
+	return invokeWithInput(t, dbPath, "", args...)
+}
+
+func invokeWithInput(t *testing.T, dbPath, input string, args ...string) (string, string, int) {
 	t.Helper()
 
 	restore := chdirToRepoRoot(t)
@@ -758,7 +1503,7 @@ func invoke(t *testing.T, dbPath string, args ...string) (string, string, int) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	exitCode := run(append([]string{"--db", dbPath}, args...), &stdout, &stderr)
+	exitCode := run(append([]string{"--db", dbPath}, args...), strings.NewReader(input), &stdout, &stderr)
 	return stdout.String(), stderr.String(), exitCode
 }
 

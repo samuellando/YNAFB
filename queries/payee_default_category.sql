@@ -11,3 +11,18 @@ INSERT INTO payee_default_category (
   ?
 )
 RETURNING *;
+
+-- name: ListPayeeDefaultCategoriesByPayee :many
+SELECT
+  pdc.id,
+  pdc.payee,
+  pdc.other_account,
+  ao.name AS other_account_name,
+  pdc.category,
+  c.name AS category_name,
+  pdc.percent
+FROM payee_default_category AS pdc
+LEFT JOIN account AS ao ON ao.id = pdc.other_account
+LEFT JOIN category AS c ON c.id = pdc.category
+WHERE pdc.payee = ?
+ORDER BY pdc.id;
