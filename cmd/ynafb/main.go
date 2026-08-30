@@ -184,11 +184,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err != nil {
 				return err
 			}
+			end := month.AddDate(0, 1, 0)
 
 			rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
 				Budget: budget.ID,
 				Start:  month,
-				End:    month.AddDate(0, 1, 0),
+				End:    end,
 			})
 			if err != nil {
 				return err
@@ -201,6 +202,26 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			allocations, err := queries.ListAllocationsByBudget(ctx, budget.ID)
 			if err != nil {
+				return err
+			}
+
+			netWorth, err := queries.GetBudgetBalanceAsOf(ctx, data.GetBudgetBalanceAsOfParams{
+				Budget: budget.ID,
+				End:    end,
+			})
+			if err != nil {
+				return err
+			}
+
+			uncategorized, err := queries.GetUncategorizedAmountByBudget(ctx, data.GetUncategorizedAmountByBudgetParams{
+				Budget: budget.ID,
+				End:    end,
+			})
+			if err != nil {
+				return err
+			}
+
+			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(rows), uncategorized); err != nil {
 				return err
 			}
 
@@ -1953,6 +1974,29 @@ func printBudgetMonths(w io.Writer, months []string) error {
 		}
 	}
 	return tw.Flush()
+}
+
+func printBudgetMonthSummary(w io.Writer, available, uncategorized int64) error {
+	if _, err := fmt.Fprintf(w, "Available: %s\n", formatCents(available)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Uncategorized: %s\n", formatCents(uncategorized)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func remainingAllocations(rows []data.ListBudgetMonthCategoriesRow) int64 {
+	var remaining int64
+	for _, r := range rows {
+		if rem := r.Allocated - r.Spent; rem > 0 {
+			remaining += rem
+		}
+	}
+	return remaining
 }
 
 func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) error {

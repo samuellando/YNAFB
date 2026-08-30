@@ -41,3 +41,25 @@ LEFT JOIN (
 ) AS s ON s.category = c.id
 WHERE c.budget = @budget
 ORDER BY c.name;
+
+-- name: GetBudgetBalanceAsOf :one
+SELECT
+  (SELECT COALESCE(SUM(t.total_inflow - t.total_outflow), 0)
+     FROM "transaction" AS t
+     JOIN account AS a ON a.id = t.account
+    WHERE a.budget = @budget AND t.date < @end)
+  + (SELECT COALESCE(SUM(ts.outflow - ts.inflow), 0)
+       FROM transaction_category AS ts
+       JOIN account AS a ON a.id = ts.other_account
+       JOIN "transaction" AS t ON t.id = ts."transaction"
+      WHERE a.budget = @budget AND t.date < @end) AS balance;
+
+-- name: GetUncategorizedAmountByBudget :one
+SELECT CAST(COALESCE(SUM(t.total_outflow + t.total_inflow), 0) AS INTEGER)
+FROM "transaction" AS t
+JOIN account AS a ON a.id = t.account
+WHERE a.budget = @budget
+  AND t.date < @end
+  AND NOT EXISTS (
+    SELECT 1 FROM transaction_category AS ts WHERE ts."transaction" = t.id
+  );
