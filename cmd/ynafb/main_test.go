@@ -751,6 +751,296 @@ func TestCascadeDelete(t *testing.T) {
 	}
 }
 
+func TestUnknownResource(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	assertCommandFails(t, dbPath, `unsupported resource "bogus"`, "bogus", "foo")
+}
+
+func TestUnknownAction(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{{"budget", "create", "Home Budget"}})
+	assertCommandFails(t, dbPath, `unsupported action "bogus" for resource "account"`, "account", "bogus")
+}
+
+func TestCommandArgValidation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{{"budget", "create", "Home Budget"}})
+
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"budget", "delete"}, "budget delete requires [name]"},
+		{[]string{"account", "create"}, "account create requires [name]"},
+		{[]string{"account", "show"}, "account show requires [account]"},
+		{[]string{"account", "import", "Checking"}, "account import requires [account] [pdf]"},
+		{[]string{"account", "categorize"}, "account categorize requires [account]"},
+		{[]string{"allocation", "create", "Groceries"}, "allocation create requires [category] [amount]"},
+		{[]string{"allocation", "delete"}, "allocation delete requires [category]"},
+		{[]string{"category", "create"}, "category create requires [name]"},
+		{[]string{"category", "delete"}, "category delete requires [name]"},
+		{[]string{"goal", "create", "Vacation"}, "goal create requires [name] [type] [start] [end|null] [category] [amount]"},
+		{[]string{"goal", "delete"}, "goal delete requires [name]"},
+		{[]string{"payee", "create"}, "payee create requires [name]"},
+		{[]string{"payee", "delete"}, "payee delete requires [name]"},
+		{[]string{"transaction", "create", "2026-08-28"}, "transaction create requires [date] [account] [payee] [total_out] [total_in] [note]"},
+		{[]string{"transaction", "delete"}, "transaction delete requires [id]"},
+		{[]string{"transaction", "category", "delete"}, "transaction category delete requires [id]"},
+		{[]string{"transaction", "category"}, "transaction category requires a subcommand (create|delete)"},
+		{[]string{"payee", "default-category"}, "payee default-category requires a subcommand (create|delete)"},
+		{[]string{"payee", "default-category", "delete"}, "payee default-category delete requires [id]"},
+	}
+
+	for _, tt := range tests {
+		assertCommandFails(t, dbPath, tt.want, tt.args...)
+	}
+}
+
+func TestUnknownNameResolution(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"payee", "create", "Market"},
+	})
+
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"account", "show", "Nope"}, `unknown account "Nope" in budget "Home Budget"`},
+		{[]string{"account", "delete", "Nope"}, `unknown account "Nope" in budget "Home Budget"`},
+		{[]string{"category", "delete", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
+		{[]string{"payee", "delete", "Nope"}, `unknown payee "Nope" in budget "Home Budget"`},
+		{[]string{"allocation", "create", "Nope", "100"}, `unknown category "Nope" in budget "Home Budget"`},
+		{[]string{"allocation", "delete", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
+		{[]string{"goal", "delete", "Nope"}, `unknown goal "Nope" in budget "Home Budget"`},
+		{[]string{"budget", "delete", "Nope"}, `unknown budget "Nope"`},
+	}
+
+	for _, tt := range tests {
+		assertCommandFails(t, dbPath, tt.want, tt.args...)
+	}
+}
+
+func TestTransactionCategoryValidation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", ""},
+	})
+
+	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "transaction", "category", "create", "1", "100", "0")
+	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "transaction", "category", "create", "1", "100", "0", "--category", "Groceries", "--other-account", "Savings")
+	assertCommandFails(t, dbPath, "--category may only be set once", "transaction", "category", "create", "1", "100", "0", "--category", "Groceries", "--category", "Groceries")
+	assertCommandFails(t, dbPath, `unknown category "Nope" in budget "Home Budget"`, "transaction", "category", "create", "1", "100", "0", "--category", "Nope")
+	assertCommandFails(t, dbPath, `unknown account "Nope" in budget "Home Budget"`, "transaction", "category", "create", "1", "100", "0", "--other-account", "Nope")
+	assertCommandFails(t, dbPath, `unsupported flag "--bogus"`, "transaction", "category", "create", "1", "100", "0", "--bogus", "x")
+}
+
+func TestPayeeDefaultCategoryValidation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Groceries"},
+		{"payee", "create", "Market"},
+	})
+
+	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "payee", "default-category", "create", "Market", "100")
+	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "payee", "default-category", "create", "Market", "100", "--category", "Groceries", "--other-account", "Savings")
+	assertCommandFails(t, dbPath, `unknown payee "Nope" in budget "Home Budget"`, "payee", "default-category", "create", "Nope", "100", "--category", "Groceries")
+	assertCommandFails(t, dbPath, "parse percent", "payee", "default-category", "create", "Market", "abc", "--category", "Groceries")
+}
+
+func TestParseErrors(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+	})
+
+	assertCommandFails(t, dbPath, "parse amount", "allocation", "create", "Groceries", "abc")
+	assertCommandFails(t, dbPath, "parse total_out", "transaction", "create", "2026-08-28", "Checking", "Market", "abc", "0", "")
+	assertCommandFails(t, dbPath, "expected RFC3339 or YYYY-MM-DD", "transaction", "create", "not-a-date", "Checking", "Market", "100", "0", "")
+}
+
+func TestDuplicateNameConstraints(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+	})
+	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "budget", "create", "Home Budget")
+
+	runCommands(t, dbPath, [][]string{
+		{"account", "create", "Checking"},
+	})
+	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "account", "create", "Checking")
+
+	runCommands(t, dbPath, [][]string{
+		{"category", "create", "Groceries"},
+	})
+	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "category", "create", "Groceries")
+
+	runCommands(t, dbPath, [][]string{
+		{"payee", "create", "Market"},
+	})
+	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "payee", "create", "Market")
+}
+
+func TestGoalWithEndDate(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"category", "create", "Groceries"},
+		{"goal", "create", "Vacation", "target", "2026-09-01", "2026-12-31", "Groceries", "100000"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "goal", "list")
+	if exitCode != 0 {
+		t.Fatalf("goal list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(stdout, "2026-12-31") {
+		t.Fatalf("expected goal end date in list, got %q", stdout)
+	}
+}
+
+func TestTransactionCreateRFC3339Date(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"transaction", "create", "2026-08-28T10:00:00Z", "Checking", "Market", "100", "0", ""},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "list")
+	if exitCode != 0 {
+		t.Fatalf("transaction list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(stdout, "2026-08-28") {
+		t.Fatalf("expected RFC3339 date rendered as YYYY-MM-DD, got %q", stdout)
+	}
+}
+
+func TestAccountShowInflowTransaction(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Income"},
+		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
+		{"transaction", "category", "create", "1", "0", "4200", "--category", "Income"},
+	})
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "Income") {
+		t.Fatalf("expected inflow target Income, got %q", show)
+	}
+	if !strings.Contains(show, "42.00") {
+		t.Fatalf("expected inflow amount 42.00, got %q", show)
+	}
+}
+
+func TestEmptyLists(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+	})
+
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"account", "list"}, "NAME  BALANCE  RECONCILED BALANCE\n"},
+		{[]string{"category", "list"}, "NAME\n"},
+		{[]string{"payee", "list"}, "NAME\n"},
+		{[]string{"allocation", "list"}, "CATEGORY  AMOUNT\n"},
+		{[]string{"goal", "list"}, "NAME  TYPE  START  END  CATEGORY  AMOUNT\n"},
+		{[]string{"transaction", "list"}, "ID  DATE  ACCOUNT  PAYEE  OUTFLOW  INFLOW  NOTE\n"},
+	}
+
+	for _, tt := range tests {
+		stdout, stderr, exitCode := invoke(t, dbPath, tt.args...)
+		if exitCode != 0 {
+			t.Fatalf("command %q failed: stdout=%q stderr=%q", strings.Join(tt.args, " "), stdout, stderr)
+		}
+		if stdout != tt.want {
+			t.Fatalf("command %q: got %q want %q", strings.Join(tt.args, " "), stdout, tt.want)
+		}
+		if stderr != "" {
+			t.Fatalf("command %q: unexpected stderr %q", strings.Join(tt.args, " "), stderr)
+		}
+	}
+}
+
+func TestAccountImportUnknownAccount(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "ws-visa"},
+	})
+
+	statementFile := filepath.Join(t.TempDir(), "statement.txt")
+	if err := os.WriteFile(statementFile, []byte("ynafb-test-statement"), 0o644); err != nil {
+		t.Fatalf("write statement file: %v", err)
+	}
+
+	assertCommandFails(t, dbPath, `unknown account "Nope" in budget "Home Budget"`, "account", "import", "Nope", statementFile)
+}
+
+func TestAccountImportUnsupportedFormat(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "ws-visa"},
+	})
+
+	garbageFile := filepath.Join(t.TempDir(), "garbage.txt")
+	if err := os.WriteFile(garbageFile, []byte("this is not a statement"), 0o644); err != nil {
+		t.Fatalf("write garbage file: %v", err)
+	}
+
+	assertCommandFails(t, dbPath, "unsupported statement format", "account", "import", "ws-visa", garbageFile)
+}
+
+func TestPayeeDefaultCategoryCreateOtherAccount(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"payee", "create", "Market"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "payee", "default-category", "create", "Market", "100", "--other-account", "Savings")
+	if exitCode != 0 {
+		t.Fatalf("create failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "created payee default-category 1\n" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+}
+
 func TestAccountCategorize(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
@@ -950,6 +1240,18 @@ func runCategorize(t *testing.T, dbPath, input, account string) string {
 		t.Fatalf("unexpected stderr: %q", stderr)
 	}
 	return stdout
+}
+
+func assertCommandFails(t *testing.T, dbPath string, wantErr string, args ...string) {
+	t.Helper()
+
+	stdout, stderr, exitCode := invoke(t, dbPath, args...)
+	if exitCode == 0 {
+		t.Fatalf("command %q expected to fail, got stdout=%q", strings.Join(args, " "), stdout)
+	}
+	if !strings.Contains(stderr, wantErr) {
+		t.Fatalf("command %q: expected stderr to contain %q, got %q", strings.Join(args, " "), wantErr, stderr)
+	}
 }
 
 func showAccount(t *testing.T, dbPath, account string) string {
