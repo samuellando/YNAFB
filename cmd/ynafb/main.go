@@ -806,7 +806,6 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				Payee:        payee,
 				TotalOutflow: totalOutflow,
 				TotalInflow:  totalInflow,
-				Reconciled:   false,
 				Note:         args[5],
 			})
 			if err != nil {
@@ -1173,7 +1172,6 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 			Payee:        payeeID,
 			TotalOutflow: entry.Outflow,
 			TotalInflow:  entry.Inflow,
-			Reconciled:   false,
 			Note:         entry.Note,
 		})
 		if err != nil {

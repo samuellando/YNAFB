@@ -5,10 +5,8 @@ INSERT INTO "transaction" (
   payee,
   total_outflow,
   total_inflow,
-  reconciled,
   note
 ) VALUES (
-  ?,
   ?,
   ?,
   ?,
@@ -27,7 +25,10 @@ SELECT
   p.name AS payee_name,
   t.total_outflow,
   t.total_inflow,
-  t.reconciled,
+  EXISTS (
+    SELECT 1 FROM reconciliation AS r
+    WHERE r.account = @account AND r."transaction" = t.id
+  ) AS reconciled,
   t.note,
   ts.id AS category_id,
   ts.other_account,
@@ -42,5 +43,5 @@ JOIN payee AS p ON p.id = t.payee
 LEFT JOIN transaction_category AS ts ON ts."transaction" = t.id
 LEFT JOIN account AS ao ON ao.id = ts.other_account
 LEFT JOIN category AS c ON c.id = ts.category
-WHERE t.account = ? OR ts.other_account = ?
+WHERE t.account = @account OR ts.other_account = @other_account
 ORDER BY t.date DESC, payee ASC, t.id ASC, ts.id ASC;

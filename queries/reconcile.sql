@@ -9,6 +9,12 @@ SELECT
       WHERE ts.other_account = @account_id AND t.date <= @date) AS balance;
 
 -- name: ReconcileAccountTransactions :execrows
-UPDATE "transaction"
-SET reconciled = true
-WHERE account = @account_id AND date <= @date AND reconciled = false;
+INSERT OR IGNORE INTO reconciliation (account, "transaction")
+SELECT @account_id, t.id
+  FROM "transaction" AS t
+ WHERE t.date <= @date
+   AND (t.account = @account_id
+        OR EXISTS (
+          SELECT 1 FROM transaction_category AS ts
+          WHERE ts."transaction" = t.id AND ts.other_account = @account_id
+        ));

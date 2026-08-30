@@ -502,7 +502,7 @@ func TestAccountReconcileSubsequentDates(t *testing.T) {
 	}
 }
 
-func TestAccountReconcileIncomingTransferNotMarked(t *testing.T) {
+func TestAccountReconcileIncomingTransferReconciledIndependently(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
 	runCommands(t, dbPath, [][]string{
@@ -523,13 +523,21 @@ func TestAccountReconcileIncomingTransferNotMarked(t *testing.T) {
 	if !strings.Contains(stdout, "Balance as of 2026-08-31: 15.00") {
 		t.Fatalf("expected incoming transfer included in balance, got %q", stdout)
 	}
-	if !strings.Contains(stdout, "reconciled 0 transactions") {
-		t.Fatalf("expected no transactions reconciled for receiving account, got %q", stdout)
+	if !strings.Contains(stdout, "reconciled 1 transactions") {
+		t.Fatalf("expected incoming transfer reconciled for receiving account, got %q", stdout)
 	}
 
-	show := showAccount(t, dbPath, "Checking")
-	if !strings.Contains(show, "1   2026-08-28  Bank   @Savings  15.00    0.00    false       move") {
-		t.Fatalf("expected source transfer to remain unreconciled, got %q", show)
+	savingsShow := showAccount(t, dbPath, "Savings")
+	if !strings.Contains(savingsShow, "Reconciled balance: 15.00") {
+		t.Fatalf("expected receiving account reconciled balance 15.00, got %q", savingsShow)
+	}
+	if !strings.Contains(savingsShow, "1   2026-08-28  Bank   @Checking  0.00     15.00   true        move") {
+		t.Fatalf("expected incoming transfer reconciled on receiving account, got %q", savingsShow)
+	}
+
+	checkingShow := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(checkingShow, "1   2026-08-28  Bank   @Savings  15.00    0.00    false       move") {
+		t.Fatalf("expected source transfer to remain unreconciled on its own account, got %q", checkingShow)
 	}
 }
 
