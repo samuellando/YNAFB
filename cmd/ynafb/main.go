@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -80,6 +81,8 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget delete [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget show [budget_name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget show [budget_name] [month]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account delete [name]\n")
@@ -150,6 +153,46 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			fmt.Fprintf(stdout, "deleted budget %q\n", budget.Name)
 			return nil
+
+		case "show":
+			if len(args) != 1 && len(args) != 2 {
+				return fmt.Errorf("budget show requires [budget_name] or [budget_name] [month]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, args[0])
+			if err != nil {
+				return err
+			}
+
+			if len(args) == 1 {
+				allocMonths, err := queries.ListAllocationMonthsByBudget(ctx, budget.ID)
+				if err != nil {
+					return err
+				}
+
+				txDates, err := queries.ListTransactionDatesByBudget(ctx, budget.ID)
+				if err != nil {
+					return err
+				}
+
+				return printBudgetMonths(stdout, distinctBudgetMonths(allocMonths, txDates))
+			}
+
+			month, err := parseMonth("month", args[1])
+			if err != nil {
+				return err
+			}
+
+			rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
+				Budget: budget.ID,
+				Start:  month,
+				End:    month.AddDate(0, 1, 0),
+			})
+			if err != nil {
+				return err
+			}
+
+			return printBudgetMonthCategories(stdout, rows)
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -1767,6 +1810,49 @@ func resolveCategoryTargets(ctx context.Context, queries *data.Queries, budget b
 
 func printCreated(w io.Writer, resource string, id int64) {
 	fmt.Fprintf(w, "created %s %d\n", resource, id)
+}
+
+func distinctBudgetMonths(allocMonths []time.Time, txDates []time.Time) []string {
+	seen := make(map[string]struct{})
+	for _, m := range allocMonths {
+		seen[m.Format("2006-01")] = struct{}{}
+	}
+	for _, d := range txDates {
+		seen[d.Format("2006-01")] = struct{}{}
+	}
+
+	months := make([]string, 0, len(seen))
+	for m := range seen {
+		months = append(months, m)
+	}
+	sort.Strings(months)
+	return months
+}
+
+func printBudgetMonths(w io.Writer, months []string) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "MONTH"); err != nil {
+		return err
+	}
+	for _, m := range months {
+		if _, err := fmt.Fprintf(tw, "%s\n", m); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(tw, "CATEGORY\tALLOCATED\tSPENT\tREMAINING"); err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", stringValue(r.Name), formatCents(r.Allocated), formatCents(r.Spent), formatCents(r.Allocated-r.Spent)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
 }
 
 func printBudgets(w io.Writer, budgets []data.ListBudgetBalancesRow) error {

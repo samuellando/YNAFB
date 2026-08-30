@@ -774,6 +774,7 @@ func TestCommandArgValidation(t *testing.T) {
 		want string
 	}{
 		{[]string{"budget", "delete"}, "budget delete requires [name]"},
+		{[]string{"budget", "show"}, "budget show requires [budget_name] or [budget_name] [month]"},
 		{[]string{"account", "create"}, "account create requires [name]"},
 		{[]string{"account", "show"}, "account show requires [account]"},
 		{[]string{"account", "import", "Checking"}, "account import requires [account] [pdf]"},
@@ -821,6 +822,7 @@ func TestUnknownNameResolution(t *testing.T) {
 		{[]string{"allocation", "delete", "2026-08", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
 		{[]string{"goal", "delete", "Nope"}, `unknown goal "Nope" in budget "Home Budget"`},
 		{[]string{"budget", "delete", "Nope"}, `unknown budget "Nope"`},
+		{[]string{"budget", "show", "Nope"}, `unknown budget "Nope"`},
 	}
 
 	for _, tt := range tests {
@@ -1455,6 +1457,127 @@ func TestAllocationMonthBehavior(t *testing.T) {
 	}
 	if stdout != "MONTH    CATEGORY   AMOUNT\n2026-09  Groceries  75.00\n" {
 		t.Fatalf("expected only September allocation after delete, got %q", stdout)
+	}
+}
+
+func TestBudgetShowMonths(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"allocation", "create", "2026-06", "Groceries", "50.00"},
+		{"allocation", "create", "2026-07", "Groceries", "50.00"},
+		{"transaction", "create", "2026-07-15", "Checking", "Market", "1000", "0", ""},
+		{"transaction", "create", "2026-08-15", "Checking", "Cafe", "500", "0", ""},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := "MONTH\n2026-06\n2026-07\n2026-08\n"
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestBudgetShowMonth(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"account", "create", "Savings"},
+		{"category", "create", "Emergency"},
+		{"category", "create", "Groceries"},
+		{"category", "create", "Household"},
+		{"allocation", "create", "2026-08", "Groceries", "50.00"},
+		{"allocation", "create", "2026-08", "Household", "25.00"},
+		{"transaction", "create", "2026-08-05", "Checking", "Market", "2000", "0", "shop"},
+		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-10", "Checking", "Cafe", "500", "0", "coffee"},
+		{"transaction", "category", "create", "2", "500", "0", "--category", "Household"},
+		{"transaction", "create", "2026-08-15", "Checking", "Mart", "3000", "0", ""},
+		{"transaction", "category", "create", "3", "3000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-20", "Checking", "Refund", "0", "1000", ""},
+		{"transaction", "category", "create", "4", "0", "1000", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-25", "Checking", "Bank", "1500", "0", "transfer"},
+		{"transaction", "category", "create", "5", "1500", "0", "--other-account", "Savings"},
+		{"transaction", "create", "2026-08-28", "Checking", "Unknown", "700", "0", ""},
+		{"transaction", "create", "2026-09-02", "Checking", "Market", "999", "0", ""},
+		{"transaction", "category", "create", "7", "999", "0", "--category", "Groceries"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"CATEGORY   ALLOCATED  SPENT  REMAINING",
+		"Emergency  0.00       0.00   0.00",
+		"Groceries  50.00      40.00  10.00",
+		"Household  25.00      5.00   20.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestBudgetShowEmpty(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "MONTH\n" {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, "MONTH\n")
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08")
+	if exitCode != 0 {
+		t.Fatalf("budget show month failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "CATEGORY  ALLOCATED  SPENT  REMAINING\n" {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, "CATEGORY  ALLOCATED  SPENT  REMAINING\n")
+	}
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
 	}
 }
 
