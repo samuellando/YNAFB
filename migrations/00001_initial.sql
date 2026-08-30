@@ -8,8 +8,9 @@ CREATE TABLE IF NOT EXISTS allocation (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
     category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
+    month DATE NOT NULL,
     amount INTEGER NOT NULL,
-    UNIQUE (budget, category)
+    UNIQUE (budget, category, month)
 );
 
 CREATE TABLE IF NOT EXISTS account (

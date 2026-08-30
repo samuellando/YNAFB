@@ -37,7 +37,7 @@ func TestCreateCommands(t *testing.T) {
 		{
 			name:  "allocation",
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}},
-			args:  []string{"allocation", "create", "Groceries", "2500"},
+			args:  []string{"allocation", "create", "2026-08", "Groceries", "25.00"},
 			want:  "created allocation 1\n",
 		},
 		{
@@ -585,8 +585,8 @@ func TestListCommands(t *testing.T) {
 		{"category", "create", "Household"},
 		{"payee", "create", "Market"},
 		{"payee", "create", "Cafe"},
-		{"allocation", "create", "Groceries", "5000"},
-		{"allocation", "create", "Household", "2500"},
+		{"allocation", "create", "2026-08", "Groceries", "50.00"},
+		{"allocation", "create", "2026-08", "Household", "25.00"},
 		{"goal", "create", "Vacation", "target", "2026-09-01", "null", "Groceries", "100000"},
 		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
 		{"transaction", "create", "2026-08-29", "Savings", "Cafe", "1000", "0", "coffee"},
@@ -607,7 +607,7 @@ func TestListCommands(t *testing.T) {
 		{[]string{"account", "list"}, "NAME      BALANCE  RECONCILED BALANCE\nChecking  -25.00   0.00\nSavings   -10.00   0.00\n"},
 		{[]string{"category", "list"}, "NAME\nGroceries\nHousehold\n"},
 		{[]string{"payee", "list"}, "NAME\nCafe\nMarket\n"},
-		{[]string{"allocation", "list"}, "CATEGORY   AMOUNT\nGroceries  50.00\nHousehold  25.00\n"},
+		{[]string{"allocation", "list"}, "MONTH    CATEGORY   AMOUNT\n2026-08  Groceries  50.00\n2026-08  Household  25.00\n"},
 		{[]string{"goal", "list"}, "NAME      TYPE    START       END  CATEGORY   AMOUNT\nVacation  target  2026-09-01       Groceries  1000.00\n"},
 		{[]string{"transaction", "list"}, "ID  DATE        ACCOUNT   PAYEE   OUTFLOW  INFLOW  NOTE\n2   2026-08-29  Savings   Cafe    10.00    0.00    coffee\n1   2026-08-28  Checking  Market  25.00    0.00    shop\n"},
 	}
@@ -634,7 +634,7 @@ func TestDeleteCommands(t *testing.T) {
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
 		{"payee", "create", "Market"},
-		{"allocation", "create", "Groceries", "5000"},
+		{"allocation", "create", "2026-08", "Groceries", "50.00"},
 		{"goal", "create", "Vacation", "target", "2026-09-01", "null", "Groceries", "100000"},
 		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
 		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
@@ -655,7 +655,7 @@ func TestDeleteCommands(t *testing.T) {
 		{[]string{"transaction", "category", "delete", "1"}, "deleted transaction category 1\n"},
 		{[]string{"payee", "default-category", "delete", "1"}, "deleted payee default-category 1\n"},
 		{[]string{"transaction", "delete", "1"}, "deleted transaction 1\n"},
-		{[]string{"allocation", "delete", "Groceries"}, "deleted allocation \"Groceries\"\n"},
+		{[]string{"allocation", "delete", "2026-08", "Groceries"}, "deleted allocation 2026-08 \"Groceries\"\n"},
 		{[]string{"goal", "delete", "Vacation"}, "deleted goal \"Vacation\"\n"},
 		{[]string{"payee", "delete", "Market"}, "deleted payee \"Market\"\n"},
 		{[]string{"category", "delete", "Groceries"}, "deleted category \"Groceries\"\n"},
@@ -778,8 +778,8 @@ func TestCommandArgValidation(t *testing.T) {
 		{[]string{"account", "show"}, "account show requires [account]"},
 		{[]string{"account", "import", "Checking"}, "account import requires [account] [pdf]"},
 		{[]string{"account", "categorize"}, "account categorize requires [account]"},
-		{[]string{"allocation", "create", "Groceries"}, "allocation create requires [category] [amount]"},
-		{[]string{"allocation", "delete"}, "allocation delete requires [category]"},
+		{[]string{"allocation", "create", "Groceries"}, "allocation create requires [month] [category] [amount]"},
+		{[]string{"allocation", "delete"}, "allocation delete requires [month] [category]"},
 		{[]string{"category", "create"}, "category create requires [name]"},
 		{[]string{"category", "delete"}, "category delete requires [name]"},
 		{[]string{"goal", "create", "Vacation"}, "goal create requires [name] [type] [start] [end|null] [category] [amount]"},
@@ -817,8 +817,8 @@ func TestUnknownNameResolution(t *testing.T) {
 		{[]string{"account", "delete", "Nope"}, `unknown account "Nope" in budget "Home Budget"`},
 		{[]string{"category", "delete", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
 		{[]string{"payee", "delete", "Nope"}, `unknown payee "Nope" in budget "Home Budget"`},
-		{[]string{"allocation", "create", "Nope", "100"}, `unknown category "Nope" in budget "Home Budget"`},
-		{[]string{"allocation", "delete", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
+		{[]string{"allocation", "create", "2026-08", "Nope", "100"}, `unknown category "Nope" in budget "Home Budget"`},
+		{[]string{"allocation", "delete", "2026-08", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
 		{[]string{"goal", "delete", "Nope"}, `unknown goal "Nope" in budget "Home Budget"`},
 		{[]string{"budget", "delete", "Nope"}, `unknown budget "Nope"`},
 	}
@@ -872,7 +872,7 @@ func TestParseErrors(t *testing.T) {
 		{"category", "create", "Groceries"},
 	})
 
-	assertCommandFails(t, dbPath, "parse amount", "allocation", "create", "Groceries", "abc")
+	assertCommandFails(t, dbPath, "invalid amount", "allocation", "create", "2026-08", "Groceries", "abc")
 	assertCommandFails(t, dbPath, "parse total_out", "transaction", "create", "2026-08-28", "Checking", "Market", "abc", "0", "")
 	assertCommandFails(t, dbPath, "expected RFC3339 or YYYY-MM-DD", "transaction", "create", "not-a-date", "Checking", "Market", "100", "0", "")
 }
@@ -971,7 +971,7 @@ func TestEmptyLists(t *testing.T) {
 		{[]string{"account", "list"}, "NAME  BALANCE  RECONCILED BALANCE\n"},
 		{[]string{"category", "list"}, "NAME\n"},
 		{[]string{"payee", "list"}, "NAME\n"},
-		{[]string{"allocation", "list"}, "CATEGORY  AMOUNT\n"},
+		{[]string{"allocation", "list"}, "MONTH  CATEGORY  AMOUNT\n"},
 		{[]string{"goal", "list"}, "NAME  TYPE  START  END  CATEGORY  AMOUNT\n"},
 		{[]string{"transaction", "list"}, "ID  DATE  ACCOUNT  PAYEE  OUTFLOW  INFLOW  NOTE\n"},
 	}
@@ -1416,6 +1416,45 @@ func TestAccountCategorizeCancelCategoryCreation(t *testing.T) {
 	show := showAccount(t, dbPath, "Checking")
 	if strings.Contains(show, "New Cat") {
 		t.Fatalf("did not expect New Cat to persist, got %q", show)
+	}
+}
+
+func TestAllocationMonthBehavior(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"category", "create", "Groceries"},
+		{"allocation", "create", "2026-08", "Groceries", "50.00"},
+		{"allocation", "create", "2026-09", "Groceries", "75.00"},
+	})
+
+	// Same category + month must be rejected (UNIQUE budget+category+month).
+	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "allocation", "create", "2026-08", "Groceries", "60.00")
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "allocation", "list")
+	if exitCode != 0 {
+		t.Fatalf("allocation list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	want := "MONTH    CATEGORY   AMOUNT\n2026-08  Groceries  50.00\n2026-09  Groceries  75.00\n"
+	if stdout != want {
+		t.Fatalf("allocation list: got %q want %q", stdout, want)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "allocation", "delete", "2026-08", "Groceries")
+	if exitCode != 0 {
+		t.Fatalf("allocation delete failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "deleted allocation 2026-08 \"Groceries\"\n" {
+		t.Fatalf("unexpected delete stdout: %q", stdout)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "allocation", "list")
+	if exitCode != 0 {
+		t.Fatalf("allocation list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "MONTH    CATEGORY   AMOUNT\n2026-09  Groceries  75.00\n" {
+		t.Fatalf("expected only September allocation after delete, got %q", stdout)
 	}
 }
 

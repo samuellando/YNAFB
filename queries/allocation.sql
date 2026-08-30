@@ -2,8 +2,10 @@
 INSERT INTO allocation (
   budget,
   category,
+  month,
   amount
 ) VALUES (
+  ?,
   ?,
   ?,
   ?

@@ -86,9 +86,9 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account show [account]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account import [account] [pdf]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account categorize [account]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [month] [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation list\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation delete [category]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation delete [month] [category]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category delete [name]\n")
@@ -290,8 +290,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 	case "allocation":
 		switch action {
 		case "create":
-			if len(args) != 2 {
-				return fmt.Errorf("allocation create requires [category] [amount]")
+			if len(args) != 3 {
+				return fmt.Errorf("allocation create requires [month] [category] [amount]")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -299,12 +299,17 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			category, err := resolveCategoryID(ctx, queries, budget, args[0])
+			month, err := parseMonth("month", args[0])
 			if err != nil {
 				return err
 			}
 
-			amount, err := parseInt64("amount", args[1])
+			category, err := resolveCategoryID(ctx, queries, budget, args[1])
+			if err != nil {
+				return err
+			}
+
+			amount, err := parseAmount(args[2])
 			if err != nil {
 				return err
 			}
@@ -312,6 +317,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			result, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
 				Budget:   budget.ID,
 				Category: category,
+				Month:    month,
 				Amount:   amount,
 			})
 			if err != nil {
@@ -335,8 +341,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			return printAllocations(stdout, allocations)
 
 		case "delete":
-			if len(args) != 1 {
-				return fmt.Errorf("allocation delete requires [category]")
+			if len(args) != 2 {
+				return fmt.Errorf("allocation delete requires [month] [category]")
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -344,19 +350,25 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			category, err := resolveCategoryID(ctx, queries, budget, args[0])
+			month, err := parseMonth("month", args[0])
 			if err != nil {
 				return err
 			}
 
-			if err := queries.DeleteAllocationByCategory(ctx, data.DeleteAllocationByCategoryParams{
+			category, err := resolveCategoryID(ctx, queries, budget, args[1])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteAllocationByCategoryAndMonth(ctx, data.DeleteAllocationByCategoryAndMonthParams{
 				Budget:   budget.ID,
 				Category: category,
+				Month:    month,
 			}); err != nil {
 				return err
 			}
 
-			fmt.Fprintf(stdout, "deleted allocation %q\n", args[0])
+			fmt.Fprintf(stdout, "deleted allocation %s %q\n", month.Format("2006-01"), args[1])
 			return nil
 
 		default:
@@ -853,6 +865,15 @@ func parseNullableTime(name, value string) (sql.NullTime, error) {
 	}
 
 	return sql.NullTime{Time: parsed, Valid: true}, nil
+}
+
+func parseMonth(name, value string) (time.Time, error) {
+	parsed, err := time.Parse("2006-01", value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse %s: expected YYYY-MM", name)
+	}
+
+	return parsed, nil
 }
 
 func parseCategoryTargetArgs(args []string) ([]string, categoryTargetArgs, error) {
@@ -1789,11 +1810,11 @@ func printAccountBalances(w io.Writer, accounts []data.ListAccountBalancesRow) e
 
 func printAllocations(w io.Writer, allocations []data.ListAllocationsByBudgetRow) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "CATEGORY\tAMOUNT"); err != nil {
+	if _, err := fmt.Fprintln(tw, "MONTH\tCATEGORY\tAMOUNT"); err != nil {
 		return err
 	}
 	for _, a := range allocations {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\n", stringValue(a.CategoryName), formatCents(a.Amount)); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", a.Month.Format("2006-01"), stringValue(a.CategoryName), formatCents(a.Amount)); err != nil {
 			return err
 		}
 	}

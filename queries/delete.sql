@@ -18,9 +18,9 @@ WHERE id = ?;
 DELETE FROM goal
 WHERE id = ?;
 
--- name: DeleteAllocationByCategory :exec
+-- name: DeleteAllocationByCategoryAndMonth :exec
 DELETE FROM allocation
-WHERE budget = ? AND category = ?;
+WHERE budget = ? AND category = ? AND month = ?;
 
 -- name: DeleteTransaction :exec
 DELETE FROM "transaction"

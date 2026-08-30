@@ -33,12 +33,13 @@ ORDER BY g.name;
 -- name: ListAllocationsByBudget :many
 SELECT
   a.id,
+  a.month,
   c.name AS category_name,
   a.amount
 FROM allocation AS a
 JOIN category AS c ON c.id = a.category
 WHERE a.budget = ?
-ORDER BY c.name;
+ORDER BY a.month, c.name;
 
 -- name: ListTransactionsByBudget :many
 SELECT
