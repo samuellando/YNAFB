@@ -2358,30 +2358,35 @@ func TestGoalMonthlyValue(t *testing.T) {
 		goal  data.ListGoalsByBudgetRow
 		now   time.Time
 		spend map[int64]map[int64]int64
+		plan  bool
 		want  int64
 	}{
-		{"save no allocation yet", newGoal("save", "2026-08", "2026-12", 100000), mustMonth("2026-08"), nil, 20000},
-		{"save counts only prior months", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, 18000},
-		{"save fully funded", newGoal("save", "2026-07", "2026-12", 10000), mustMonth("2026-08"), nil, 0},
-		{"save not started", newGoal("save", "2026-09", "2026-12", 100000), mustMonth("2026-08"), nil, 0},
-		{"save ended", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, 0},
-		{"save last month", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-08"), nil, 90000},
-		{"monthly active", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, 5000},
-		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), nil, 0},
-		{"monthly ended", newGoal("monthly", "2026-07", "2026-08", 5000), mustMonth("2026-09"), nil, 0},
-		{"refill no history", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-08", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), nil, 100000},
-		{"refill counts prior balance", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, 90000},
-		{"refill fully funded", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, 0},
-		{"refill subtracts spending", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 4000}}, 94000},
-		{"refill overspent clamps at zero", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 20000}}, 100000},
-		{"refill excludes current month", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, 90000},
-		{"refill not started", newGoal("refill", "2026-09", "", 100000), mustMonth("2026-08"), nil, 0},
-		{"refill ended", newGoal("refill", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, 0},
+		{"save no allocation yet", newGoal("save", "2026-08", "2026-12", 100000), mustMonth("2026-08"), nil, false, 20000},
+		{"save counts only prior months", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, false, 18000},
+		{"save fully funded", newGoal("save", "2026-07", "2026-12", 10000), mustMonth("2026-08"), nil, false, 0},
+		{"save not started", newGoal("save", "2026-09", "2026-12", 100000), mustMonth("2026-08"), nil, false, 0},
+		{"save ended", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, false, 0},
+		{"save last month", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-08"), nil, false, 90000},
+		{"monthly active", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, false, 5000},
+		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), nil, false, 0},
+		{"monthly ended", newGoal("monthly", "2026-07", "2026-08", 5000), mustMonth("2026-09"), nil, false, 0},
+		{"refill no history", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-08", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), nil, false, 100000},
+		{"refill counts prior balance", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, false, 90000},
+		{"refill fully funded", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, false, 0},
+		{"refill subtracts spending", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 4000}}, false, 94000},
+		{"refill overspent clamps at zero", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 20000}}, false, 100000},
+		{"refill excludes current month", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, false, 90000},
+		{"refill not started", newGoal("refill", "2026-09", "", 100000), mustMonth("2026-08"), nil, false, 0},
+		{"refill ended", newGoal("refill", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, false, 0},
+		{"refill plan ignores carryover", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, true, 100000},
+		{"refill plan ignores spending", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 4000}}, true, 100000},
+		{"monthly plan unaffected", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, true, 5000},
+		{"save plan unaffected", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, true, 18000},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := goalMonthlyValue(tt.goal, alloc, tt.spend, tt.now)
+			got := goalMonthlyValue(tt.goal, alloc, tt.spend, tt.now, tt.plan)
 			if got != tt.want {
 				t.Fatalf("goalMonthlyValue() = %d, want %d", got, tt.want)
 			}
@@ -2429,29 +2434,108 @@ func TestGoalWarning(t *testing.T) {
 		goal  data.ListGoalsByBudgetRow
 		now   time.Time
 		spend map[int64]map[int64]int64
+		plan  bool
 		want  string
 	}{
-		{"monthly fully funded", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, ""},
-		{"monthly underfunded", newGoal("monthly", "2026-07", "", 15000), mustMonth("2026-08"), nil, "underfunded 50.00"},
-		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), nil, ""},
-		{"save on track", newGoal("save", "2026-07", "2026-12", 20000), mustMonth("2026-08"), nil, ""},
-		{"save behind", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, "behind 80.00"},
-		{"save fully funded", newGoal("save", "2026-07", "2026-12", 10000), mustMonth("2026-08"), nil, ""},
-		{"save not started", newGoal("save", "2026-09", "2026-12", 100000), mustMonth("2026-08"), nil, ""},
-		{"refill at target", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, ""},
-		{"refill below target", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, "needs refill 900.00"},
-		{"refill with spending", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-07", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), map[int64]map[int64]int64{2: {202607: 4000}}, "needs refill 40.00"},
-		{"refill not started", newGoal("refill", "2026-09", "", 100000), mustMonth("2026-08"), nil, ""},
+		{"monthly fully funded", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, false, ""},
+		{"monthly exactly funded", newGoal("monthly", "2026-07", "", 10000), mustMonth("2026-08"), nil, false, ""},
+		{"monthly underfunded", newGoal("monthly", "2026-07", "", 15000), mustMonth("2026-08"), nil, false, "underfunded 50.00"},
+		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), nil, false, ""},
+		{"monthly ended", newGoal("monthly", "2026-07", "2026-07", 15000), mustMonth("2026-08"), nil, false, ""},
+		{"save on track", newGoal("save", "2026-07", "2026-12", 20000), mustMonth("2026-08"), nil, false, ""},
+		{"save exactly on pace", newGoal("save", "2026-07", "2026-12", 60000), mustMonth("2026-08"), nil, false, ""},
+		{"save behind", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, false, "behind 80.00"},
+		{"save fully funded", newGoal("save", "2026-07", "2026-12", 10000), mustMonth("2026-08"), nil, false, ""},
+		{"save not started", newGoal("save", "2026-09", "2026-12", 100000), mustMonth("2026-08"), nil, false, ""},
+		{"save ended", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, false, ""},
+		{"refill at target", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, false, ""},
+		{"refill below target", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, false, "needs refill 900.00"},
+		{"refill with spending", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-07", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), map[int64]map[int64]int64{2: {202607: 4000}}, false, "needs refill 40.00"},
+		{"refill overspent clamps to full", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 20000}}, false, "needs refill 1000.00"},
+		{"refill not started", newGoal("refill", "2026-09", "", 100000), mustMonth("2026-08"), nil, false, ""},
+		{"refill ended", newGoal("refill", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, false, ""},
+		{"refill plan ignores carryover", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, true, "needs refill 1000.00"},
+		{"refill plan ignores spending", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 4000}}, true, "needs refill 1000.00"},
+		{"monthly plan unaffected", newGoal("monthly", "2026-07", "", 15000), mustMonth("2026-08"), nil, true, "underfunded 50.00"},
+		{"save plan unaffected", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, true, "behind 80.00"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := goalWarning(tt.goal, alloc, tt.spend, tt.now)
+			got := goalWarning(tt.goal, alloc, tt.spend, tt.now, tt.plan)
 			if got != tt.want {
 				t.Fatalf("goalWarning() = %q, want %q", got, tt.want)
 			}
 		})
 	}
+}
+
+func TestCategoryRemaining(t *testing.T) {
+	mustMonth := func(s string) time.Time {
+		t.Helper()
+		parsed, err := time.Parse("2006-01", s)
+		if err != nil {
+			t.Fatalf("parse month %q: %v", s, err)
+		}
+		return parsed
+	}
+
+	rows := []data.ListBudgetMonthCategoriesRow{
+		{ID: 1},
+		{ID: 2},
+		{ID: 3},
+	}
+
+	allocations := []data.ListAllocationsByBudgetRow{
+		{Month: mustMonth("2026-07"), CategoryID: 1, Amount: 40000},
+		{Month: mustMonth("2026-08"), CategoryID: 1, Amount: 10000},
+		{Month: mustMonth("2026-07"), CategoryID: 2, Amount: 10000},
+		{Month: mustMonth("2026-08"), CategoryID: 2, Amount: 5000},
+		{Month: mustMonth("2026-07"), CategoryID: 3, Amount: 10000},
+		{Month: mustMonth("2026-08"), CategoryID: 3, Amount: 10000},
+	}
+
+	spending := []data.ListCategoryMonthlySpendingByBudgetRow{
+		{Category: sql.NullInt64{Int64: 1, Valid: true}, Month: 202607, Net: 5000},
+		{Category: sql.NullInt64{Int64: 1, Valid: true}, Month: 202608, Net: 3000},
+		{Category: sql.NullInt64{Int64: 2, Valid: true}, Month: 202608, Net: 20000},
+		{Category: sql.NullInt64{Int64: 3, Valid: true}, Month: 202607, Net: 20000},
+	}
+
+	month := mustMonth("2026-08")
+	end := month.AddDate(0, 1, 0)
+
+	t.Run("normal rolls prior months forward", func(t *testing.T) {
+		got := categoryRemaining(rows, allocations, spending, month, end, false)
+		// cat 1: July 40000-5000=35000, Aug 10000-3000=7000; total 42000
+		if got[1] != 42000 {
+			t.Fatalf("cat 1 remaining = %d, want 42000", got[1])
+		}
+		// cat 2: July +10000, Aug 5000-20000=-15000 → 10000-15000 = -5000, target is last month so unclamped
+		if got[2] != -5000 {
+			t.Fatalf("cat 2 remaining = %d, want -5000", got[2])
+		}
+		// cat 3: July 10000-20000 = -10000, clamped to 0 before Aug, then +10000 = 10000
+		if got[3] != 10000 {
+			t.Fatalf("cat 3 remaining = %d, want 10000", got[3])
+		}
+	})
+
+	t.Run("plan ignores carryover and spending, counts only target month allocation", func(t *testing.T) {
+		got := categoryRemaining(rows, allocations, spending, month, end, true)
+		// cat 1: Aug 10000 only (spending ignored)
+		if got[1] != 10000 {
+			t.Fatalf("plan cat 1 remaining = %d, want 10000", got[1])
+		}
+		// cat 2: Aug 5000 only
+		if got[2] != 5000 {
+			t.Fatalf("plan cat 2 remaining = %d, want 5000", got[2])
+		}
+		// cat 3: Aug 10000 only
+		if got[3] != 10000 {
+			t.Fatalf("plan cat 3 remaining = %d, want 10000", got[3])
+		}
+	})
 }
 
 func TestBudgetShowGoal(t *testing.T) {
@@ -2553,6 +2637,195 @@ func TestBudgetShowRefillGoal(t *testing.T) {
 
 	if stdout != want {
 		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestBudgetShowRefillGoalPlan(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Repair"},
+		{"goal", "create", "refill", "2026-07", "null", "Repair", "1000.00"},
+		{"allocation", "create", "2026-07", "Repair", "400.00"},
+		{"transaction", "create", "2026-07-20", "Checking", "Hardware", "50.00", "0.00", "fix"},
+		{"transaction", "category", "create", "1", "50.00", "0.00", "--category", "Repair"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08", "--plan")
+	if exitCode != 0 {
+		t.Fatalf("budget show --plan failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"Available: -50.00",
+		"Income: 0.00",
+		"Goals: 1000.00",
+		"Allocated: 0.00",
+		"Spent: 0.00",
+		"Remaining: 0.00",
+		"Uncategorized: 0.00",
+		"",
+		"No group:",
+		"CATEGORY  GOAL     ALLOCATED  SPENT  REMAINING  WARNING",
+		"Repair    1000.00  0.00       0.00   0.00       needs refill 1000.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestBudgetShowUnsupportedFlag(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+	runCommands(t, dbPath, [][]string{{"budget", "create", "Home Budget"}})
+	assertCommandFails(t, dbPath, `unsupported flag "--bogus"`, "budget", "show", "Home Budget", "2026-08", "--bogus")
+}
+
+func TestBudgetShowPlanMixedGoals(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"category", "create", "Household"},
+		{"category", "create", "Repair"},
+		{"goal", "create", "monthly", "2026-07", "null", "Groceries", "50.00"},
+		{"goal", "create", "save", "2026-08", "2026-12", "Household", "1000.00"},
+		{"goal", "create", "refill", "2026-07", "null", "Repair", "1000.00"},
+		{"allocation", "create", "2026-07", "Repair", "400.00"},
+		{"allocation", "create", "2026-08", "Groceries", "30.00"},
+		{"allocation", "create", "2026-08", "Repair", "100.00"},
+		{"transaction", "create", "2026-07-20", "Checking", "Hardware", "50.00", "0.00", "fix"},
+		{"transaction", "category", "create", "1", "50.00", "0.00", "--category", "Repair"},
+		{"transaction", "create", "2026-08-10", "Checking", "Hardware", "25.00", "0.00", "more"},
+		{"transaction", "category", "create", "2", "25.00", "0.00", "--category", "Repair"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08", "--plan")
+	if exitCode != 0 {
+		t.Fatalf("budget show --plan failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"Available: -205.00",
+		"Income: 0.00",
+		"Goals: 1250.00",
+		"Allocated: 130.00",
+		"Spent: 0.00",
+		"Remaining: 130.00",
+		"Uncategorized: 0.00",
+		"",
+		"No group:",
+		"CATEGORY   GOAL     ALLOCATED  SPENT  REMAINING  WARNING",
+		"Groceries  50.00    30.00      0.00   30.00      underfunded 20.00",
+		"Household  200.00   0.00       0.00   0.00       behind 200.00",
+		"Repair     1000.00  100.00     0.00   100.00     needs refill 1000.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestBudgetShowPlanHidesMonthToDate(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"allocation", "create", "2026-08", "Groceries", "100.00"},
+		{"transaction", "create", "2026-08-05", "Checking", "Market", "40.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "40.00", "0.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-10", "Checking", "Employer", "0.00", "200.00", "paycheck"},
+		{"transaction", "category", "create", "2", "0.00", "200.00", "--income"},
+		{"transaction", "create", "2026-08-15", "Checking", "ATM", "50.00", "0.00", "cash"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"Available: 50.00",
+		"Income: 200.00",
+		"Goals: 0.00",
+		"Allocated: 100.00",
+		"Spent: 40.00",
+		"Remaining: 60.00",
+		"Uncategorized: 50.00",
+		"",
+		"No group:",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING  WARNING",
+		"Groceries        100.00     40.00  60.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected normal stdout: got %q want %q", stdout, want)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08", "--plan")
+	if exitCode != 0 {
+		t.Fatalf("budget show --plan failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want = strings.Join([]string{
+		"Available: 10.00",
+		"Income: 0.00",
+		"Goals: 0.00",
+		"Allocated: 100.00",
+		"Spent: 0.00",
+		"Remaining: 100.00",
+		"Uncategorized: 0.00",
+		"",
+		"No group:",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING  WARNING",
+		"Groceries        100.00     0.00   100.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected plan stdout: got %q want %q", stdout, want)
 	}
 
 	if stderr != "" {
