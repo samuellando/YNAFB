@@ -1937,6 +1937,7 @@ func TestBudgetShowMonth(t *testing.T) {
 		"Remaining: 30.00",
 		"Uncategorized: 7.00",
 		"",
+		"No group:",
 		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
 		"Emergency        0.00       0.00   0.00",
 		"Groceries        50.00      40.00  10.00",
@@ -1975,8 +1976,8 @@ func TestBudgetShowEmpty(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("budget show month failed: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n" {
-		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n")
+	if stdout != "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\n" {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\n")
 	}
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
@@ -2098,6 +2099,7 @@ func TestBudgetShowGoal(t *testing.T) {
 		"Remaining: 50.00",
 		"Uncategorized: 0.00",
 		"",
+		"No group:",
 		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
 		"Emergency          0.00       0.00   0.00",
 		"Groceries  50.00   50.00      20.00  30.00",
@@ -2161,6 +2163,7 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 		"Remaining: 75.00",
 		"Uncategorized: 0.00",
 		"",
+		"No group:",
 		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
 		"Fees               0.00       0.00   0.00",
 		"Fun                0.00       0.00   0.00",

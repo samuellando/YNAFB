@@ -2143,27 +2143,61 @@ func remainingAllocations(rows []data.ListBudgetMonthCategoriesRow) int64 {
 	return remaining
 }
 
-func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "CATEGORY\tGOAL\tALLOCATED\tSPENT\tREMAINING"); err != nil {
-		return err
-	}
+const ungroupedLabel = "No group"
 
+func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) error {
 	goalsByCategory := make(map[int64]data.ListGoalsByBudgetRow)
 	for _, g := range goals {
 		goalsByCategory[g.CategoryID] = g
 	}
 
+	groups := make(map[string][]data.ListBudgetMonthCategoriesRow)
 	for _, r := range rows {
-		goal := ""
-		if g, ok := goalsByCategory[r.ID]; ok && goalActiveInMonth(g, month) {
-			goal = formatCents(goalMonthlyValue(g, allocations, month))
+		name := stringValue(r.Name_2)
+		if name == "" {
+			name = ungroupedLabel
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(r.Spent), formatCents(r.Allocated-r.Spent)); err != nil {
+		groups[name] = append(groups[name], r)
+	}
+
+	names := make([]string, 0, len(groups))
+	for name := range groups {
+		if name != ungroupedLabel {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	if _, ok := groups[ungroupedLabel]; ok {
+		names = append(names, ungroupedLabel)
+	}
+
+	for i, name := range names {
+		if i > 0 {
+			if _, err := fmt.Fprintln(w); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintf(w, "%s:\n", name); err != nil {
+			return err
+		}
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "CATEGORY\tGOAL\tALLOCATED\tSPENT\tREMAINING"); err != nil {
+			return err
+		}
+		for _, r := range groups[name] {
+			goal := ""
+			if g, ok := goalsByCategory[r.ID]; ok && goalActiveInMonth(g, month) {
+				goal = formatCents(goalMonthlyValue(g, allocations, month))
+			}
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(r.Spent), formatCents(r.Allocated-r.Spent)); err != nil {
+				return err
+			}
+		}
+		if err := tw.Flush(); err != nil {
 			return err
 		}
 	}
-	return tw.Flush()
+	return nil
 }
 
 func printBudgets(w io.Writer, budgets []data.ListBudgetBalancesRow) error {
