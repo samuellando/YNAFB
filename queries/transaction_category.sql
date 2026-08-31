@@ -15,3 +15,8 @@ INSERT INTO transaction_category (
   ?
 )
 RETURNING *;
+
+-- name: UpdateTransactionCategory :execrows
+UPDATE transaction_category
+SET "transaction" = ?, other_account = ?, category = ?, income = ?, outflow = ?, inflow = ?
+WHERE id = ?;

@@ -10,6 +10,11 @@ INSERT INTO category (
 )
 RETURNING *;
 
+-- name: UpdateCategory :execrows
+UPDATE category
+SET name = ?, category_group = ?
+WHERE id = ?;
+
 -- name: GetOrCreateCategoryGroup :one
 INSERT INTO category_group (
   budget,

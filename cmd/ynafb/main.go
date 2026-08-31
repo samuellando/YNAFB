@@ -80,11 +80,13 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 func usage(w io.Writer) {
 	fmt.Fprintf(w, "Usage:\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget update [name] [new_name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget show [budget_name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] budget show [budget_name] [month]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account update [name] [new_name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account show [account]\n")
@@ -92,23 +94,30 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account import [account] [pdf]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] account categorize [account]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [month] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation update [month] [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation delete [month] [category]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name] [--group name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category update [name] [new_name] [--group name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [type] [start] [end|null] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal update [category] [type] [start] [end|null] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal delete [category]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee update [name] [new_name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee default-category create [payee] [percent] [--category name | --other-account name | --income]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee default-category update [id] [payee] [percent] [--category name | --other-account name | --income]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee default-category delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [total_out] [total_in] [note]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction update [id] [date] [account] [payee] [total_out] [total_in] [note]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction category create [transaction] [outflow] [inflow] [--category name | --other-account name | --income]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction category update [id] [transaction] [outflow] [inflow] [--category name | --other-account name | --income]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction category delete [id]\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates (monthly goals).\n")
@@ -131,6 +140,30 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			printCreated(stdout, "budget", result.ID)
+			return nil
+
+		case "update":
+			if len(args) != 2 {
+				return fmt.Errorf("budget update requires [name] [new_name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, args[0])
+			if err != nil {
+				return err
+			}
+
+			rows, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
+				Name: args[1],
+				ID:   budget.ID,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("unknown budget %q", args[0])
+			}
+
+			fmt.Fprintf(stdout, "updated budget %q\n", args[1])
 			return nil
 
 		case "list":
@@ -269,6 +302,35 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			printCreated(stdout, "account", result.ID)
+			return nil
+
+		case "update":
+			if len(args) != 2 {
+				return fmt.Errorf("account update requires [name] [new_name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			accountID, err := resolveAccountID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			rows, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
+				Name: args[1],
+				ID:   accountID,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("unknown account %q", args[0])
+			}
+
+			fmt.Fprintf(stdout, "updated account %q\n", args[1])
 			return nil
 
 		case "list":
@@ -440,6 +502,47 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			printCreated(stdout, "allocation", result.ID)
 			return nil
 
+		case "update":
+			if len(args) != 3 {
+				return fmt.Errorf("allocation update requires [month] [category] [amount]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			month, err := parseMonth("month", args[0])
+			if err != nil {
+				return err
+			}
+
+			category, err := resolveCategoryID(ctx, queries, budget, args[1])
+			if err != nil {
+				return err
+			}
+
+			amount, err := parseAmount(args[2])
+			if err != nil {
+				return err
+			}
+
+			rows, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
+				Amount:   amount,
+				Budget:   budget.ID,
+				Category: category,
+				Month:    month,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("no allocation for %s %q in budget %q", month.Format("2006-01"), args[1], budget.Name)
+			}
+
+			fmt.Fprintf(stdout, "updated allocation %s %q\n", month.Format("2006-01"), args[1])
+			return nil
+
 		case "list":
 			budget, err := resolveBudget(ctx, queries, budgetName)
 			if err != nil {
@@ -545,6 +648,72 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			printCreated(stdout, "category", result.ID)
 			return nil
 
+		case "update":
+			var name, newName, group string
+			for i := 0; i < len(args); i++ {
+				switch args[i] {
+				case "--group":
+					if i+1 >= len(args) {
+						return fmt.Errorf("missing value for --group")
+					}
+					group = args[i+1]
+					i++
+				default:
+					if strings.HasPrefix(args[i], "--") {
+						return fmt.Errorf("unsupported flag %q", args[i])
+					}
+					if name == "" {
+						name = args[i]
+					} else if newName == "" {
+						newName = args[i]
+					} else {
+						return fmt.Errorf("category update requires [name] [new_name]")
+					}
+				}
+			}
+
+			if name == "" || newName == "" {
+				return fmt.Errorf("category update requires [name] [new_name]")
+			}
+
+			if strings.EqualFold(newName, "income") {
+				return fmt.Errorf("category name %q is reserved", newName)
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			categoryID, err := resolveCategoryID(ctx, queries, budget, name)
+			if err != nil {
+				return err
+			}
+
+			var categoryGroup sql.NullInt64
+			if group != "" {
+				groupID, err := resolveOrCreateCategoryGroup(ctx, queries, budget, group)
+				if err != nil {
+					return err
+				}
+				categoryGroup = sql.NullInt64{Int64: groupID, Valid: true}
+			}
+
+			rows, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
+				Name:          newName,
+				CategoryGroup: categoryGroup,
+				ID:            categoryID,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("unknown category %q", name)
+			}
+
+			fmt.Fprintf(stdout, "updated category %q\n", newName)
+			return nil
+
 		case "list":
 			budget, err := resolveBudget(ctx, queries, budgetName)
 			if err != nil {
@@ -644,6 +813,67 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			printCreated(stdout, "goal", result.ID)
 			return nil
 
+		case "update":
+			if len(args) != 5 {
+				return fmt.Errorf("goal update requires [category] [type] [start] [end|null] [amount]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			category, err := resolveCategoryID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			goalType := strings.ToLower(args[1])
+			if goalType != "monthly" && goalType != "save" {
+				return fmt.Errorf("goal update: unknown goal type %q (expected monthly or save)", args[1])
+			}
+
+			start, err := parseMonth("start", args[2])
+			if err != nil {
+				return err
+			}
+
+			end, err := parseNullableMonth("end", args[3])
+			if err != nil {
+				return err
+			}
+
+			if goalType == "save" && !end.Valid {
+				return fmt.Errorf("goal update: save goals require an end month")
+			}
+
+			if end.Valid && end.Time.Before(start) {
+				return fmt.Errorf("goal update: end month must not be before start month")
+			}
+
+			amount, err := parseAmount(args[4])
+			if err != nil {
+				return err
+			}
+
+			rows, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
+				Type:     goalType,
+				Start:    start,
+				End:      end,
+				Amount:   amount,
+				Budget:   budget.ID,
+				Category: category,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("no goal for category %q in budget %q", args[0], budget.Name)
+			}
+
+			fmt.Fprintf(stdout, "updated goal for category %q\n", args[0])
+			return nil
+
 		case "list":
 			budget, err := resolveBudget(ctx, queries, budgetName)
 			if err != nil {
@@ -720,6 +950,35 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			printCreated(stdout, "payee", result.ID)
+			return nil
+
+		case "update":
+			if len(args) != 2 {
+				return fmt.Errorf("payee update requires [name] [new_name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			payeeID, err := resolvePayeeID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			rows, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
+				Name: args[1],
+				ID:   payeeID,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("unknown payee %q", args[0])
+			}
+
+			fmt.Fprintf(stdout, "updated payee %q\n", args[1])
 			return nil
 
 		case "list":
@@ -809,6 +1068,59 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				printCreated(stdout, "payee default-category", result.ID)
 				return nil
 
+			case "update":
+				positionals, targetArgs, err := parseCategoryTargetArgs(subArgs)
+				if err != nil {
+					return err
+				}
+
+				if len(positionals) != 3 {
+					return fmt.Errorf("payee default-category update requires [id] [payee] [percent] and exactly one of --category, --other-account, or --income")
+				}
+
+				id, err := parseInt64("id", positionals[0])
+				if err != nil {
+					return err
+				}
+
+				budget, err := resolveBudget(ctx, queries, budgetName)
+				if err != nil {
+					return err
+				}
+
+				payee, err := resolvePayeeID(ctx, queries, budget, positionals[1])
+				if err != nil {
+					return err
+				}
+
+				percent, err := parseInt64("percent", positionals[2])
+				if err != nil {
+					return err
+				}
+
+				target, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
+				if err != nil {
+					return err
+				}
+
+				rows, err := queries.UpdatePayeeDefaultCategory(ctx, data.UpdatePayeeDefaultCategoryParams{
+					Payee:        payee,
+					OtherAccount: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
+					Category:     target.category,
+					Income:       target.income,
+					Percent:      percent,
+					ID:           id,
+				})
+				if err != nil {
+					return err
+				}
+				if rows != 1 {
+					return fmt.Errorf("unknown payee default-category %d", id)
+				}
+
+				fmt.Fprintf(stdout, "updated payee default-category %d\n", id)
+				return nil
+
 			case "delete":
 				if len(subArgs) != 1 {
 					return fmt.Errorf("payee default-category delete requires [id]")
@@ -884,6 +1196,65 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			printCreated(stdout, "transaction", result.ID)
+			return nil
+
+		case "update":
+			if len(args) != 7 {
+				return fmt.Errorf("transaction update requires [id] [date] [account] [payee] [total_out] [total_in] [note]")
+			}
+
+			id, err := parseInt64("id", args[0])
+			if err != nil {
+				return err
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			date, err := parseTime("date", args[1])
+			if err != nil {
+				return err
+			}
+
+			account, err := resolveAccountID(ctx, queries, budget, args[2])
+			if err != nil {
+				return err
+			}
+
+			payee, err := resolveOrCreatePayeeID(ctx, queries, budget, args[3])
+			if err != nil {
+				return err
+			}
+
+			totalOutflow, err := parseAmount(args[4])
+			if err != nil {
+				return fmt.Errorf("parse total_out: %w", err)
+			}
+
+			totalInflow, err := parseAmount(args[5])
+			if err != nil {
+				return fmt.Errorf("parse total_in: %w", err)
+			}
+
+			rows, err := queries.UpdateTransaction(ctx, data.UpdateTransactionParams{
+				Date:         date,
+				Account:      account,
+				Payee:        payee,
+				TotalOutflow: totalOutflow,
+				TotalInflow:  totalInflow,
+				Note:         args[6],
+				ID:           id,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("unknown transaction %d", id)
+			}
+
+			fmt.Fprintf(stdout, "updated transaction %d\n", id)
 			return nil
 
 		case "list":
@@ -972,6 +1343,65 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				}
 
 				printCreated(stdout, "transaction category", result.ID)
+				return nil
+
+			case "update":
+				positionals, targetArgs, err := parseCategoryTargetArgs(subArgs)
+				if err != nil {
+					return err
+				}
+
+				if len(positionals) != 4 {
+					return fmt.Errorf("transaction category update requires [id] [transaction] [outflow] [inflow] and exactly one of --category, --other-account, or --income")
+				}
+
+				id, err := parseInt64("id", positionals[0])
+				if err != nil {
+					return err
+				}
+
+				budget, err := resolveBudget(ctx, queries, budgetName)
+				if err != nil {
+					return err
+				}
+
+				transactionID, err := parseInt64("transaction", positionals[1])
+				if err != nil {
+					return err
+				}
+
+				outflow, err := parseAmount(positionals[2])
+				if err != nil {
+					return fmt.Errorf("parse outflow: %w", err)
+				}
+
+				inflow, err := parseAmount(positionals[3])
+				if err != nil {
+					return fmt.Errorf("parse inflow: %w", err)
+				}
+
+				target, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
+				if err != nil {
+					return err
+				}
+
+				rows, err := queries.UpdateTransactionCategory(ctx, data.UpdateTransactionCategoryParams{
+					Transaction:  transactionID,
+					OtherAccount: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
+					Category:     target.category,
+					Income:       target.income,
+					Outflow:      outflow,
+					Inflow:       inflow,
+					ID:           id,
+				})
+				if err != nil {
+					return err
+				}
+				if rows != 1 {
+					return fmt.Errorf("unknown transaction category %d", id)
+				}
+
+				fmt.Fprintf(stdout, "updated transaction category %d\n", id)
 				return nil
 
 			case "delete":

@@ -6,6 +6,11 @@ INSERT INTO budget (
 )
 RETURNING *;
 
+-- name: UpdateBudget :execrows
+UPDATE budget
+SET name = ?
+WHERE id = ?;
+
 -- name: ListAllocationMonthsByBudget :many
 SELECT DISTINCT month
 FROM allocation

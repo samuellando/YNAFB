@@ -108,6 +108,219 @@ func TestCreateCommands(t *testing.T) {
 	}
 }
 
+type updateVerify struct {
+	args     []string
+	contains string
+}
+
+type updateTestCase struct {
+	name   string
+	args   []string
+	setup  [][]string
+	want   string
+	verify []updateVerify
+}
+
+func TestUpdateCommands(t *testing.T) {
+	tests := []updateTestCase{
+		{
+			name:  "budget",
+			setup: [][]string{{"budget", "create", "Home Budget"}},
+			args:  []string{"budget", "update", "Home Budget", "Renamed"},
+			want:  "updated budget \"Renamed\"\n",
+			verify: []updateVerify{
+				{args: []string{"budget", "list"}, contains: "Renamed"},
+			},
+		},
+		{
+			name:  "account",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}},
+			args:  []string{"account", "update", "Checking", "Main"},
+			want:  "updated account \"Main\"\n",
+			verify: []updateVerify{
+				{args: []string{"account", "list"}, contains: "Main"},
+			},
+		},
+		{
+			name:  "allocation",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}, {"allocation", "create", "2026-08", "Groceries", "25.00"}},
+			args:  []string{"allocation", "update", "2026-08", "Groceries", "30.00"},
+			want:  "updated allocation 2026-08 \"Groceries\"\n",
+			verify: []updateVerify{
+				{args: []string{"allocation", "list"}, contains: "30.00"},
+			},
+		},
+		{
+			name:  "category",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}},
+			args:  []string{"category", "update", "Groceries", "Food"},
+			want:  "updated category \"Food\"\n",
+			verify: []updateVerify{
+				{args: []string{"category", "list"}, contains: "Food"},
+			},
+		},
+		{
+			name:  "goal",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Savings"}, {"goal", "create", "monthly", "2026-08", "null", "Savings", "50.00"}},
+			args:  []string{"goal", "update", "Savings", "save", "2026-08", "2026-12", "100.00"},
+			want:  "updated goal for category \"Savings\"\n",
+			verify: []updateVerify{
+				{args: []string{"goal", "list"}, contains: "100.00"},
+			},
+		},
+		{
+			name:  "payee",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"payee", "create", "Market"}},
+			args:  []string{"payee", "update", "Market", "Supermarket"},
+			want:  "updated payee \"Supermarket\"\n",
+			verify: []updateVerify{
+				{args: []string{"payee", "list"}, contains: "Supermarket"},
+			},
+		},
+		{
+			name:  "payee default-category",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}, {"payee", "default-category", "create", "Market", "100", "--category", "Groceries"}},
+			args:  []string{"payee", "default-category", "update", "1", "Market", "50", "--category", "Groceries"},
+			want:  "updated payee default-category 1\n",
+		},
+		{
+			name:  "transaction",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"payee", "create", "Market"}, {"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "weekly shop"}},
+			args:  []string{"transaction", "update", "1", "2026-08-29", "Checking", "Market", "30.00", "0.00", "new note"},
+			want:  "updated transaction 1\n",
+			verify: []updateVerify{
+				{args: []string{"transaction", "list"}, contains: "30.00"},
+				{args: []string{"transaction", "list"}, contains: "2026-08-29"},
+				{args: []string{"transaction", "list"}, contains: "new note"},
+			},
+		},
+		{
+			name:  "transaction category",
+			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}, {"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "weekly shop"}, {"transaction", "category", "create", "1", "25.00", "0.00", "--category", "Groceries"}},
+			args:  []string{"transaction", "category", "update", "1", "1", "30.00", "0.00", "--category", "Groceries"},
+			want:  "updated transaction category 1\n",
+			verify: []updateVerify{
+				{args: []string{"account", "show", "Checking"}, contains: "30.00"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+			for _, setupArgs := range tt.setup {
+				stdout, stderr, exitCode := invoke(t, dbPath, setupArgs...)
+				if exitCode != 0 {
+					t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(setupArgs, " "), exitCode, stdout, stderr)
+				}
+			}
+
+			stdout, stderr, exitCode := invoke(t, dbPath, tt.args...)
+			if exitCode != 0 {
+				t.Fatalf("command failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+			}
+
+			if stdout != tt.want {
+				t.Fatalf("unexpected stdout: got %q want %q", stdout, tt.want)
+			}
+
+			if stderr != "" {
+				t.Fatalf("unexpected stderr: %q", stderr)
+			}
+
+			for _, v := range tt.verify {
+				checkOut, checkErr, checkExit := invoke(t, dbPath, v.args...)
+				if checkExit != 0 {
+					t.Fatalf("verify command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(v.args, " "), checkExit, checkOut, checkErr)
+				}
+				if !strings.Contains(checkOut, v.contains) {
+					t.Fatalf("verify command %q: stdout %q does not contain %q", strings.Join(v.args, " "), checkOut, v.contains)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateCommandsFail(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   [][]string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "budget",
+			setup:   [][]string{{"budget", "create", "Home Budget"}},
+			args:    []string{"budget", "update", "Nope", "Renamed"},
+			wantErr: `unknown budget "Nope"`,
+		},
+		{
+			name:    "account",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}},
+			args:    []string{"account", "update", "Nope", "Main"},
+			wantErr: `unknown account "Nope"`,
+		},
+		{
+			name:    "allocation",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}},
+			args:    []string{"allocation", "update", "2026-08", "Groceries", "30.00"},
+			wantErr: `no allocation for 2026-08 "Groceries"`,
+		},
+		{
+			name:    "category",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}},
+			args:    []string{"category", "update", "Nope", "Food"},
+			wantErr: `unknown category "Nope"`,
+		},
+		{
+			name:    "goal",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Savings"}},
+			args:    []string{"goal", "update", "Savings", "save", "2026-08", "2026-12", "100.00"},
+			wantErr: `no goal for category "Savings"`,
+		},
+		{
+			name:    "payee",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"payee", "create", "Market"}},
+			args:    []string{"payee", "update", "Nope", "Supermarket"},
+			wantErr: `unknown payee "Nope"`,
+		},
+		{
+			name:    "payee default-category",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}},
+			args:    []string{"payee", "default-category", "update", "99", "Market", "50", "--category", "Groceries"},
+			wantErr: `unknown payee default-category 99`,
+		},
+		{
+			name:    "transaction",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"payee", "create", "Market"}},
+			args:    []string{"transaction", "update", "99", "2026-08-29", "Checking", "Market", "30.00", "0.00", "note"},
+			wantErr: `unknown transaction 99`,
+		},
+		{
+			name:    "transaction category",
+			setup:   [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}},
+			args:    []string{"transaction", "category", "update", "99", "1", "30.00", "0.00", "--category", "Groceries"},
+			wantErr: `unknown transaction category 99`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+			for _, setupArgs := range tt.setup {
+				stdout, stderr, exitCode := invoke(t, dbPath, setupArgs...)
+				if exitCode != 0 {
+					t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(setupArgs, " "), exitCode, stdout, stderr)
+				}
+			}
+
+			assertCommandFails(t, dbPath, tt.wantErr, tt.args...)
+		})
+	}
+}
+
 func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 

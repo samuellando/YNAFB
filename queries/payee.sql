@@ -7,3 +7,8 @@ INSERT INTO payee (
   ?
 )
 RETURNING *;
+
+-- name: UpdatePayee :execrows
+UPDATE payee
+SET name = ?
+WHERE id = ?;

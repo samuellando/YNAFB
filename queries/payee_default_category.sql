@@ -14,6 +14,11 @@ INSERT INTO payee_default_category (
 )
 RETURNING *;
 
+-- name: UpdatePayeeDefaultCategory :execrows
+UPDATE payee_default_category
+SET payee = ?, other_account = ?, category = ?, income = ?, percent = ?
+WHERE id = ?;
+
 -- name: ListPayeeDefaultCategoriesByPayee :many
 SELECT
   pdc.id,

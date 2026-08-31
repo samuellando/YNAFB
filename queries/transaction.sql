@@ -16,6 +16,11 @@ INSERT INTO "transaction" (
 )
 RETURNING *;
 
+-- name: UpdateTransaction :execrows
+UPDATE "transaction"
+SET date = ?, account = ?, payee = ?, total_outflow = ?, total_inflow = ?, note = ?
+WHERE id = ?;
+
 -- name: ListAccountTransactions :many
 SELECT
   t.id,

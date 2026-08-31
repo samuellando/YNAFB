@@ -11,3 +11,8 @@ INSERT INTO allocation (
   ?
 )
 RETURNING *;
+
+-- name: UpdateAllocation :execrows
+UPDATE allocation
+SET amount = ?
+WHERE budget = ? AND category = ? AND month = ?;

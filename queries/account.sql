@@ -7,3 +7,8 @@ INSERT INTO account (
   ?
 )
 RETURNING *;
+
+-- name: UpdateAccount :execrows
+UPDATE account
+SET name = ?
+WHERE id = ?;
