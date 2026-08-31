@@ -70,13 +70,13 @@ func TestCreateCommands(t *testing.T) {
 		{
 			name:  "transaction",
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"payee", "create", "Market"}},
-			args:  []string{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "weekly shop"},
+			args:  []string{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "weekly shop"},
 			want:  "created transaction 1\n",
 		},
 		{
 			name:  "transaction category",
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"account", "create", "Checking"}, {"category", "create", "Groceries"}, {"payee", "create", "Market"}, {"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "weekly shop"}},
-			args:  []string{"transaction", "category", "create", "1", "2500", "0", "--category", "Groceries"},
+			args:  []string{"transaction", "category", "create", "1", "25.00", "0.00", "--category", "Groceries"},
 			want:  "created transaction category 1\n",
 		},
 	}
@@ -124,7 +124,7 @@ func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
 		}
 	}
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "create", "2026-08-28", "Checking", "Corner Store", "1250", "0", "snacks")
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "create", "2026-08-28", "Checking", "Corner Store", "12.50", "0.00", "snacks")
 	if exitCode != 0 {
 		t.Fatalf("transaction create failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
@@ -137,7 +137,7 @@ func TestTransactionCreateAutoCreatesPayee(t *testing.T) {
 		t.Fatalf("unexpected stderr: %q", stderr)
 	}
 
-	stdout, stderr, exitCode = invoke(t, dbPath, "transaction", "category", "create", "1", "1250", "0", "--category", "Groceries")
+	stdout, stderr, exitCode = invoke(t, dbPath, "transaction", "category", "create", "1", "12.50", "0.00", "--category", "Groceries")
 	if exitCode != 0 {
 		t.Fatalf("transaction category create failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
@@ -172,7 +172,7 @@ func TestAccountListTransactionsIncludesTransactionsWithoutCategories(t *testing
 	setup := [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "ws-visa"},
-		{"transaction", "create", "2026-08-28", "ws-visa", "Online Shop", "4200", "0", "pending import"},
+		{"transaction", "create", "2026-08-28", "ws-visa", "Online Shop", "42.00", "0.00", "pending import"},
 	}
 
 	for _, args := range setup {
@@ -213,8 +213,8 @@ func TestAccountListTransactionsShowsMismatchedSingleCategorySeparately(t *testi
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", "import mismatch"},
-		{"transaction", "category", "create", "1", "4000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "42.00", "0.00", "import mismatch"},
+		{"transaction", "category", "create", "1", "40.00", "0.00", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -307,15 +307,15 @@ func TestAccountListTransactions(t *testing.T) {
 		{"payee", "create", "Cafe"},
 		{"payee", "create", "Bank"},
 		{"payee", "create", "Market"},
-		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "1000", "0", "coffee"},
-		{"transaction", "category", "create", "1", "1000", "0", "--category", "Groceries"},
-		{"transaction", "create", "2026-08-29", "Checking", "Bank", "1500", "0", "move money"},
-		{"transaction", "category", "create", "2", "1500", "0", "--other-account", "Savings"},
-		{"transaction", "create", "2026-08-30", "Checking", "Market", "2500", "0", "weekly shop"},
-		{"transaction", "category", "create", "3", "2000", "0", "--category", "Groceries"},
-		{"transaction", "category", "create", "3", "500", "0", "--category", "Household"},
-		{"transaction", "create", "2026-08-31", "Savings", "Market", "9999", "0", "should not appear"},
-		{"transaction", "category", "create", "4", "9999", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "10.00", "0.00", "coffee"},
+		{"transaction", "category", "create", "1", "10.00", "0.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-29", "Checking", "Bank", "15.00", "0.00", "move money"},
+		{"transaction", "category", "create", "2", "15.00", "0.00", "--other-account", "Savings"},
+		{"transaction", "create", "2026-08-30", "Checking", "Market", "25.00", "0.00", "weekly shop"},
+		{"transaction", "category", "create", "3", "20.00", "0.00", "--category", "Groceries"},
+		{"transaction", "category", "create", "3", "5.00", "0.00", "--category", "Household"},
+		{"transaction", "create", "2026-08-31", "Savings", "Market", "99.99", "0.00", "should not appear"},
+		{"transaction", "category", "create", "4", "99.99", "0.00", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -362,13 +362,13 @@ func TestAccountListTransactionsShowsMirroredTransfersForOtherAccount(t *testing
 		{"account", "create", "merry"},
 		{"category", "create", "groceries"},
 		{"payee", "create", "superC"},
-		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "100", "0", ""},
-		{"transaction", "category", "create", "1", "25", "0", "--category", "groceries"},
-		{"transaction", "category", "create", "1", "75", "0", "--other-account", "merry"},
-		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "200", "0", ""},
-		{"transaction", "category", "create", "2", "100", "0", "--category", "groceries"},
-		{"transaction", "category", "create", "2", "100", "0", "--other-account", "merry"},
-		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "250", "0", ""},
+		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "1.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "0.25", "0.00", "--category", "groceries"},
+		{"transaction", "category", "create", "1", "0.75", "0.00", "--other-account", "merry"},
+		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "2.00", "0.00", ""},
+		{"transaction", "category", "create", "2", "1.00", "0.00", "--category", "groceries"},
+		{"transaction", "category", "create", "2", "1.00", "0.00", "--other-account", "merry"},
+		{"transaction", "create", "2026-08-09", "ws-visa", "superC", "2.50", "0.00", ""},
 	}
 
 	for _, args := range setup {
@@ -410,9 +410,9 @@ func TestAccountReconcileMatchingBalance(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction", "category", "create", "1", "2500", "0", "--category", "Groceries"},
-		{"transaction", "create", "2026-08-30", "Checking", "Market", "1000", "0", "later"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "25.00", "0.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-30", "Checking", "Market", "10.00", "0.00", "later"},
 	})
 
 	stdout, stderr, exitCode := invokeWithInput(t, dbPath, "-25.00\n", "account", "reconcile", "Checking", "2026-08-28")
@@ -451,8 +451,8 @@ func TestAccountReconcileMismatch(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction", "category", "create", "1", "2500", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "25.00", "0.00", "--category", "Groceries"},
 	})
 
 	stdout, stderr, exitCode := invokeWithInput(t, dbPath, "-1.00\n", "account", "reconcile", "Checking", "2026-08-28")
@@ -479,10 +479,10 @@ func TestAccountReconcileSubsequentDates(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction", "category", "create", "1", "2500", "0", "--category", "Groceries"},
-		{"transaction", "create", "2026-08-30", "Checking", "Market", "1000", "0", "later"},
-		{"transaction", "category", "create", "2", "1000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "25.00", "0.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-30", "Checking", "Market", "10.00", "0.00", "later"},
+		{"transaction", "category", "create", "2", "10.00", "0.00", "--category", "Groceries"},
 	})
 
 	stdout, stderr, exitCode := invokeWithInput(t, dbPath, "-35.00\n", "account", "reconcile", "Checking", "2026-08-30")
@@ -509,8 +509,8 @@ func TestAccountReconcileIncomingTransferReconciledIndependently(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"account", "create", "Savings"},
-		{"transaction", "create", "2026-08-28", "Checking", "Bank", "1500", "0", "move"},
-		{"transaction", "category", "create", "1", "1500", "0", "--other-account", "Savings"},
+		{"transaction", "create", "2026-08-28", "Checking", "Bank", "15.00", "0.00", "move"},
+		{"transaction", "category", "create", "1", "15.00", "0.00", "--other-account", "Savings"},
 	})
 
 	stdout, stderr, exitCode := invokeWithInput(t, dbPath, "15.00\n", "account", "reconcile", "Savings", "2026-08-31")
@@ -547,7 +547,7 @@ func TestAccountReconcileCancel(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "shop"},
 	})
 
 	stdout, stderr, exitCode := invokeWithInput(t, dbPath, "\n", "account", "reconcile", "Checking", "2026-08-28")
@@ -576,7 +576,7 @@ func TestTransactionCategoryCreateRejectsMultipleTargets(t *testing.T) {
 		{"account", "create", "Savings"},
 		{"category", "create", "Groceries"},
 		{"payee", "create", "Market"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "weekly shop"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "weekly shop"},
 	}
 
 	for _, args := range setup {
@@ -586,7 +586,7 @@ func TestTransactionCategoryCreateRejectsMultipleTargets(t *testing.T) {
 		}
 	}
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "category", "create", "1", "2500", "0", "--category", "Groceries", "--other-account", "Savings")
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "category", "create", "1", "25.00", "0.00", "--category", "Groceries", "--other-account", "Savings")
 	if exitCode != 1 {
 		t.Fatalf("unexpected exit code: got %d want 1", exitCode)
 	}
@@ -755,8 +755,8 @@ func TestListCommands(t *testing.T) {
 		{"allocation", "create", "2026-08", "Groceries", "50.00"},
 		{"allocation", "create", "2026-08", "Household", "25.00"},
 		{"goal", "create", "monthly", "2020-01", "null", "Groceries", "1000.00"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction", "create", "2026-08-29", "Savings", "Cafe", "1000", "0", "coffee"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "shop"},
+		{"transaction", "create", "2026-08-29", "Savings", "Cafe", "10.00", "0.00", "coffee"},
 	}
 
 	for _, args := range setup {
@@ -803,8 +803,8 @@ func TestDeleteCommands(t *testing.T) {
 		{"payee", "create", "Market"},
 		{"allocation", "create", "2026-08", "Groceries", "50.00"},
 		{"goal", "create", "monthly", "2026-09", "null", "Groceries", "1000.00"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "20.00", "0.00", "--category", "Groceries"},
 		{"payee", "default-category", "create", "Market", "100", "--category", "Groceries"},
 	}
 
@@ -867,8 +867,8 @@ func TestCascadeDelete(t *testing.T) {
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
 		{"payee", "create", "Market"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", "shop"},
-		{"transaction", "category", "create", "1", "2500", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "25.00", "0.00", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -1059,7 +1059,7 @@ func TestTransactionCategoryValidation(t *testing.T) {
 		{"account", "create", "Checking"},
 		{"account", "create", "Savings"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "25.00", "0.00", ""},
 	})
 
 	assertCommandFails(t, dbPath, "set exactly one of --category, --other-account, or --income", "transaction", "category", "create", "1", "100", "0")
@@ -1147,13 +1147,31 @@ func TestGoalWithEndDate(t *testing.T) {
 	}
 }
 
+func TestTransactionCreateDollarAmounts(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "12.50", "3.25", "both"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "list")
+	if exitCode != 0 {
+		t.Fatalf("transaction list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(stdout, "12.50") || !strings.Contains(stdout, "3.25") {
+		t.Fatalf("expected dollar amounts in listing, got %q", stdout)
+	}
+}
+
 func TestTransactionCreateRFC3339Date(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28T10:00:00Z", "Checking", "Market", "100", "0", ""},
+		{"transaction", "create", "2026-08-28T10:00:00Z", "Checking", "Market", "1.00", "0.00", ""},
 	})
 
 	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "list")
@@ -1171,8 +1189,8 @@ func TestAccountShowInflowTransaction(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
-		{"transaction", "category", "create", "1", "0", "4200", "--income"},
+		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0.00", "42.00", "paycheck"},
+		{"transaction", "category", "create", "1", "0.00", "42.00", "--income"},
 	})
 
 	show := showAccount(t, dbPath, "Checking")
@@ -1302,7 +1320,7 @@ func TestAccountCategorizeIncomeSavesDefaultAndPrefills(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
+		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0.00", "42.00", "paycheck"},
 	})
 
 	input := strings.Join([]string{
@@ -1323,7 +1341,7 @@ func TestAccountCategorizeIncomeSavesDefaultAndPrefills(t *testing.T) {
 	}
 
 	runCommands(t, dbPath, [][]string{
-		{"transaction", "create", "2026-08-29", "Checking", "Employer", "0", "4200", "second paycheck"},
+		{"transaction", "create", "2026-08-29", "Checking", "Employer", "0.00", "42.00", "second paycheck"},
 	})
 
 	second := runCategorize(t, dbPath, "o\n", "Checking")
@@ -1345,8 +1363,8 @@ func TestInflowCategorizedToCategory(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Reimbursements"},
-		{"transaction", "create", "2026-08-28", "Checking", "Friend", "0", "2500", "reimbursement"},
-		{"transaction", "category", "create", "1", "0", "2500", "--category", "Reimbursements"},
+		{"transaction", "create", "2026-08-28", "Checking", "Friend", "0.00", "25.00", "reimbursement"},
+		{"transaction", "category", "create", "1", "0.00", "25.00", "--category", "Reimbursements"},
 	})
 
 	show := showAccount(t, dbPath, "Checking")
@@ -1378,8 +1396,8 @@ func TestAccountCategorize(t *testing.T) {
 		{"account", "create", "Savings"},
 		{"category", "create", "Groceries"},
 		{"category", "create", "Household"},
-		{"transaction", "create", "2026-08-29", "Checking", "Grocery Mart", "4200", "0", ""},
-		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", "import mismatch"},
+		{"transaction", "create", "2026-08-29", "Checking", "Grocery Mart", "42.00", "0.00", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "42.00", "0.00", "import mismatch"},
 		{"payee", "default-category", "create", "Grocery Mart", "80", "--category", "Groceries"},
 		{"payee", "default-category", "create", "Grocery Mart", "20", "--category", "Household"},
 	}
@@ -1437,7 +1455,7 @@ func TestAccountCategorizeCreatesCategory(t *testing.T) {
 	setup := [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "42.00", "0.00", ""},
 	}
 
 	for _, args := range setup {
@@ -1486,7 +1504,7 @@ func TestAccountCategorizePrefillMatchesDefaultDoesNotPrompt(t *testing.T) {
 		{"account", "create", "Checking"},
 		{"account", "create", "merry"},
 		{"category", "create", "groceries"},
-		{"transaction", "create", "2026-07-26", "Checking", "IGA #8644", "2957", "0", ""},
+		{"transaction", "create", "2026-07-26", "Checking", "IGA #8644", "29.57", "0.00", ""},
 		{"payee", "default-category", "create", "IGA #8644", "50", "--category", "groceries"},
 		{"payee", "default-category", "create", "IGA #8644", "50", "--other-account", "merry"},
 	}
@@ -1520,7 +1538,7 @@ func TestAccountCategorizeUnknownAccountErrors(t *testing.T) {
 	setup := [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Online Shop", "42.00", "0.00", ""},
 	}
 
 	for _, args := range setup {
@@ -1602,8 +1620,8 @@ func TestAccountCategorizeSkipsFullyCategorized(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
-		{"transaction", "category", "create", "1", "4200", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "42.00", "0.00", "--category", "Groceries"},
 	})
 
 	stdout := runCategorize(t, dbPath, "", "Checking")
@@ -1618,7 +1636,7 @@ func TestAccountCategorizeInflowTransaction(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
+		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0.00", "42.00", "paycheck"},
 	})
 
 	input := strings.Join([]string{
@@ -1648,8 +1666,8 @@ func TestAccountCategorizeExcludesMirroredTransfers(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"account", "create", "Savings"},
-		{"transaction", "create", "2026-08-28", "Savings", "Me", "0", "500", ""},
-		{"transaction", "category", "create", "1", "0", "500", "--other-account", "Checking"},
+		{"transaction", "create", "2026-08-28", "Savings", "Me", "0.00", "5.00", ""},
+		{"transaction", "category", "create", "1", "0.00", "5.00", "--other-account", "Checking"},
 	})
 
 	stdout := runCategorize(t, dbPath, "", "Checking")
@@ -1665,7 +1683,7 @@ func TestAccountCategorizeAddTransfer(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"account", "create", "Savings"},
-		{"transaction", "create", "2026-08-28", "Checking", "Bank", "1500", "0", "move"},
+		{"transaction", "create", "2026-08-28", "Checking", "Bank", "15.00", "0.00", "move"},
 	})
 
 	input := strings.Join([]string{
@@ -1695,7 +1713,7 @@ func TestAccountCategorizeEmptyAmountDefaultsToRemaining(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{
@@ -1719,7 +1737,7 @@ func TestAccountCategorizeCancelCategoryCreation(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{
@@ -1794,8 +1812,8 @@ func TestBudgetShowMonths(t *testing.T) {
 		{"category", "create", "Groceries"},
 		{"allocation", "create", "2026-06", "Groceries", "50.00"},
 		{"allocation", "create", "2026-07", "Groceries", "50.00"},
-		{"transaction", "create", "2026-07-15", "Checking", "Market", "1000", "0", ""},
-		{"transaction", "create", "2026-08-15", "Checking", "Cafe", "500", "0", ""},
+		{"transaction", "create", "2026-07-15", "Checking", "Market", "10.00", "0.00", ""},
+		{"transaction", "create", "2026-08-15", "Checking", "Cafe", "5.00", "0.00", ""},
 	}
 
 	for _, args := range setup {
@@ -1832,19 +1850,19 @@ func TestBudgetShowMonth(t *testing.T) {
 		{"category", "create", "Household"},
 		{"allocation", "create", "2026-08", "Groceries", "50.00"},
 		{"allocation", "create", "2026-08", "Household", "25.00"},
-		{"transaction", "create", "2026-08-05", "Checking", "Market", "2000", "0", "shop"},
-		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
-		{"transaction", "create", "2026-08-10", "Checking", "Cafe", "500", "0", "coffee"},
-		{"transaction", "category", "create", "2", "500", "0", "--category", "Household"},
-		{"transaction", "create", "2026-08-15", "Checking", "Mart", "3000", "0", ""},
-		{"transaction", "category", "create", "3", "3000", "0", "--category", "Groceries"},
-		{"transaction", "create", "2026-08-20", "Checking", "Refund", "0", "1000", ""},
-		{"transaction", "category", "create", "4", "0", "1000", "--category", "Groceries"},
-		{"transaction", "create", "2026-08-25", "Checking", "Bank", "1500", "0", "transfer"},
-		{"transaction", "category", "create", "5", "1500", "0", "--other-account", "Savings"},
-		{"transaction", "create", "2026-08-28", "Checking", "Unknown", "700", "0", ""},
-		{"transaction", "create", "2026-09-02", "Checking", "Market", "999", "0", ""},
-		{"transaction", "category", "create", "7", "999", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-05", "Checking", "Market", "20.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "20.00", "0.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-10", "Checking", "Cafe", "5.00", "0.00", "coffee"},
+		{"transaction", "category", "create", "2", "5.00", "0.00", "--category", "Household"},
+		{"transaction", "create", "2026-08-15", "Checking", "Mart", "30.00", "0.00", ""},
+		{"transaction", "category", "create", "3", "30.00", "0.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-20", "Checking", "Refund", "0.00", "10.00", ""},
+		{"transaction", "category", "create", "4", "0.00", "10.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-25", "Checking", "Bank", "15.00", "0.00", "transfer"},
+		{"transaction", "category", "create", "5", "15.00", "0.00", "--other-account", "Savings"},
+		{"transaction", "create", "2026-08-28", "Checking", "Unknown", "7.00", "0.00", ""},
+		{"transaction", "create", "2026-09-02", "Checking", "Market", "9.99", "0.00", ""},
+		{"transaction", "category", "create", "7", "9.99", "0.00", "--category", "Groceries"},
 	}
 
 	for _, args := range setup {
@@ -1862,6 +1880,10 @@ func TestBudgetShowMonth(t *testing.T) {
 	want := strings.Join([]string{
 		"Available: -82.00",
 		"Income: 0.00",
+		"Goals: 0.00",
+		"Allocated: 75.00",
+		"Spent: 45.00",
+		"Remaining: 30.00",
 		"Uncategorized: 7.00",
 		"",
 		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
@@ -1902,8 +1924,8 @@ func TestBudgetShowEmpty(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("budget show month failed: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "Available: 0.00\nIncome: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n" {
-		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Available: 0.00\nIncome: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n")
+	if stdout != "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n" {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n")
 	}
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
@@ -1998,10 +2020,10 @@ func TestBudgetShowGoal(t *testing.T) {
 		{"allocation", "create", "2026-08", "Household", "25.00"},
 		{"goal", "create", "monthly", "2026-07", "null", "Groceries", "50.00"},
 		{"goal", "create", "save", "2026-08", "2026-12", "Household", "1000.00"},
-		{"transaction", "create", "2026-08-05", "Checking", "Market", "2000", "0", "shop"},
-		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
-		{"transaction", "create", "2026-08-10", "Checking", "Cafe", "500", "0", "coffee"},
-		{"transaction", "category", "create", "2", "500", "0", "--category", "Household"},
+		{"transaction", "create", "2026-08-05", "Checking", "Market", "20.00", "0.00", "shop"},
+		{"transaction", "category", "create", "1", "20.00", "0.00", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-10", "Checking", "Cafe", "5.00", "0.00", "coffee"},
+		{"transaction", "category", "create", "2", "5.00", "0.00", "--category", "Household"},
 	}
 
 	for _, args := range setup {
@@ -2019,6 +2041,10 @@ func TestBudgetShowGoal(t *testing.T) {
 	want := strings.Join([]string{
 		"Available: -75.00",
 		"Income: 0.00",
+		"Goals: 250.00",
+		"Allocated: 75.00",
+		"Spent: 25.00",
+		"Remaining: 50.00",
 		"Uncategorized: 0.00",
 		"",
 		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
@@ -2059,8 +2085,8 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 		{"goal", "create", "save", "2026-07", "2026-10", "Household", "200.00"},
 		{"goal", "create", "save", "2026-08", "2026-08", "Savings", "50.00"},
 		{"goal", "create", "monthly", "2026-09", "null", "Travel", "25.00"},
-		{"transaction", "create", "2026-08-05", "Checking", "Employer", "0", "4200", "paycheck"},
-		{"transaction", "category", "create", "1", "0", "4200", "--income"},
+		{"transaction", "create", "2026-08-05", "Checking", "Employer", "0.00", "42.00", "paycheck"},
+		{"transaction", "category", "create", "1", "0.00", "42.00", "--income"},
 	}
 
 	for _, args := range setup {
@@ -2078,6 +2104,10 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 	want := strings.Join([]string{
 		"Available: -33.00",
 		"Income: 42.00",
+		"Goals: 150.00",
+		"Allocated: 75.00",
+		"Spent: 0.00",
+		"Remaining: 75.00",
 		"Uncategorized: 0.00",
 		"",
 		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
@@ -2200,9 +2230,9 @@ func TestAccountCategorizeDeleteExisting(t *testing.T) {
 		{"account", "create", "Savings"},
 		{"category", "create", "Groceries"},
 		{"category", "create", "Household"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
-		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
-		{"transaction", "category", "create", "1", "1000", "0", "--category", "Household"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "20.00", "0.00", "--category", "Groceries"},
+		{"transaction", "category", "create", "1", "10.00", "0.00", "--category", "Household"},
 	})
 
 	input := strings.Join([]string{
@@ -2240,8 +2270,8 @@ func TestAccountCategorizeDeleteInvalidIndex(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
-		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "20.00", "0.00", "--category", "Groceries"},
 	})
 
 	input := strings.Join([]string{
@@ -2265,7 +2295,7 @@ func TestAccountCategorizeDeleteEmpty(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{
@@ -2287,8 +2317,8 @@ func TestAccountCategorizeOkMismatchStaysInLoop(t *testing.T) {
 		{"account", "create", "Checking"},
 		{"account", "create", "Savings"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
-		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "20.00", "0.00", "--category", "Groceries"},
 	})
 
 	input := strings.Join([]string{
@@ -2326,8 +2356,8 @@ func TestAccountCategorizeOkPersistsOnExistingPartial(t *testing.T) {
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
 		{"category", "create", "Household"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
-		{"transaction", "category", "create", "1", "4000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "40.00", "0.00", "--category", "Groceries"},
 	})
 
 	input := strings.Join([]string{
@@ -2357,7 +2387,7 @@ func TestAccountCategorizeSaveDefaultNo(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{
@@ -2378,7 +2408,7 @@ func TestAccountCategorizeSaveDefaultNo(t *testing.T) {
 	}
 
 	runCommands(t, dbPath, [][]string{
-		{"transaction", "create", "2026-08-29", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "create", "2026-08-29", "Checking", "Market", "42.00", "0.00", ""},
 	})
 
 	second := runCategorize(t, dbPath, "q\n", "Checking")
@@ -2396,7 +2426,7 @@ func TestAccountCategorizeSaveDefaultPercentRounding(t *testing.T) {
 		{"category", "create", "A"},
 		{"category", "create", "B"},
 		{"category", "create", "C"},
-		{"transaction", "create", "2026-08-28", "Checking", "Three Way", "1000", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Three Way", "10.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{
@@ -2412,7 +2442,7 @@ func TestAccountCategorizeSaveDefaultPercentRounding(t *testing.T) {
 	}
 
 	runCommands(t, dbPath, [][]string{
-		{"transaction", "create", "2026-08-29", "Checking", "Three Way", "1000", "0", ""},
+		{"transaction", "create", "2026-08-29", "Checking", "Three Way", "10.00", "0.00", ""},
 	})
 
 	second := runCategorize(t, dbPath, "o\n", "Checking")
@@ -2431,8 +2461,8 @@ func TestAccountCategorizeSkipLeavesUnchanged(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
-		{"transaction", "category", "create", "1", "2000", "0", "--category", "Groceries"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "20.00", "0.00", "--category", "Groceries"},
 	})
 
 	stdout := runCategorize(t, dbPath, "s\n", "Checking")
@@ -2453,8 +2483,8 @@ func TestAccountCategorizeQuitMidFlow(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-29", "Checking", "Market", "4200", "0", ""},
-		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "4200", "0", ""},
+		{"transaction", "create", "2026-08-29", "Checking", "Market", "42.00", "0.00", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Cafe", "42.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{
@@ -2481,7 +2511,7 @@ func TestAccountCategorizeEOFQuits(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "4200", "0", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "42.00", "0.00", ""},
 	})
 
 	stdout := runCategorize(t, dbPath, "", "Checking")
@@ -2505,9 +2535,9 @@ func TestAccountCategorizeOrderingAndCounts(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"category", "create", "Groceries"},
-		{"transaction", "create", "2026-08-30", "Checking", "Newest", "4200", "0", ""},
-		{"transaction", "create", "2026-08-29", "Checking", "Middle", "4200", "0", ""},
-		{"transaction", "create", "2026-08-28", "Checking", "Oldest", "4200", "0", ""},
+		{"transaction", "create", "2026-08-30", "Checking", "Newest", "42.00", "0.00", ""},
+		{"transaction", "create", "2026-08-29", "Checking", "Middle", "42.00", "0.00", ""},
+		{"transaction", "create", "2026-08-28", "Checking", "Oldest", "42.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{

@@ -113,6 +113,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates (monthly goals).\n")
 	fmt.Fprintf(w, "Goal months are YYYY-MM; save goals require an end month.\n")
+	fmt.Fprintf(w, "Amounts are entered in dollars, e.g. 25.00 or 12.50.\n")
 	fmt.Fprintf(w, "Omit --budget only when exactly one budget exists.\n")
 }
 
@@ -231,11 +232,15 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(rows), income, uncategorized); err != nil {
+			allocated, spent, remaining := budgetMonthTotals(rows)
+			allocMap := buildCategoryAllocations(allocations)
+			goalsTotal := budgetMonthGoalTotal(goals, allocMap, month)
+
+			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(rows), income, goalsTotal, allocated, spent, remaining, uncategorized); err != nil {
 				return err
 			}
 
-			return printBudgetMonthCategories(stdout, rows, goals, buildCategoryAllocations(allocations), month)
+			return printBudgetMonthCategories(stdout, rows, goals, allocMap, month)
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -826,14 +831,14 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			totalOutflow, err := parseInt64("total_out", args[3])
+			totalOutflow, err := parseAmount(args[3])
 			if err != nil {
-				return err
+				return fmt.Errorf("parse total_out: %w", err)
 			}
 
-			totalInflow, err := parseInt64("total_in", args[4])
+			totalInflow, err := parseAmount(args[4])
 			if err != nil {
-				return err
+				return fmt.Errorf("parse total_in: %w", err)
 			}
 
 			result, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
@@ -909,14 +914,14 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					return err
 				}
 
-				outflow, err := parseInt64("outflow", positionals[1])
+				outflow, err := parseAmount(positionals[1])
 				if err != nil {
-					return err
+					return fmt.Errorf("parse outflow: %w", err)
 				}
 
-				inflow, err := parseInt64("inflow", positionals[2])
+				inflow, err := parseAmount(positionals[2])
 				if err != nil {
-					return err
+					return fmt.Errorf("parse inflow: %w", err)
 				}
 
 				target, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
@@ -2037,11 +2042,23 @@ func printBudgetMonths(w io.Writer, months []string) error {
 	return tw.Flush()
 }
 
-func printBudgetMonthSummary(w io.Writer, available, income, uncategorized int64) error {
+func printBudgetMonthSummary(w io.Writer, available, income, goals, allocated, spent, remaining, uncategorized int64) error {
 	if _, err := fmt.Fprintf(w, "Available: %s\n", formatCents(available)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "Income: %s\n", formatCents(income)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Goals: %s\n", formatCents(goals)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Allocated: %s\n", formatCents(allocated)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Spent: %s\n", formatCents(spent)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Remaining: %s\n", formatCents(remaining)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "Uncategorized: %s\n", formatCents(uncategorized)); err != nil {
@@ -2051,6 +2068,24 @@ func printBudgetMonthSummary(w io.Writer, available, income, uncategorized int64
 		return err
 	}
 	return nil
+}
+
+func budgetMonthGoalTotal(goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) int64 {
+	var total int64
+	for _, g := range goals {
+		if goalActiveInMonth(g, month) {
+			total += goalMonthlyValue(g, allocations, month)
+		}
+	}
+	return total
+}
+
+func budgetMonthTotals(rows []data.ListBudgetMonthCategoriesRow) (allocated, spent, remaining int64) {
+	for _, r := range rows {
+		allocated += r.Allocated
+		spent += r.Spent
+	}
+	return allocated, spent, allocated - spent
 }
 
 func remainingAllocations(rows []data.ListBudgetMonthCategoriesRow) int64 {
