@@ -10,6 +10,12 @@ FROM category
 WHERE budget = ?
 ORDER BY name;
 
+-- name: ListCategoryGroupsByBudget :many
+SELECT id, budget, name
+FROM category_group
+WHERE budget = ?
+ORDER BY name;
+
 -- name: ListPayeesByBudget :many
 SELECT id, budget, name
 FROM payee

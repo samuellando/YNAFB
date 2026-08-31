@@ -101,6 +101,10 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category update [name] [new_name] [--group name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category delete [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] group create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] group update [name] [new_name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] group list\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] group delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [type] [start] [end|null] [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal update [category] [type] [start] [end|null] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal list\n")
@@ -747,6 +751,97 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			fmt.Fprintf(stdout, "deleted category %q\n", args[0])
+			return nil
+
+		default:
+			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
+		}
+
+	case "group":
+		switch action {
+		case "create":
+			if len(args) != 1 {
+				return fmt.Errorf("group create requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			result, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
+				Budget: budget.ID,
+				Name:   args[0],
+			})
+			if err != nil {
+				return err
+			}
+
+			printCreated(stdout, "group", result)
+			return nil
+
+		case "update":
+			if len(args) != 2 {
+				return fmt.Errorf("group update requires [name] [new_name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			groupID, err := resolveCategoryGroupID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			rows, err := queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
+				Name: args[1],
+				ID:   groupID,
+			})
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return fmt.Errorf("unknown group %q", args[0])
+			}
+
+			fmt.Fprintf(stdout, "updated group %q\n", args[1])
+			return nil
+
+		case "list":
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			groups, err := queries.ListCategoryGroupsByBudget(ctx, budget.ID)
+			if err != nil {
+				return err
+			}
+
+			return printNames(stdout, groups, func(g data.CategoryGroup) string { return stringValue(g.Name) })
+
+		case "delete":
+			if len(args) != 1 {
+				return fmt.Errorf("group delete requires [name]")
+			}
+
+			budget, err := resolveBudget(ctx, queries, budgetName)
+			if err != nil {
+				return err
+			}
+
+			groupID, err := resolveCategoryGroupID(ctx, queries, budget, args[0])
+			if err != nil {
+				return err
+			}
+
+			if err := queries.DeleteCategoryGroup(ctx, groupID); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(stdout, "deleted group %q\n", args[0])
 			return nil
 
 		default:
@@ -1606,6 +1701,22 @@ func resolveCategoryID(ctx context.Context, queries *data.Queries, budget budget
 	}
 
 	return category.ID, nil
+}
+
+func resolveCategoryGroupID(ctx context.Context, queries *data.Queries, budget budgetContext, groupName string) (int64, error) {
+	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
+		Budget: budget.ID,
+		Name:   groupName,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("unknown group %q in budget %q", groupName, budget.Name)
+		}
+
+		return 0, err
+	}
+
+	return group.ID, nil
 }
 
 func resolvePayeeID(ctx context.Context, queries *data.Queries, budget budgetContext, payeeName string) (int64, error) {

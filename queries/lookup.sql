@@ -18,6 +18,11 @@ SELECT id, budget, name
 FROM category
 WHERE budget = ? AND name = ?;
 
+-- name: GetCategoryGroupByName :one
+SELECT id, budget, name
+FROM category_group
+WHERE budget = ? AND name = ?;
+
 -- name: GetPayeeByName :one
 SELECT id, budget, name
 FROM payee

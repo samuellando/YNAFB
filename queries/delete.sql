@@ -10,6 +10,10 @@ WHERE id = ?;
 DELETE FROM category
 WHERE id = ?;
 
+-- name: DeleteCategoryGroup :exec
+DELETE FROM category_group
+WHERE id = ?;
+
 -- name: DeletePayee :exec
 DELETE FROM payee
 WHERE id = ?;

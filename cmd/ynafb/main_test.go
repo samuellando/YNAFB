@@ -1578,6 +1578,114 @@ func TestCategoryCreateGroupValidation(t *testing.T) {
 	assertCommandFails(t, dbPath, "missing value for --group", "category", "create", "Groceries", "--group")
 }
 
+func TestGroupCommands(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"group", "create", "Fixed"},
+		{"group", "create", "Variable"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "group", "list")
+	if exitCode != 0 {
+		t.Fatalf("group list failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+	if stdout != "NAME\nFixed\nVariable\n" {
+		t.Fatalf("group list: got %q want %q", stdout, "NAME\nFixed\nVariable\n")
+	}
+	if stderr != "" {
+		t.Fatalf("group list: unexpected stderr %q", stderr)
+	}
+
+	runCommands(t, dbPath, [][]string{
+		{"group", "update", "Fixed", "Essentials"},
+	})
+
+	assertRowCount(t, dbPath, "category_group", 2)
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	var name string
+	if err := db.QueryRow("SELECT name FROM category_group WHERE name = 'Essentials'").Scan(&name); err != nil {
+		t.Fatalf("lookup renamed group: %v", err)
+	}
+	if err := db.QueryRow("SELECT name FROM category_group WHERE name = 'Fixed'").Scan(&name); err != sql.ErrNoRows {
+		t.Fatalf("old group name still present: %v", err)
+	}
+
+	runCommands(t, dbPath, [][]string{
+		{"group", "delete", "Variable"},
+	})
+
+	assertRowCount(t, dbPath, "category_group", 1)
+}
+
+func TestGroupDeleteUngroupsCategories(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"group", "create", "Fixed"},
+		{"category", "create", "Groceries", "--group", "Fixed"},
+	})
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	var groupID int64
+	if err := db.QueryRow("SELECT id FROM category_group WHERE name = 'Fixed'").Scan(&groupID); err != nil {
+		t.Fatalf("lookup group: %v", err)
+	}
+
+	runCommands(t, dbPath, [][]string{
+		{"group", "delete", "Fixed"},
+	})
+
+	var count int64
+	if err := db.QueryRow("SELECT COUNT(*) FROM category_group").Scan(&count); err != nil {
+		t.Fatalf("count groups: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("groups after delete = %d, want 0", count)
+	}
+
+	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group = ?", groupID).Scan(&count); err != nil {
+		t.Fatalf("count grouped: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("grouped categories after delete = %d, want 0", count)
+	}
+
+	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group IS NULL").Scan(&count); err != nil {
+		t.Fatalf("count ungrouped: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("ungrouped categories = %d, want 1", count)
+	}
+}
+
+func TestGroupCommandValidation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+	})
+
+	assertCommandFails(t, dbPath, "group create requires [name]", "group", "create")
+	assertCommandFails(t, dbPath, "group update requires [name] [new_name]", "group", "update", "Fixed")
+	assertCommandFails(t, dbPath, "group delete requires [name]", "group", "delete")
+	assertCommandFails(t, dbPath, `unknown group "Nope" in budget "Home Budget"`, "group", "update", "Nope", "New")
+	assertCommandFails(t, dbPath, `unknown group "Nope" in budget "Home Budget"`, "group", "delete", "Nope")
+}
+
 func TestAccountCategorizeIncomeSavesDefaultAndPrefills(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
