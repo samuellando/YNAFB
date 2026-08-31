@@ -67,7 +67,10 @@ CREATE TABLE IF NOT EXISTS category (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
     name STRING NOT NULL,
-    UNIQUE (budget, name)
+    UNIQUE (budget, name),
+    CHECK (
+        (name IS NOT 'income')
+    )
 );
 
 CREATE TABLE IF NOT EXISTS goal (

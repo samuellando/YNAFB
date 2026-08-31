@@ -94,7 +94,7 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation create [month] [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] allocation delete [month] [category]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category create [name] [--group name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] category delete [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] goal create [type] [start] [end|null] [category] [amount]\n")
@@ -491,12 +491,32 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 	case "category":
 		switch action {
 		case "create":
-			if len(args) != 1 {
+			var name, group string
+			for i := 0; i < len(args); i++ {
+				switch args[i] {
+				case "--group":
+					if i+1 >= len(args) {
+						return fmt.Errorf("missing value for --group")
+					}
+					group = args[i+1]
+					i++
+				default:
+					if strings.HasPrefix(args[i], "--") {
+						return fmt.Errorf("unsupported flag %q", args[i])
+					}
+					if name != "" {
+						return fmt.Errorf("category create requires [name]")
+					}
+					name = args[i]
+				}
+			}
+
+			if name == "" {
 				return fmt.Errorf("category create requires [name]")
 			}
 
-			if strings.EqualFold(args[0], "income") {
-				return fmt.Errorf("category name %q is reserved", args[0])
+			if strings.EqualFold(name, "income") {
+				return fmt.Errorf("category name %q is reserved", name)
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -504,9 +524,19 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
+			var categoryGroup sql.NullInt64
+			if group != "" {
+				groupID, err := resolveOrCreateCategoryGroup(ctx, queries, budget, group)
+				if err != nil {
+					return err
+				}
+				categoryGroup = sql.NullInt64{Int64: groupID, Valid: true}
+			}
+
 			result, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-				Budget: budget.ID,
-				Name:   args[0],
+				Budget:        budget.ID,
+				Name:          name,
+				CategoryGroup: categoryGroup,
 			})
 			if err != nil {
 				return err
@@ -1676,13 +1706,28 @@ func resolveOrCreateCategoryID(ctx context.Context, queries *data.Queries, budge
 		return 0, fmt.Errorf("category %q not created", name)
 	}
 
-	created, err := queries.CreateCategory(ctx, data.CreateCategoryParams{Budget: budget.ID, Name: name})
+	created, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
+		Budget:        budget.ID,
+		Name:          name,
+		CategoryGroup: sql.NullInt64{},
+	})
 	if err != nil {
 		return 0, err
 	}
 
 	fmt.Fprintf(stdout, "  → created category %q\n", name)
 	return created.ID, nil
+}
+
+func resolveOrCreateCategoryGroup(ctx context.Context, queries *data.Queries, budget budgetContext, name string) (int64, error) {
+	id, err := queries.GetOrCreateCategoryGroup(ctx, data.GetOrCreateCategoryGroupParams{
+		Budget: budget.ID,
+		Name:   name,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 func categorizeDelete(reader *bufio.Reader, stdout io.Writer, working *[]categorizeRow) error {

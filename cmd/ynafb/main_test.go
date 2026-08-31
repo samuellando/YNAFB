@@ -1314,6 +1314,57 @@ func TestCategoryCreateIncomeReserved(t *testing.T) {
 	assertCommandFails(t, dbPath, `category name "Income" is reserved`, "category", "create", "Income")
 }
 
+func TestCategoryCreateWithGroup(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"category", "create", "Groceries", "--group", "Fixed"},
+		{"category", "create", "Utilities", "--group", "Fixed"},
+		{"category", "create", "Fun"},
+	})
+
+	assertRowCount(t, dbPath, "category_group", 1)
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	var groupID int64
+	if err := db.QueryRow("SELECT id FROM category_group WHERE name = 'Fixed'").Scan(&groupID); err != nil {
+		t.Fatalf("lookup group: %v", err)
+	}
+
+	var grouped, ungrouped int64
+	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group = ?", groupID).Scan(&grouped); err != nil {
+		t.Fatalf("count grouped: %v", err)
+	}
+	if grouped != 2 {
+		t.Fatalf("grouped categories = %d, want 2", grouped)
+	}
+
+	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group IS NULL").Scan(&ungrouped); err != nil {
+		t.Fatalf("count ungrouped: %v", err)
+	}
+	if ungrouped != 1 {
+		t.Fatalf("ungrouped categories = %d, want 1", ungrouped)
+	}
+}
+
+func TestCategoryCreateGroupValidation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+	})
+
+	assertCommandFails(t, dbPath, "category create requires [name]", "category", "create")
+	assertCommandFails(t, dbPath, "unsupported flag \"--bogus\"", "category", "create", "Groceries", "--bogus", "x")
+	assertCommandFails(t, dbPath, "missing value for --group", "category", "create", "Groceries", "--group")
+}
+
 func TestAccountCategorizeIncomeSavesDefaultAndPrefills(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
