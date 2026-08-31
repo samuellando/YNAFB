@@ -22,9 +22,11 @@ WHERE a.budget = ?;
 SELECT
   c.id,
   c.name,
+  g.name,
   COALESCE(a.amount, 0) AS allocated,
   CAST(COALESCE(s.spent, 0) AS INTEGER) AS spent
 FROM category AS c
+LEFT JOIN category_group AS g ON c.category_group = g.id
 LEFT JOIN allocation AS a
   ON a.category = c.id
  AND a.budget = @budget
@@ -40,7 +42,7 @@ LEFT JOIN (
   GROUP BY ts.category
 ) AS s ON s.category = c.id
 WHERE c.budget = @budget
-ORDER BY c.name;
+ORDER BY g.name, c.name;
 
 -- name: GetBudgetBalanceAsOf :one
 SELECT

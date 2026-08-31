@@ -526,7 +526,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			return printNames(stdout, categories, func(c data.Category) string { return stringValue(c.Name) })
+			return printNames(stdout, categories, func(c data.ListCategoriesByBudgetRow) string { return stringValue(c.Name) })
 
 		case "delete":
 			if len(args) != 1 {
