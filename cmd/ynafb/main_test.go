@@ -2259,7 +2259,7 @@ func TestBudgetShowMonth(t *testing.T) {
 		"Uncategorized: 7.00",
 		"",
 		"No group:",
-		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING  WARNING",
 		"Emergency        0.00       0.00   0.00",
 		"Groceries        50.00      40.00  10.00",
 		"Household        25.00      5.00   20.00",
@@ -2389,6 +2389,71 @@ func TestGoalMonthlyValue(t *testing.T) {
 	}
 }
 
+func TestGoalWarning(t *testing.T) {
+	mustMonth := func(s string) time.Time {
+		t.Helper()
+		parsed, err := time.Parse("2006-01", s)
+		if err != nil {
+			t.Fatalf("parse month %q: %v", s, err)
+		}
+		return parsed
+	}
+
+	newGoal := func(type_, start, end string, amount int64) data.ListGoalsByBudgetRow {
+		g := data.ListGoalsByBudgetRow{
+			ID:           1,
+			Type:         type_,
+			CategoryID:   1,
+			CategoryName: "Cat",
+			Amount:       amount,
+			Start:        mustMonth(start),
+		}
+		if end != "" {
+			g.End = sql.NullTime{Time: mustMonth(end), Valid: true}
+		}
+		return g
+	}
+
+	alloc := map[int64]map[time.Time]int64{
+		1: {
+			mustMonth("2026-07"): 10000,
+			mustMonth("2026-08"): 10000,
+		},
+		2: {
+			mustMonth("2026-07"): 100000,
+		},
+	}
+
+	tests := []struct {
+		name  string
+		goal  data.ListGoalsByBudgetRow
+		now   time.Time
+		spend map[int64]map[int64]int64
+		want  string
+	}{
+		{"monthly fully funded", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, ""},
+		{"monthly underfunded", newGoal("monthly", "2026-07", "", 15000), mustMonth("2026-08"), nil, "underfunded 50.00"},
+		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), nil, ""},
+		{"save on track", newGoal("save", "2026-07", "2026-12", 20000), mustMonth("2026-08"), nil, ""},
+		{"save behind", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, "behind 80.00"},
+		{"save fully funded", newGoal("save", "2026-07", "2026-12", 10000), mustMonth("2026-08"), nil, ""},
+		{"save not started", newGoal("save", "2026-09", "2026-12", 100000), mustMonth("2026-08"), nil, ""},
+		{"refill at target", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, ""},
+		{"refill below target", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, "needs refill 900.00"},
+		{"refill with spending", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-07", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), map[int64]map[int64]int64{2: {202607: 4000}}, "needs refill 40.00"},
+		{"refill not started", newGoal("refill", "2026-09", "", 100000), mustMonth("2026-08"), nil, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := goalWarning(tt.goal, alloc, tt.spend, tt.now)
+			if got != tt.want {
+				t.Fatalf("goalWarning() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBudgetShowGoal(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
@@ -2430,10 +2495,10 @@ func TestBudgetShowGoal(t *testing.T) {
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
-		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
+		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING  WARNING",
 		"Emergency          0.00       0.00   0.00",
 		"Groceries  50.00   50.00      20.00  30.00",
-		"Household  200.00  25.00      5.00   20.00",
+		"Household  200.00  25.00      5.00   20.00      behind 175.00",
 		"",
 	}, "\n")
 
@@ -2481,8 +2546,8 @@ func TestBudgetShowRefillGoal(t *testing.T) {
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
-		"CATEGORY  GOAL    ALLOCATED  SPENT  REMAINING",
-		"Repair    650.00  0.00       0.00   350.00",
+		"CATEGORY  GOAL    ALLOCATED  SPENT  REMAINING  WARNING",
+		"Repair    650.00  0.00       0.00   350.00     needs refill 650.00",
 		"",
 	}, "\n")
 
@@ -2543,12 +2608,12 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
-		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
+		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING  WARNING",
 		"Fees               0.00       0.00   0.00",
 		"Fun                0.00       0.00   0.00",
-		"Groceries  100.00  50.00      0.00   150.00",
+		"Groceries  100.00  50.00      0.00   150.00     behind 50.00",
 		"Household  0.00    25.00      0.00   225.00",
-		"Savings    50.00   0.00       0.00   0.00",
+		"Savings    50.00   0.00       0.00   0.00       behind 50.00",
 		"Travel             0.00       0.00   0.00",
 		"",
 	}, "\n")
@@ -2600,7 +2665,7 @@ func TestBudgetShowRollover(t *testing.T) {
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
-		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING  WARNING",
 		"Groceries        50.00      20.00  90.00",
 		"Household        0.00       0.00   0.00",
 		"",
@@ -2650,7 +2715,7 @@ func TestBudgetShowNoNegativeRollover(t *testing.T) {
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
-		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING  WARNING",
 		"Groceries        50.00      70.00  -20.00",
 		"",
 	}, "\n")
@@ -2674,7 +2739,7 @@ func TestBudgetShowNoNegativeRollover(t *testing.T) {
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
-		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING  WARNING",
 		"Groceries        50.00      0.00   50.00",
 		"",
 	}, "\n")

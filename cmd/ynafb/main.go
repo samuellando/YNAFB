@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -2808,21 +2809,29 @@ func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategori
 		if _, err := fmt.Fprintf(w, "%s:\n", name); err != nil {
 			return err
 		}
-		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		if _, err := fmt.Fprintln(tw, "CATEGORY\tGOAL\tALLOCATED\tSPENT\tREMAINING"); err != nil {
+		var buf bytes.Buffer
+		tw := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "CATEGORY\tGOAL\tALLOCATED\tSPENT\tREMAINING\tWARNING"); err != nil {
 			return err
 		}
 		for _, r := range groups[name] {
 			goal := ""
+			warning := ""
 			if g, ok := goalsByCategory[r.ID]; ok && goalActiveInMonth(g, month) {
 				goal = formatCents(goalMonthlyValue(g, allocations, spending, month))
+				warning = goalWarning(g, allocations, spending, month)
 			}
-			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(r.Spent), formatCents(remaining[r.ID])); err != nil {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(r.Spent), formatCents(remaining[r.ID]), warning); err != nil {
 				return err
 			}
 		}
 		if err := tw.Flush(); err != nil {
 			return err
+		}
+		for _, line := range strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n") {
+			if _, err := fmt.Fprintln(w, strings.TrimRight(line, " ")); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -2993,6 +3002,39 @@ func goalMonthlyValue(g data.ListGoalsByBudgetRow, allocations map[int64]map[tim
 	}
 
 	return g.Amount
+}
+
+func goalWarning(g data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time) string {
+	if !goalActiveInMonth(g, month) {
+		return ""
+	}
+
+	var gap int64
+	word := ""
+	allocated := allocations[g.CategoryID][month]
+	switch stringValue(g.Type) {
+	case "refill":
+		if categoryAvailableBeforeMonth(allocations, spending, g.CategoryID, month) < g.Amount {
+			word = "needs refill"
+			gap = g.Amount - categoryAvailableBeforeMonth(allocations, spending, g.CategoryID, month)
+		}
+	case "save":
+		value := goalMonthlyValue(g, allocations, spending, month)
+		if allocated < value {
+			word = "behind"
+			gap = value - allocated
+		}
+	default:
+		if allocated < g.Amount {
+			word = "underfunded"
+			gap = g.Amount - allocated
+		}
+	}
+
+	if gap <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s %s", word, formatCents(gap))
 }
 
 func categoryAvailableBeforeMonth(allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, category int64, month time.Time) int64 {
