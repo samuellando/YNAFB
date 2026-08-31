@@ -244,6 +244,14 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
+			spending, err := queries.ListCategoryMonthlySpendingByBudget(ctx, data.ListCategoryMonthlySpendingByBudgetParams{
+				Budget: budget.ID,
+				End:    end,
+			})
+			if err != nil {
+				return err
+			}
+
 			netWorth, err := queries.GetBudgetBalanceAsOf(ctx, data.GetBudgetBalanceAsOfParams{
 				Budget: budget.ID,
 				End:    end,
@@ -269,15 +277,17 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			allocated, spent, remaining := budgetMonthTotals(rows)
+			remaining := categoryRemaining(rows, allocations, spending, month, end)
+			allocated, spent, remainingTotal := budgetMonthTotals(rows, remaining)
 			allocMap := buildCategoryAllocations(allocations)
-			goalsTotal := budgetMonthGoalTotal(goals, allocMap, month)
+			spendingMap := buildCategorySpending(spending)
+			goalsTotal := budgetMonthGoalTotal(goals, allocMap, spendingMap, month)
 
-			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(rows), income, goalsTotal, allocated, spent, remaining, uncategorized); err != nil {
+			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(remaining), income, goalsTotal, allocated, spent, remainingTotal, uncategorized); err != nil {
 				return err
 			}
 
-			return printBudgetMonthCategories(stdout, rows, goals, allocMap, month)
+			return printBudgetMonthCategories(stdout, rows, goals, allocMap, spendingMap, month, remaining)
 
 		default:
 			return fmt.Errorf("unsupported action %q for resource %q", action, resource)
@@ -861,8 +871,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			goalType := strings.ToLower(args[0])
-			if goalType != "monthly" && goalType != "save" {
-				return fmt.Errorf("goal create: unknown goal type %q (expected monthly or save)", args[0])
+			if !validGoalType(goalType) {
+				return fmt.Errorf("goal create: unknown goal type %q (expected monthly, save, or refill)", args[0])
 			}
 
 			start, err := parseMonth("start", args[1])
@@ -924,8 +934,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			goalType := strings.ToLower(args[1])
-			if goalType != "monthly" && goalType != "save" {
-				return fmt.Errorf("goal update: unknown goal type %q (expected monthly or save)", args[1])
+			if !validGoalType(goalType) {
+				return fmt.Errorf("goal update: unknown goal type %q (expected monthly, save, or refill)", args[1])
 			}
 
 			start, err := parseMonth("start", args[2])
@@ -985,7 +995,15 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			return printGoals(stdout, goals, buildCategoryAllocations(allocations), monthStart(time.Now()))
+			spending, err := queries.ListCategoryMonthlySpendingByBudget(ctx, data.ListCategoryMonthlySpendingByBudgetParams{
+				Budget: budget.ID,
+				End:    monthStart(time.Now()).AddDate(0, 1, 0),
+			})
+			if err != nil {
+				return err
+			}
+
+			return printGoals(stdout, goals, buildCategoryAllocations(allocations), buildCategorySpending(spending), monthStart(time.Now()))
 
 		case "delete":
 			if len(args) != 1 {
@@ -2656,37 +2674,106 @@ func printBudgetMonthSummary(w io.Writer, available, income, goals, allocated, s
 	return nil
 }
 
-func budgetMonthGoalTotal(goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) int64 {
+func budgetMonthGoalTotal(goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time) int64 {
 	var total int64
 	for _, g := range goals {
 		if goalActiveInMonth(g, month) {
-			total += goalMonthlyValue(g, allocations, month)
+			total += goalMonthlyValue(g, allocations, spending, month)
 		}
 	}
 	return total
 }
 
-func budgetMonthTotals(rows []data.ListBudgetMonthCategoriesRow) (allocated, spent, remaining int64) {
+func budgetMonthTotals(rows []data.ListBudgetMonthCategoriesRow, remaining map[int64]int64) (allocated, spent, remainingTotal int64) {
 	for _, r := range rows {
 		allocated += r.Allocated
 		spent += r.Spent
+		remainingTotal += remaining[r.ID]
 	}
-	return allocated, spent, allocated - spent
+	return allocated, spent, remainingTotal
 }
 
-func remainingAllocations(rows []data.ListBudgetMonthCategoriesRow) int64 {
-	var remaining int64
-	for _, r := range rows {
-		if rem := r.Allocated - r.Spent; rem > 0 {
-			remaining += rem
+func remainingAllocations(remaining map[int64]int64) int64 {
+	var total int64
+	for _, rem := range remaining {
+		if rem > 0 {
+			total += rem
 		}
 	}
-	return remaining
+	return total
+}
+
+func categoryRemaining(rows []data.ListBudgetMonthCategoriesRow, allocations []data.ListAllocationsByBudgetRow, spending []data.ListCategoryMonthlySpendingByBudgetRow, month, end time.Time) map[int64]int64 {
+	target := int64(month.Year())*100 + int64(month.Month())
+
+	type monthly struct {
+		allocated map[int64]int64
+		spent     map[int64]int64
+	}
+	perCat := make(map[int64]*monthly)
+	get := func(cat int64) *monthly {
+		m := perCat[cat]
+		if m == nil {
+			m = &monthly{allocated: make(map[int64]int64), spent: make(map[int64]int64)}
+			perCat[cat] = m
+		}
+		return m
+	}
+
+	for _, a := range allocations {
+		if !a.Month.Before(end) {
+			continue
+		}
+		key := int64(a.Month.Year())*100 + int64(a.Month.Month())
+		get(a.CategoryID).allocated[key] += a.Amount
+	}
+	for _, s := range spending {
+		get(s.Category.Int64).spent[s.Month] += s.Net
+	}
+
+	result := make(map[int64]int64, len(rows))
+	for _, r := range rows {
+		m := perCat[r.ID]
+		if m == nil {
+			result[r.ID] = 0
+			continue
+		}
+		keys := make([]int64, 0, len(m.allocated)+len(m.spent))
+		seen := make(map[int64]struct{})
+		for k := range m.allocated {
+			if _, ok := seen[k]; !ok {
+				seen[k] = struct{}{}
+				keys = append(keys, k)
+			}
+		}
+		for k := range m.spent {
+			if _, ok := seen[k]; !ok {
+				seen[k] = struct{}{}
+				keys = append(keys, k)
+			}
+		}
+		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+		remaining := int64(0)
+		for _, k := range keys {
+			if remaining < 0 {
+				remaining = 0
+			}
+			remaining += m.allocated[k] - m.spent[k]
+		}
+		if len(keys) == 0 || keys[len(keys)-1] != target {
+			if remaining < 0 {
+				remaining = 0
+			}
+		}
+		result[r.ID] = remaining
+	}
+	return result
 }
 
 const ungroupedLabel = "No group"
 
-func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) error {
+func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, remaining map[int64]int64) error {
 	goalsByCategory := make(map[int64]data.ListGoalsByBudgetRow)
 	for _, g := range goals {
 		goalsByCategory[g.CategoryID] = g
@@ -2728,9 +2815,9 @@ func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategori
 		for _, r := range groups[name] {
 			goal := ""
 			if g, ok := goalsByCategory[r.ID]; ok && goalActiveInMonth(g, month) {
-				goal = formatCents(goalMonthlyValue(g, allocations, month))
+				goal = formatCents(goalMonthlyValue(g, allocations, spending, month))
 			}
-			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(r.Spent), formatCents(r.Allocated-r.Spent)); err != nil {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(r.Spent), formatCents(remaining[r.ID])); err != nil {
 				return err
 			}
 		}
@@ -2793,7 +2880,7 @@ func printAllocations(w io.Writer, allocations []data.ListAllocationsByBudgetRow
 	return tw.Flush()
 }
 
-func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, now time.Time) error {
+func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, now time.Time) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "TYPE\tCATEGORY\tSTART\tEND\tAMOUNT\tMONTHLY"); err != nil {
 		return err
@@ -2811,7 +2898,7 @@ func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow, allocations map[
 			g.Start.Format("2006-01"),
 			end,
 			formatCents(g.Amount),
-			formatCents(goalMonthlyValue(g, allocations, now)),
+			formatCents(goalMonthlyValue(g, allocations, spending, now)),
 		); err != nil {
 			return err
 		}
@@ -2830,6 +2917,20 @@ func buildCategoryAllocations(rows []data.ListAllocationsByBudgetRow) map[int64]
 	return byCategory
 }
 
+func buildCategorySpending(rows []data.ListCategoryMonthlySpendingByBudgetRow) map[int64]map[int64]int64 {
+	byCategory := make(map[int64]map[int64]int64)
+	for _, r := range rows {
+		if !r.Category.Valid {
+			continue
+		}
+		if byCategory[r.Category.Int64] == nil {
+			byCategory[r.Category.Int64] = make(map[int64]int64)
+		}
+		byCategory[r.Category.Int64][r.Month] = r.Net
+	}
+	return byCategory
+}
+
 func monthStart(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 }
@@ -2839,6 +2940,10 @@ func monthsRemaining(from, end time.Time) int {
 		return 0
 	}
 	return (end.Year()-from.Year())*12 + int(end.Month()-from.Month()) + 1
+}
+
+func validGoalType(t string) bool {
+	return t == "monthly" || t == "save" || t == "refill"
 }
 
 func goalActiveInMonth(g data.ListGoalsByBudgetRow, month time.Time) bool {
@@ -2851,12 +2956,19 @@ func goalActiveInMonth(g data.ListGoalsByBudgetRow, month time.Time) bool {
 	return true
 }
 
-func goalMonthlyValue(g data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, month time.Time) int64 {
+func goalMonthlyValue(g data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time) int64 {
 	if !goalActiveInMonth(g, month) {
 		return 0
 	}
 
-	if stringValue(g.Type) == "save" {
+	switch stringValue(g.Type) {
+	case "refill":
+		value := g.Amount - categoryAvailableBeforeMonth(allocations, spending, g.CategoryID, month)
+		if value < 0 {
+			value = 0
+		}
+		return value
+	case "save":
 		if !g.End.Valid {
 			return 0
 		}
@@ -2881,6 +2993,54 @@ func goalMonthlyValue(g data.ListGoalsByBudgetRow, allocations map[int64]map[tim
 	}
 
 	return g.Amount
+}
+
+func categoryAvailableBeforeMonth(allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, category int64, month time.Time) int64 {
+	target := int64(month.Year())*100 + int64(month.Month())
+
+	type monthly struct {
+		allocated int64
+		spent     int64
+	}
+	perMonth := make(map[int64]*monthly)
+	for allocMonth, amount := range allocations[category] {
+		if key := int64(allocMonth.Year())*100 + int64(allocMonth.Month()); key < target {
+			m := perMonth[key]
+			if m == nil {
+				m = &monthly{}
+				perMonth[key] = m
+			}
+			m.allocated += amount
+		}
+	}
+	for key, net := range spending[category] {
+		if key < target {
+			m := perMonth[key]
+			if m == nil {
+				m = &monthly{}
+				perMonth[key] = m
+			}
+			m.spent += net
+		}
+	}
+
+	keys := make([]int64, 0, len(perMonth))
+	for key := range perMonth {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	var available int64
+	for _, key := range keys {
+		if available < 0 {
+			available = 0
+		}
+		available += perMonth[key].allocated - perMonth[key].spent
+	}
+	if available < 0 {
+		available = 0
+	}
+	return available
 }
 
 func printTransactionsByBudget(w io.Writer, transactions []data.ListTransactionsByBudgetRow) error {

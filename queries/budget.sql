@@ -49,6 +49,18 @@ LEFT JOIN (
 WHERE c.budget = @budget
 ORDER BY g.name, c.name;
 
+-- name: ListCategoryMonthlySpendingByBudget :many
+SELECT
+  ts.category,
+  CAST(substr(t.date, 1, 4) AS INTEGER) * 100 + CAST(substr(t.date, 6, 2) AS INTEGER) AS month,
+  CAST(SUM(ts.outflow - ts.inflow) AS INTEGER) AS net
+FROM transaction_category AS ts
+JOIN "transaction" AS t ON t.id = ts."transaction"
+JOIN category AS c ON c.id = ts.category
+WHERE c.budget = @budget
+  AND t.date < @end
+GROUP BY ts.category, month;
+
 -- name: GetBudgetBalanceAsOf :one
 SELECT
   (SELECT COALESCE(SUM(t.total_inflow - t.total_outflow), 0)

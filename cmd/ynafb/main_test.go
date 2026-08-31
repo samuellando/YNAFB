@@ -2313,7 +2313,7 @@ func TestGoalCreateValidation(t *testing.T) {
 		{"category", "create", "Groceries"},
 	})
 
-	assertCommandFails(t, dbPath, `goal create: unknown goal type "bogus" (expected monthly or save)`, "goal", "create", "bogus", "2026-08", "null", "Groceries", "5000")
+	assertCommandFails(t, dbPath, `goal create: unknown goal type "bogus" (expected monthly, save, or refill)`, "goal", "create", "bogus", "2026-08", "null", "Groceries", "5000")
 	assertCommandFails(t, dbPath, "goal create: save goals require an end month", "goal", "create", "save", "2026-08", "null", "Groceries", "5000")
 	assertCommandFails(t, dbPath, "goal create: end month must not be before start month", "goal", "create", "monthly", "2026-09", "2026-08", "Groceries", "5000")
 	assertCommandFails(t, dbPath, "parse start: expected YYYY-MM", "goal", "create", "monthly", "not-a-month", "null", "Groceries", "5000")
@@ -2354,25 +2354,34 @@ func TestGoalMonthlyValue(t *testing.T) {
 	}
 
 	tests := []struct {
-		name string
-		goal data.ListGoalsByBudgetRow
-		now  time.Time
-		want int64
+		name  string
+		goal  data.ListGoalsByBudgetRow
+		now   time.Time
+		spend map[int64]map[int64]int64
+		want  int64
 	}{
-		{"save no allocation yet", newGoal("save", "2026-08", "2026-12", 100000), mustMonth("2026-08"), 20000},
-		{"save counts only prior months", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), 18000},
-		{"save fully funded", newGoal("save", "2026-07", "2026-12", 10000), mustMonth("2026-08"), 0},
-		{"save not started", newGoal("save", "2026-09", "2026-12", 100000), mustMonth("2026-08"), 0},
-		{"save ended", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-09"), 0},
-		{"save last month", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-08"), 90000},
-		{"monthly active", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), 5000},
-		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), 0},
-		{"monthly ended", newGoal("monthly", "2026-07", "2026-08", 5000), mustMonth("2026-09"), 0},
+		{"save no allocation yet", newGoal("save", "2026-08", "2026-12", 100000), mustMonth("2026-08"), nil, 20000},
+		{"save counts only prior months", newGoal("save", "2026-07", "2026-12", 100000), mustMonth("2026-08"), nil, 18000},
+		{"save fully funded", newGoal("save", "2026-07", "2026-12", 10000), mustMonth("2026-08"), nil, 0},
+		{"save not started", newGoal("save", "2026-09", "2026-12", 100000), mustMonth("2026-08"), nil, 0},
+		{"save ended", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, 0},
+		{"save last month", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-08"), nil, 90000},
+		{"monthly active", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, 5000},
+		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), nil, 0},
+		{"monthly ended", newGoal("monthly", "2026-07", "2026-08", 5000), mustMonth("2026-09"), nil, 0},
+		{"refill no history", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-08", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), nil, 100000},
+		{"refill counts prior balance", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, 90000},
+		{"refill fully funded", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, 0},
+		{"refill subtracts spending", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 4000}}, 94000},
+		{"refill overspent clamps at zero", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 20000}}, 100000},
+		{"refill excludes current month", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, 90000},
+		{"refill not started", newGoal("refill", "2026-09", "", 100000), mustMonth("2026-08"), nil, 0},
+		{"refill ended", newGoal("refill", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := goalMonthlyValue(tt.goal, alloc, tt.now)
+			got := goalMonthlyValue(tt.goal, alloc, tt.spend, tt.now)
 			if got != tt.want {
 				t.Fatalf("goalMonthlyValue() = %d, want %d", got, tt.want)
 			}
@@ -2437,6 +2446,55 @@ func TestBudgetShowGoal(t *testing.T) {
 	}
 }
 
+func TestBudgetShowRefillGoal(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Repair"},
+		{"goal", "create", "refill", "2026-07", "null", "Repair", "1000.00"},
+		{"allocation", "create", "2026-07", "Repair", "400.00"},
+		{"transaction", "create", "2026-07-20", "Checking", "Hardware", "50.00", "0.00", "fix"},
+		{"transaction", "category", "create", "1", "50.00", "0.00", "--category", "Repair"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"Available: -400.00",
+		"Income: 0.00",
+		"Goals: 650.00",
+		"Allocated: 0.00",
+		"Spent: 0.00",
+		"Remaining: 350.00",
+		"Uncategorized: 0.00",
+		"",
+		"No group:",
+		"CATEGORY  GOAL    ALLOCATED  SPENT  REMAINING",
+		"Repair    650.00  0.00       0.00   350.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
 func TestBudgetShowGoalVariants(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
@@ -2476,22 +2534,148 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -33.00",
+		"Available: -333.00",
 		"Income: 42.00",
 		"Goals: 150.00",
 		"Allocated: 75.00",
 		"Spent: 0.00",
-		"Remaining: 75.00",
+		"Remaining: 375.00",
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
 		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
 		"Fees               0.00       0.00   0.00",
 		"Fun                0.00       0.00   0.00",
-		"Groceries  100.00  50.00      0.00   50.00",
-		"Household  0.00    25.00      0.00   25.00",
+		"Groceries  100.00  50.00      0.00   150.00",
+		"Household  0.00    25.00      0.00   225.00",
 		"Savings    50.00   0.00       0.00   0.00",
 		"Travel             0.00       0.00   0.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestBudgetShowRollover(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"category", "create", "Household"},
+		{"allocation", "create", "2026-06", "Groceries", "100.00"},
+		{"transaction", "create", "2026-06-05", "Checking", "Market", "40.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "40.00", "0.00", "--category", "Groceries"},
+		{"allocation", "create", "2026-07", "Groceries", "50.00"},
+		{"transaction", "create", "2026-07-10", "Checking", "Market", "20.00", "0.00", ""},
+		{"transaction", "category", "create", "2", "20.00", "0.00", "--category", "Groceries"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-07")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"Available: -150.00",
+		"Income: 0.00",
+		"Goals: 0.00",
+		"Allocated: 50.00",
+		"Spent: 20.00",
+		"Remaining: 90.00",
+		"Uncategorized: 0.00",
+		"",
+		"No group:",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
+		"Groceries        50.00      20.00  90.00",
+		"Household        0.00       0.00   0.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr: %q", stderr)
+	}
+}
+
+func TestBudgetShowNoNegativeRollover(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	setup := [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Groceries"},
+		{"allocation", "create", "2026-06", "Groceries", "50.00"},
+		{"transaction", "create", "2026-06-05", "Checking", "Market", "70.00", "0.00", ""},
+		{"transaction", "category", "create", "1", "70.00", "0.00", "--category", "Groceries"},
+		{"allocation", "create", "2026-07", "Groceries", "50.00"},
+	}
+
+	for _, args := range setup {
+		stdout, stderr, exitCode := invoke(t, dbPath, args...)
+		if exitCode != 0 {
+			t.Fatalf("setup command %q failed with exit code %d, stdout=%q stderr=%q", strings.Join(args, " "), exitCode, stdout, stderr)
+		}
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-06")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want := strings.Join([]string{
+		"Available: -70.00",
+		"Income: 0.00",
+		"Goals: 0.00",
+		"Allocated: 50.00",
+		"Spent: 70.00",
+		"Remaining: -20.00",
+		"Uncategorized: 0.00",
+		"",
+		"No group:",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
+		"Groceries        50.00      70.00  -20.00",
+		"",
+	}, "\n")
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "budget", "show", "Home Budget", "2026-07")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
+	}
+
+	want = strings.Join([]string{
+		"Available: -120.00",
+		"Income: 0.00",
+		"Goals: 0.00",
+		"Allocated: 50.00",
+		"Spent: 0.00",
+		"Remaining: 50.00",
+		"Uncategorized: 0.00",
+		"",
+		"No group:",
+		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
+		"Groceries        50.00      0.00   50.00",
 		"",
 	}, "\n")
 
@@ -2533,9 +2717,11 @@ func TestGoalListOrderingAndTypes(t *testing.T) {
 		{"category", "create", "Zebra"},
 		{"category", "create", "Apple"},
 		{"category", "create", "Mango"},
+		{"category", "create", "Repair"},
 		{"goal", "create", "Monthly", "2020-01", "null", "Mango", "10.00"},
 		{"goal", "create", "SAVE", "2020-01", "2020-12", "Apple", "120.00"},
 		{"goal", "create", "monthly", "2020-01", "null", "Zebra", "5.00"},
+		{"goal", "create", "refill", "2020-01", "null", "Repair", "500.00"},
 	})
 
 	stdout, stderr, exitCode := invoke(t, dbPath, "goal", "list")
@@ -2547,6 +2733,7 @@ func TestGoalListOrderingAndTypes(t *testing.T) {
 		"TYPE     CATEGORY  START    END      AMOUNT  MONTHLY",
 		"save     Apple     2020-01  2020-12  120.00  0.00",
 		"monthly  Mango     2020-01           10.00   10.00",
+		"refill   Repair    2020-01           500.00  500.00",
 		"monthly  Zebra     2020-01           5.00    5.00",
 		"",
 	}, "\n")
