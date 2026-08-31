@@ -3,9 +3,11 @@ INSERT INTO transaction_category (
   "transaction",
   other_account,
   category,
+  income,
   outflow,
   inflow
 ) VALUES (
+  ?,
   ?,
   ?,
   ?,

@@ -3,8 +3,10 @@ INSERT INTO payee_default_category (
   payee,
   other_account,
   category,
+  income,
   percent
 ) VALUES (
+  ?,
   ?,
   ?,
   ?,
@@ -20,6 +22,7 @@ SELECT
   ao.name AS other_account_name,
   pdc.category,
   c.name AS category_name,
+  pdc.income,
   pdc.percent
 FROM payee_default_category AS pdc
 LEFT JOIN account AS ao ON ao.id = pdc.other_account

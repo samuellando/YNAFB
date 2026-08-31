@@ -36,7 +36,8 @@ SELECT
   ts.category,
   c.name AS category_name,
   ts.outflow,
-  ts.inflow
+  ts.inflow,
+  COALESCE(ts.income, false) AS income
 FROM "transaction" AS t
 JOIN account AS ta ON ta.id = t.account
 JOIN payee AS p ON p.id = t.payee

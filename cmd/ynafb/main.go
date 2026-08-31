@@ -28,6 +28,7 @@ type budgetContext struct {
 type categoryTargetArgs struct {
 	OtherAccount string
 	Category     string
+	Income       bool
 }
 
 func main() {
@@ -102,12 +103,12 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee create [name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee delete [name]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee default-category create [payee] [percent] [--category name | --other-account name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] payee default-category create [payee] [percent] [--category name | --other-account name | --income]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] payee default-category delete [id]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction create [date] [account] [payee] [total_out] [total_in] [note]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction delete [id]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction category create [transaction] [outflow] [inflow] [--category name | --other-account name]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--budget name] transaction category create [transaction] [outflow] [inflow] [--category name | --other-account name | --income]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] transaction category delete [id]\n")
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "Dates accept RFC3339 or YYYY-MM-DD. Use null for goal end dates (monthly goals).\n")
@@ -221,7 +222,16 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(rows), uncategorized); err != nil {
+			income, err := queries.GetIncomeByBudgetMonth(ctx, data.GetIncomeByBudgetMonthParams{
+				Budget: budget.ID,
+				Start:  month,
+				End:    end,
+			})
+			if err != nil {
+				return err
+			}
+
+			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(rows), income, uncategorized); err != nil {
 				return err
 			}
 
@@ -478,6 +488,10 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 		case "create":
 			if len(args) != 1 {
 				return fmt.Errorf("category create requires [name]")
+			}
+
+			if strings.EqualFold(args[0], "income") {
+				return fmt.Errorf("category name %q is reserved", args[0])
 			}
 
 			budget, err := resolveBudget(ctx, queries, budgetName)
@@ -741,15 +755,16 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					return err
 				}
 
-				otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
+				target, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
 				if err != nil {
 					return err
 				}
 
 				result, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 					Payee:        payee,
-					OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
-					Category:     category,
+					OtherAccount: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
+					Category:     target.category,
+					Income:       target.income,
 					Percent:      percent,
 				})
 				if err != nil {
@@ -904,15 +919,16 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					return err
 				}
 
-				otherAccount, category, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
+				target, err := resolveCategoryTargets(ctx, queries, budget, targetArgs)
 				if err != nil {
 					return err
 				}
 
 				result, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
 					Transaction:  transactionID,
-					OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: otherAccount != 0},
-					Category:     category,
+					OtherAccount: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
+					Category:     target.category,
+					Income:       target.income,
 					Outflow:      outflow,
 					Inflow:       inflow,
 				})
@@ -1019,24 +1035,30 @@ func parseCategoryTargetArgs(args []string) ([]string, categoryTargetArgs, error
 			continue
 		}
 
-		if i+1 >= len(args) {
-			return nil, categoryTargetArgs{}, fmt.Errorf("missing value for %s", arg)
-		}
-
-		value := args[i+1]
-		i++
-
 		switch arg {
 		case "--other-account":
+			if i+1 >= len(args) {
+				return nil, categoryTargetArgs{}, fmt.Errorf("missing value for %s", arg)
+			}
 			if targets.OtherAccount != "" {
 				return nil, categoryTargetArgs{}, fmt.Errorf("--other-account may only be set once")
 			}
-			targets.OtherAccount = value
+			i++
+			targets.OtherAccount = args[i]
 		case "--category":
+			if i+1 >= len(args) {
+				return nil, categoryTargetArgs{}, fmt.Errorf("missing value for %s", arg)
+			}
 			if targets.Category != "" {
 				return nil, categoryTargetArgs{}, fmt.Errorf("--category may only be set once")
 			}
-			targets.Category = value
+			i++
+			targets.Category = args[i]
+		case "--income":
+			if targets.Income {
+				return nil, categoryTargetArgs{}, fmt.Errorf("--income may only be set once")
+			}
+			targets.Income = true
 		default:
 			return nil, categoryTargetArgs{}, fmt.Errorf("unsupported flag %q", arg)
 		}
@@ -1049,9 +1071,12 @@ func parseCategoryTargetArgs(args []string) ([]string, categoryTargetArgs, error
 	if targets.Category != "" {
 		targetCount++
 	}
+	if targets.Income {
+		targetCount++
+	}
 
 	if targetCount != 1 {
-		return nil, categoryTargetArgs{}, fmt.Errorf("set exactly one of --category or --other-account")
+		return nil, categoryTargetArgs{}, fmt.Errorf("set exactly one of --category, --other-account, or --income")
 	}
 
 	return positionals, targets, nil
@@ -1270,6 +1295,7 @@ type categorizeTransaction struct {
 type categorizeRow struct {
 	id         int64
 	transfer   bool
+	income     bool
 	targetID   int64
 	targetName string
 	outflow    int64
@@ -1441,6 +1467,9 @@ func loadCategorizations(rows []data.ListAccountTransactionsRow) []categorizeRow
 			row.transfer = true
 			row.targetID = r.OtherAccount.Int64
 			row.targetName = stringValue(r.OtherAccountName)
+		} else if r.Income {
+			row.income = true
+			row.targetName = "Income"
 		} else {
 			row.transfer = false
 			row.targetID = r.Category.Int64
@@ -1485,6 +1514,9 @@ func prefillFromDefaults(ctx context.Context, queries *data.Queries, budget budg
 			row.transfer = true
 			row.targetID = d.OtherAccount.Int64
 			row.targetName = stringValue(d.OtherAccountName)
+		} else if d.Income {
+			row.income = true
+			row.targetName = "Income"
 		} else {
 			row.transfer = false
 			row.targetID = d.Category.Int64
@@ -1555,6 +1587,8 @@ func synthesizeRows(tx categorizeTransaction, working []categorizeRow) []data.Li
 		if row.transfer {
 			r.OtherAccount = sql.NullInt64{Int64: row.targetID, Valid: true}
 			r.OtherAccountName = row.targetName
+		} else if row.income {
+			r.Income = true
 		} else {
 			r.Category = sql.NullInt64{Int64: row.targetID, Valid: true}
 			r.CategoryName = row.targetName
@@ -1565,7 +1599,7 @@ func synthesizeRows(tx categorizeTransaction, working []categorizeRow) []data.Li
 }
 
 func categorizeAdd(ctx context.Context, queries *data.Queries, budget budgetContext, reader *bufio.Reader, stdout io.Writer, tx categorizeTransaction, working *[]categorizeRow) error {
-	target, err := prompt(reader, stdout, "  Target (category, or @account for a transfer): ")
+	target, err := prompt(reader, stdout, "  Target (category, @account for a transfer, or income): ")
 	if err != nil {
 		return err
 	}
@@ -1581,6 +1615,9 @@ func categorizeAdd(ctx context.Context, queries *data.Queries, budget budgetCont
 		row.transfer = true
 		row.targetID = id
 		row.targetName = name
+	} else if strings.EqualFold(target, "income") {
+		row.income = true
+		row.targetName = "Income"
 	} else {
 		if target == "" {
 			fmt.Fprintln(stdout, "  target required")
@@ -1620,6 +1657,10 @@ func resolveOrCreateCategoryID(ctx context.Context, queries *data.Queries, budge
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
+	}
+
+	if strings.EqualFold(name, "income") {
+		return 0, fmt.Errorf("category name %q is reserved", name)
 	}
 
 	ans, err := prompt(reader, stdout, fmt.Sprintf("  Category %q doesn't exist. Create it? [y/n]: ", name))
@@ -1747,12 +1788,18 @@ func categorizeTargetLabel(row categorizeRow) string {
 	if row.transfer {
 		return "@" + row.targetName
 	}
+	if row.income {
+		return "Income"
+	}
 	return row.targetName
 }
 
 func categorizeKey(row categorizeRow) string {
 	if row.transfer {
 		return fmt.Sprintf("account:%d", row.targetID)
+	}
+	if row.income {
+		return "income"
 	}
 	return fmt.Sprintf("category:%d", row.targetID)
 }
@@ -1779,6 +1826,8 @@ func defaultsMatch(tx categorizeTransaction, defaults []data.ListPayeeDefaultCat
 		var key string
 		if d.OtherAccount.Valid {
 			key = fmt.Sprintf("account:%d", d.OtherAccount.Int64)
+		} else if d.Income {
+			key = "income"
 		} else {
 			key = fmt.Sprintf("category:%d", d.Category.Int64)
 		}
@@ -1818,6 +1867,7 @@ func replaceTransactionCategories(ctx context.Context, db *sql.DB, queries *data
 			Transaction:  transactionID,
 			OtherAccount: categorizeOtherAccount(row),
 			Category:     categorizeCategory(row),
+			Income:       row.income,
 			Outflow:      row.outflow,
 			Inflow:       row.inflow,
 		}); err != nil {
@@ -1843,6 +1893,7 @@ func replacePayeeDefaults(ctx context.Context, db *sql.DB, queries *data.Queries
 			Payee:        payeeID,
 			OtherAccount: categorizeOtherAccount(row),
 			Category:     categorizeCategory(row),
+			Income:       row.income,
 			Percent:      percents[categorizeKey(row)],
 		}); err != nil {
 			return err
@@ -1859,7 +1910,7 @@ func categorizeOtherAccount(row categorizeRow) sql.NullInt64 {
 }
 
 func categorizeCategory(row categorizeRow) sql.NullInt64 {
-	if row.transfer {
+	if row.transfer || row.income {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{Int64: row.targetID, Valid: true}
@@ -1924,22 +1975,32 @@ func parseAmount(s string) (int64, error) {
 	return cents, nil
 }
 
-func resolveCategoryTargets(ctx context.Context, queries *data.Queries, budget budgetContext, args categoryTargetArgs) (int64, sql.NullInt64, error) {
+type categoryTargetResolved struct {
+	otherAccount int64
+	category     sql.NullInt64
+	income       bool
+}
+
+func resolveCategoryTargets(ctx context.Context, queries *data.Queries, budget budgetContext, args categoryTargetArgs) (categoryTargetResolved, error) {
+	if args.Income {
+		return categoryTargetResolved{income: true}, nil
+	}
+
 	if args.Category != "" {
 		categoryID, err := resolveCategoryID(ctx, queries, budget, args.Category)
 		if err != nil {
-			return 0, sql.NullInt64{}, err
+			return categoryTargetResolved{}, err
 		}
 
-		return 0, sql.NullInt64{Int64: categoryID, Valid: true}, nil
+		return categoryTargetResolved{category: sql.NullInt64{Int64: categoryID, Valid: true}}, nil
 	}
 
 	otherAccountID, err := resolveAccountID(ctx, queries, budget, args.OtherAccount)
 	if err != nil {
-		return 0, sql.NullInt64{}, err
+		return categoryTargetResolved{}, err
 	}
 
-	return otherAccountID, sql.NullInt64{}, nil
+	return categoryTargetResolved{otherAccount: otherAccountID}, nil
 }
 
 func printCreated(w io.Writer, resource string, id int64) {
@@ -1976,8 +2037,11 @@ func printBudgetMonths(w io.Writer, months []string) error {
 	return tw.Flush()
 }
 
-func printBudgetMonthSummary(w io.Writer, available, uncategorized int64) error {
+func printBudgetMonthSummary(w io.Writer, available, income, uncategorized int64) error {
 	if _, err := fmt.Fprintf(w, "Available: %s\n", formatCents(available)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Income: %s\n", formatCents(income)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "Uncategorized: %s\n", formatCents(uncategorized)); err != nil {
@@ -2348,6 +2412,10 @@ func transactionTarget(accountID int64, transaction data.ListAccountTransactions
 
 	if transaction.OtherAccount.Valid {
 		return "@" + stringValue(transaction.OtherAccountName)
+	}
+
+	if transaction.Income {
+		return "Income"
 	}
 
 	return stringValue(transaction.CategoryName)

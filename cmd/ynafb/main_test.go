@@ -595,7 +595,7 @@ func TestTransactionCategoryCreateRejectsMultipleTargets(t *testing.T) {
 		t.Fatalf("unexpected stdout: %q", stdout)
 	}
 
-	want := "error: set exactly one of --category or --other-account\n"
+	want := "error: set exactly one of --category, --other-account, or --income\n"
 	if stderr != want {
 		t.Fatalf("unexpected stderr: got %q want %q", stderr, want)
 	}
@@ -1062,8 +1062,8 @@ func TestTransactionCategoryValidation(t *testing.T) {
 		{"transaction", "create", "2026-08-28", "Checking", "Market", "2500", "0", ""},
 	})
 
-	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "transaction", "category", "create", "1", "100", "0")
-	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "transaction", "category", "create", "1", "100", "0", "--category", "Groceries", "--other-account", "Savings")
+	assertCommandFails(t, dbPath, "set exactly one of --category, --other-account, or --income", "transaction", "category", "create", "1", "100", "0")
+	assertCommandFails(t, dbPath, "set exactly one of --category, --other-account, or --income", "transaction", "category", "create", "1", "100", "0", "--category", "Groceries", "--other-account", "Savings")
 	assertCommandFails(t, dbPath, "--category may only be set once", "transaction", "category", "create", "1", "100", "0", "--category", "Groceries", "--category", "Groceries")
 	assertCommandFails(t, dbPath, `unknown category "Nope" in budget "Home Budget"`, "transaction", "category", "create", "1", "100", "0", "--category", "Nope")
 	assertCommandFails(t, dbPath, `unknown account "Nope" in budget "Home Budget"`, "transaction", "category", "create", "1", "100", "0", "--other-account", "Nope")
@@ -1080,8 +1080,8 @@ func TestPayeeDefaultCategoryValidation(t *testing.T) {
 		{"payee", "create", "Market"},
 	})
 
-	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "payee", "default-category", "create", "Market", "100")
-	assertCommandFails(t, dbPath, "set exactly one of --category or --other-account", "payee", "default-category", "create", "Market", "100", "--category", "Groceries", "--other-account", "Savings")
+	assertCommandFails(t, dbPath, "set exactly one of --category, --other-account, or --income", "payee", "default-category", "create", "Market", "100")
+	assertCommandFails(t, dbPath, "set exactly one of --category, --other-account, or --income", "payee", "default-category", "create", "Market", "100", "--category", "Groceries", "--other-account", "Savings")
 	assertCommandFails(t, dbPath, `unknown payee "Nope" in budget "Home Budget"`, "payee", "default-category", "create", "Nope", "100", "--category", "Groceries")
 	assertCommandFails(t, dbPath, "parse percent", "payee", "default-category", "create", "Market", "abc", "--category", "Groceries")
 }
@@ -1171,9 +1171,8 @@ func TestAccountShowInflowTransaction(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"category", "create", "Income"},
 		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
-		{"transaction", "category", "create", "1", "0", "4200", "--category", "Income"},
+		{"transaction", "category", "create", "1", "0", "4200", "--income"},
 	})
 
 	show := showAccount(t, dbPath, "Checking")
@@ -1266,6 +1265,107 @@ func TestPayeeDefaultCategoryCreateOtherAccount(t *testing.T) {
 	}
 	if stdout != "created payee default-category 1\n" {
 		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+}
+
+func TestPayeeDefaultCategoryCreateIncome(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"payee", "create", "Employer"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "payee", "default-category", "create", "Employer", "100", "--income")
+	if exitCode != 0 {
+		t.Fatalf("create failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "created payee default-category 1\n" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+}
+
+func TestCategoryCreateIncomeReserved(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+	})
+
+	assertCommandFails(t, dbPath, `category name "income" is reserved`, "category", "create", "income")
+	assertCommandFails(t, dbPath, `category name "Income" is reserved`, "category", "create", "Income")
+}
+
+func TestAccountCategorizeIncomeSavesDefaultAndPrefills(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
+	})
+
+	input := strings.Join([]string{
+		"a",
+		"income",
+		"",
+		"",
+		"o",
+		"y",
+	}, "\n")
+
+	stdout := runCategorize(t, dbPath, input, "Checking")
+	if !strings.Contains(stdout, "→ added: Income") {
+		t.Fatalf("expected income added, got %q", stdout)
+	}
+	if !strings.Contains(stdout, `saved default for "Employer"`) {
+		t.Fatalf("expected default saved, got %q", stdout)
+	}
+
+	runCommands(t, dbPath, [][]string{
+		{"transaction", "create", "2026-08-29", "Checking", "Employer", "0", "4200", "second paycheck"},
+	})
+
+	second := runCategorize(t, dbPath, "o\n", "Checking")
+	if !strings.Contains(second, "(pre-filled from payee default)") {
+		t.Fatalf("expected pre-fill from income default, got %q", second)
+	}
+	if !strings.Contains(second, "Income") {
+		t.Fatalf("expected income pre-fill, got %q", second)
+	}
+	if !strings.Contains(second, "matches existing default") {
+		t.Fatalf("expected matches existing default, got %q", second)
+	}
+}
+
+func TestInflowCategorizedToCategory(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"budget", "create", "Home Budget"},
+		{"account", "create", "Checking"},
+		{"category", "create", "Reimbursements"},
+		{"transaction", "create", "2026-08-28", "Checking", "Friend", "0", "2500", "reimbursement"},
+		{"transaction", "category", "create", "1", "0", "2500", "--category", "Reimbursements"},
+	})
+
+	show := showAccount(t, dbPath, "Checking")
+	if !strings.Contains(show, "Reimbursements") {
+		t.Fatalf("expected reimbursement categorized to a category, got %q", show)
+	}
+	if strings.Contains(show, "Income") {
+		t.Fatalf("expected no income target for a category inflow, got %q", show)
+	}
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget", "2026-08")
+	if exitCode != 0 {
+		t.Fatalf("budget show failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Income: 0.00") {
+		t.Fatalf("expected income line 0.00, got %q", stdout)
+	}
+	if !strings.Contains(stdout, "Reimbursements") {
+		t.Fatalf("expected reimbursement category in budget show, got %q", stdout)
 	}
 }
 
@@ -1518,7 +1618,6 @@ func TestAccountCategorizeInflowTransaction(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"category", "create", "Income"},
 		{"transaction", "create", "2026-08-28", "Checking", "Employer", "0", "4200", "paycheck"},
 	})
 
@@ -1762,6 +1861,7 @@ func TestBudgetShowMonth(t *testing.T) {
 
 	want := strings.Join([]string{
 		"Available: -82.00",
+		"Income: 0.00",
 		"Uncategorized: 7.00",
 		"",
 		"CATEGORY   GOAL  ALLOCATED  SPENT  REMAINING",
@@ -1802,8 +1902,8 @@ func TestBudgetShowEmpty(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("budget show month failed: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "Available: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n" {
-		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Available: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n")
+	if stdout != "Available: 0.00\nIncome: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n" {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Available: 0.00\nIncome: 0.00\nUncategorized: 0.00\n\nCATEGORY  GOAL  ALLOCATED  SPENT  REMAINING\n")
 	}
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
@@ -1918,6 +2018,7 @@ func TestBudgetShowGoal(t *testing.T) {
 
 	want := strings.Join([]string{
 		"Available: -75.00",
+		"Income: 0.00",
 		"Uncategorized: 0.00",
 		"",
 		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
@@ -1946,7 +2047,6 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 		{"category", "create", "Fun"},
 		{"category", "create", "Groceries"},
 		{"category", "create", "Household"},
-		{"category", "create", "Income"},
 		{"category", "create", "Savings"},
 		{"category", "create", "Travel"},
 		{"allocation", "create", "2026-07", "Groceries", "100.00"},
@@ -1960,7 +2060,7 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 		{"goal", "create", "save", "2026-08", "2026-08", "Savings", "50.00"},
 		{"goal", "create", "monthly", "2026-09", "null", "Travel", "25.00"},
 		{"transaction", "create", "2026-08-05", "Checking", "Employer", "0", "4200", "paycheck"},
-		{"transaction", "category", "create", "1", "0", "4200", "--category", "Income"},
+		{"transaction", "category", "create", "1", "0", "4200", "--income"},
 	}
 
 	for _, args := range setup {
@@ -1976,17 +2076,17 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -75.00",
+		"Available: -33.00",
+		"Income: 42.00",
 		"Uncategorized: 0.00",
 		"",
-		"CATEGORY   GOAL    ALLOCATED  SPENT   REMAINING",
-		"Fees               0.00       0.00    0.00",
-		"Fun                0.00       0.00    0.00",
-		"Groceries  100.00  50.00      0.00    50.00",
-		"Household  0.00    25.00      0.00    25.00",
-		"Income             0.00       -42.00  42.00",
-		"Savings    50.00   0.00       0.00    0.00",
-		"Travel             0.00       0.00    0.00",
+		"CATEGORY   GOAL    ALLOCATED  SPENT  REMAINING",
+		"Fees               0.00       0.00   0.00",
+		"Fun                0.00       0.00   0.00",
+		"Groceries  100.00  50.00      0.00   50.00",
+		"Household  0.00    25.00      0.00   25.00",
+		"Savings    50.00   0.00       0.00   0.00",
+		"Travel             0.00       0.00   0.00",
 		"",
 	}, "\n")
 

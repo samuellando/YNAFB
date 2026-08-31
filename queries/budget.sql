@@ -63,3 +63,12 @@ WHERE a.budget = @budget
   AND NOT EXISTS (
     SELECT 1 FROM transaction_category AS ts WHERE ts."transaction" = t.id
   );
+
+-- name: GetIncomeByBudgetMonth :one
+SELECT CAST(COALESCE(SUM(ts.inflow - ts.outflow), 0) AS INTEGER)
+FROM transaction_category AS ts
+JOIN "transaction" AS t ON t.id = ts."transaction"
+JOIN account AS a ON a.id = t.account
+WHERE a.budget = @budget
+  AND ts.income
+  AND t.date >= @start AND t.date < @end;
