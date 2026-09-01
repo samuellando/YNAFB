@@ -1,97 +1,105 @@
--- +goose Up
-CREATE TABLE IF NOT EXISTS budget (
+-- +goose up
+CREATE TABLE budget (
     id INTEGER PRIMARY KEY,
     name string NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS allocation (
-    id INTEGER PRIMARY KEY,
-    budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
-    month DATE NOT NULL,
-    amount INTEGER NOT NULL,
-    UNIQUE (budget, category, month)
-);
-
-CREATE TABLE IF NOT EXISTS account (
+CREATE TABLE account (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
     name STRING NOT NULL,
     UNIQUE (budget, name)
 );
 
-CREATE TABLE IF NOT EXISTS "transaction" (
+CREATE TABLE "transaction" (
     id INTEGER PRIMARY KEY,
     date DATETIME NOT NULL,
     account INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
     payee INTEGER NOT NULL REFERENCES payee (id) ON DELETE CASCADE,
     total_outflow INTEGER NOT NULL DEFAULT 0,
     total_inflow INTEGER NOT NULL DEFAULT 0,
-    reconciled BOOL NOT NULL DEFAULT false,
     note STRING NOT NULL DEFAULT ''
 );
 
-CREATE TABLE IF NOT EXISTS transaction_category (
+CREATE TABLE payee (
+    id INTEGER PRIMARY KEY,
+    budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
+    name STRING NOT NULL,
+    UNIQUE (budget, name)
+);
+
+CREATE TABLE "transaction_category" (
     id INTEGER PRIMARY KEY,
     "transaction" INTEGER NOT NULL REFERENCES "transaction" (id) ON DELETE CASCADE,
     other_account INTEGER REFERENCES account (id) ON DELETE CASCADE,
     category INTEGER REFERENCES category (id) ON DELETE CASCADE,
+    income BOOL NOT NULL DEFAULT false,
     outflow INTEGER NOT NULL DEFAULT 0,
     inflow INTEGER NOT NULL DEFAULT 0,
+    -- XOR, can only be one of category (spend), transfer, or income
     CHECK (
-        (other_account IS NOT NULL AND category IS NULL) OR
-        (other_account IS NULL AND category IS NOT NULL)
+        (CASE WHEN other_account IS NOT NULL THEN 1 ELSE 0 END
+       + CASE WHEN category IS NOT NULL THEN 1 ELSE 0 END
+       + CASE WHEN income THEN 1 ELSE 0 END) = 1
+    ),
+    CHECK (
+        NOT INCOME OR (outflow = 0 and inflow > 0)
     )
 );
 
-CREATE TABLE IF NOT EXISTS payee (
+CREATE TABLE category (
+    id INTEGER PRIMARY KEY,
+    budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
+    name STRING NOT NULL, category_group INTEGER REFERENCES category_group (id) ON DELETE SET NULL,
+    UNIQUE (budget, name),
+    CHECK (name IS NOT 'income')
+);
+
+CREATE TABLE category_group (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
     name STRING NOT NULL,
     UNIQUE (budget, name)
 );
 
-CREATE TABLE IF NOT EXISTS payee_default_category (
+CREATE TABLE "payee_default_category" (
     id INTEGER PRIMARY KEY,
     payee INTEGER NOT NULL REFERENCES payee (id) ON DELETE CASCADE,
     other_account INTEGER REFERENCES account (id) ON DELETE CASCADE,
     category INTEGER REFERENCES category (id) ON DELETE CASCADE,
+    income BOOL NOT NULL DEFAULT false,
     percent INTEGER NOT NULL,
     CHECK (
-        (other_account IS NOT NULL AND category IS NULL) OR
-        (other_account IS NULL AND category IS NOT NULL)
+        (CASE WHEN other_account IS NOT NULL THEN 1 ELSE 0 END
+       + CASE WHEN category IS NOT NULL THEN 1 ELSE 0 END
+       + CASE WHEN income THEN 1 ELSE 0 END) = 1
     )
 );
 
-CREATE TABLE IF NOT EXISTS category (
+CREATE TABLE allocation (
     id INTEGER PRIMARY KEY,
+    month DATE NOT NULL,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name STRING NOT NULL,
-    UNIQUE (budget, name),
-    CHECK (
-        (name IS NOT 'income')
-    )
-);
-
-CREATE TABLE IF NOT EXISTS goal (
-    id INTEGER PRIMARY KEY,
-    budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name string NOT NULL, 
-    type STRING NOT NULL,
-    start DATETIME NOT NULL,
-    end DATETIME,
     category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
-    amount INTEGER NOT NULL,
-    UNIQUE (budget, name)
+    amount INTEGER NOT NULL, 
+    UNIQUE (budget, category, month)
 );
 
--- +goose Down
-DROP TABLE IF EXISTS goal;
-DROP TABLE IF EXISTS category;
-DROP TABLE IF EXISTS payee_default_category;
-DROP TABLE IF EXISTS payee;
-DROP TABLE IF EXISTS transaction_category;
-DROP TABLE IF EXISTS "transaction";
-DROP TABLE IF EXISTS account;
-DROP TABLE IF EXISTS allocation;
-DROP TABLE IF EXISTS budget;
+CREATE TABLE reconciliation (
+    account        INTEGER NOT NULL REFERENCES account (id) ON DELETE CASCADE,
+    "transaction"  INTEGER NOT NULL REFERENCES "transaction" (id) ON DELETE CASCADE,
+    PRIMARY KEY (account, "transaction")
+);
+
+CREATE TABLE "goal" (
+    id       INTEGER PRIMARY KEY,
+    budget   INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
+    type     STRING  NOT NULL CHECK (type IN ('monthly', 'save', 'refill')),
+    start    DATE    NOT NULL,
+    "end"    DATE,
+    category INTEGER NOT NULL REFERENCES category (id) ON DELETE CASCADE,
+    amount   INTEGER NOT NULL,
+    UNIQUE (budget, category),
+    CHECK (type IN ('monthly', 'refill') OR "end" IS NOT NULL),
+    CHECK ("end" IS NULL OR "end" >= start)
+);
