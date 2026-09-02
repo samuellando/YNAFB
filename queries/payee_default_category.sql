@@ -19,6 +19,14 @@ UPDATE payee_default_category
 SET payee = ?, other_account = ?, category = ?, income = ?, percent = ?
 WHERE id = ?;
 
+-- name: DeletePayeeDefaultCategory :exec
+DELETE FROM payee_default_category
+WHERE id = ?;
+
+-- name: DeletePayeeDefaultCategoriesByPayee :exec
+DELETE FROM payee_default_category
+WHERE payee = ?;
+
 -- name: ListPayeeDefaultCategoriesByPayee :many
 SELECT
   pdc.id,

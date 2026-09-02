@@ -983,7 +983,7 @@ func TestListCommands(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"budget", "list"}, "NAME         BALANCE  RECONCILED BALANCE\nHome Budget  -35.00   0.00\n"},
+		{[]string{"budget", "list"}, "NAME\nHome Budget\n"},
 		{[]string{"account", "list"}, "NAME      BALANCE  RECONCILED BALANCE\nChecking  -25.00   0.00\nSavings   -10.00   0.00\n"},
 		{[]string{"category", "list"}, "NAME\nGroceries\nHousehold\n"},
 		{[]string{"payee", "list"}, "NAME\nCafe\nMarket\n"},
@@ -1116,7 +1116,7 @@ func TestCascadeDelete(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("budget list failed after delete: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "NAME  BALANCE  RECONCILED BALANCE\n" {
+	if stdout != "NAME\n" {
 		t.Fatalf("expected no budgets after budget delete, got %q", stdout)
 	}
 
@@ -2331,8 +2331,8 @@ func TestGoalMonthlyValue(t *testing.T) {
 		return parsed
 	}
 
-	newGoal := func(type_, start, end string, amount int64) data.ListGoalsByBudgetRow {
-		g := data.ListGoalsByBudgetRow{
+	newGoal := func(type_, start, end string, amount int64) data.ListGoalsRow {
+		g := data.ListGoalsRow{
 			ID:           1,
 			Type:         type_,
 			CategoryID:   1,
@@ -2355,7 +2355,7 @@ func TestGoalMonthlyValue(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		goal  data.ListGoalsByBudgetRow
+		goal  data.ListGoalsRow
 		now   time.Time
 		spend map[int64]map[int64]int64
 		plan  bool
@@ -2370,7 +2370,7 @@ func TestGoalMonthlyValue(t *testing.T) {
 		{"monthly active", newGoal("monthly", "2026-07", "", 5000), mustMonth("2026-08"), nil, false, 5000},
 		{"monthly not started", newGoal("monthly", "2026-09", "", 5000), mustMonth("2026-08"), nil, false, 0},
 		{"monthly ended", newGoal("monthly", "2026-07", "2026-08", 5000), mustMonth("2026-09"), nil, false, 0},
-		{"refill no history", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-08", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), nil, false, 100000},
+		{"refill no history", func() data.ListGoalsRow { g := newGoal("refill", "2026-08", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), nil, false, 100000},
 		{"refill counts prior balance", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, false, 90000},
 		{"refill fully funded", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, false, 0},
 		{"refill subtracts spending", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 4000}}, false, 94000},
@@ -2404,8 +2404,8 @@ func TestGoalWarning(t *testing.T) {
 		return parsed
 	}
 
-	newGoal := func(type_, start, end string, amount int64) data.ListGoalsByBudgetRow {
-		g := data.ListGoalsByBudgetRow{
+	newGoal := func(type_, start, end string, amount int64) data.ListGoalsRow {
+		g := data.ListGoalsRow{
 			ID:           1,
 			Type:         type_,
 			CategoryID:   1,
@@ -2431,7 +2431,7 @@ func TestGoalWarning(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		goal  data.ListGoalsByBudgetRow
+		goal  data.ListGoalsRow
 		now   time.Time
 		spend map[int64]map[int64]int64
 		plan  bool
@@ -2450,7 +2450,7 @@ func TestGoalWarning(t *testing.T) {
 		{"save ended", newGoal("save", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, false, ""},
 		{"refill at target", newGoal("refill", "2026-07", "", 10000), mustMonth("2026-08"), nil, false, ""},
 		{"refill below target", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), nil, false, "needs refill 900.00"},
-		{"refill with spending", func() data.ListGoalsByBudgetRow { g := newGoal("refill", "2026-07", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), map[int64]map[int64]int64{2: {202607: 4000}}, false, "needs refill 40.00"},
+		{"refill with spending", func() data.ListGoalsRow { g := newGoal("refill", "2026-07", "", 100000); g.CategoryID = 2; return g }(), mustMonth("2026-08"), map[int64]map[int64]int64{2: {202607: 4000}}, false, "needs refill 40.00"},
 		{"refill overspent clamps to full", newGoal("refill", "2026-07", "", 100000), mustMonth("2026-08"), map[int64]map[int64]int64{1: {202607: 20000}}, false, "needs refill 1000.00"},
 		{"refill not started", newGoal("refill", "2026-09", "", 100000), mustMonth("2026-08"), nil, false, ""},
 		{"refill ended", newGoal("refill", "2026-07", "2026-08", 100000), mustMonth("2026-09"), nil, false, ""},
@@ -2486,7 +2486,7 @@ func TestCategoryRemaining(t *testing.T) {
 		{ID: 3},
 	}
 
-	allocations := []data.ListAllocationsByBudgetRow{
+	allocations := []data.ListAllocationsRow{
 		{Month: mustMonth("2026-07"), CategoryID: 1, Amount: 40000},
 		{Month: mustMonth("2026-08"), CategoryID: 1, Amount: 10000},
 		{Month: mustMonth("2026-07"), CategoryID: 2, Amount: 10000},

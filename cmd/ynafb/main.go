@@ -173,7 +173,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			return nil
 
 		case "list":
-			budgets, err := queries.ListBudgetBalances(ctx)
+			budgets, err := queries.ListBudgets(ctx)
 			if err != nil {
 				return err
 			}
@@ -249,12 +249,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			goals, err := queries.ListGoalsByBudget(ctx, budget.ID)
+			goals, err := queries.ListGoals(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
 
-			allocations, err := queries.ListAllocationsByBudget(ctx, budget.ID)
+			allocations, err := queries.ListAllocations(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
@@ -373,7 +373,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			accounts, err := queries.ListAccountBalances(ctx, budget.ID)
+			accounts, err := queries.ListAccountsBalances(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
@@ -583,7 +583,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			allocations, err := queries.ListAllocationsByBudget(ctx, budget.ID)
+			allocations, err := queries.ListAllocations(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
@@ -754,12 +754,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			categories, err := queries.ListCategoriesByBudget(ctx, budget.ID)
+			categories, err := queries.ListCategories(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
 
-			return printNames(stdout, categories, func(c data.ListCategoriesByBudgetRow) string { return stringValue(c.Name) })
+			return printNames(stdout, categories, func(c data.ListCategoriesRow) string { return stringValue(c.Name) })
 
 		case "delete":
 			if len(args) != 1 {
@@ -845,7 +845,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			groups, err := queries.ListCategoryGroupsByBudget(ctx, budget.ID)
+			groups, err := queries.ListCategoryGroups(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
@@ -1005,12 +1005,12 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			goals, err := queries.ListGoalsByBudget(ctx, budget.ID)
+			goals, err := queries.ListGoals(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
 
-			allocations, err := queries.ListAllocationsByBudget(ctx, budget.ID)
+			allocations, err := queries.ListAllocations(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
@@ -1120,7 +1120,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			payees, err := queries.ListPayeesByBudget(ctx, budget.ID)
+			payees, err := queries.ListPayees(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
@@ -1396,7 +1396,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			transactions, err := queries.ListTransactionsByBudget(ctx, budget.ID)
+			transactions, err := queries.ListTransactions(ctx, budget.ID)
 			if err != nil {
 				return err
 			}
@@ -2694,7 +2694,7 @@ func printBudgetMonthSummary(w io.Writer, available, income, goals, allocated, s
 	return nil
 }
 
-func budgetMonthGoalTotal(goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, plan bool) int64 {
+func budgetMonthGoalTotal(goals []data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, plan bool) int64 {
 	var total int64
 	for _, g := range goals {
 		if goalActiveInMonth(g, month) {
@@ -2723,7 +2723,7 @@ func remainingAllocations(remaining map[int64]int64) int64 {
 	return total
 }
 
-func categoryRemaining(rows []data.ListBudgetMonthCategoriesRow, allocations []data.ListAllocationsByBudgetRow, spending []data.ListCategoryMonthlySpendingByBudgetRow, month, end time.Time, plan bool) map[int64]int64 {
+func categoryRemaining(rows []data.ListBudgetMonthCategoriesRow, allocations []data.ListAllocationsRow, spending []data.ListCategoryMonthlySpendingByBudgetRow, month, end time.Time, plan bool) map[int64]int64 {
 	target := int64(month.Year())*100 + int64(month.Month())
 
 	type monthly struct {
@@ -2799,8 +2799,8 @@ func categoryRemaining(rows []data.ListBudgetMonthCategoriesRow, allocations []d
 
 const ungroupedLabel = "No group"
 
-func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, remaining map[int64]int64, plan bool) error {
-	goalsByCategory := make(map[int64]data.ListGoalsByBudgetRow)
+func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategoriesRow, goals []data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, remaining map[int64]int64, plan bool) error {
+	goalsByCategory := make(map[int64]data.ListGoalsRow)
 	for _, g := range goals {
 		goalsByCategory[g.CategoryID] = g
 	}
@@ -2866,13 +2866,13 @@ func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategori
 	return nil
 }
 
-func printBudgets(w io.Writer, budgets []data.ListBudgetBalancesRow) error {
+func printBudgets(w io.Writer, budgets []data.Budget) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "NAME\tBALANCE\tRECONCILED BALANCE"); err != nil {
+	if _, err := fmt.Fprintln(tw, "NAME"); err != nil {
 		return err
 	}
 	for _, b := range budgets {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", stringValue(b.Name), formatCents(b.Balance), formatCents(b.ReconciledBalance)); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\n", stringValue(b.Name)); err != nil {
 			return err
 		}
 	}
@@ -2892,7 +2892,7 @@ func printNames[T any](w io.Writer, rows []T, name func(T) string) error {
 	return tw.Flush()
 }
 
-func printAccountBalances(w io.Writer, accounts []data.ListAccountBalancesRow) error {
+func printAccountBalances(w io.Writer, accounts []data.ListAccountsBalancesRow) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "NAME\tBALANCE\tRECONCILED BALANCE"); err != nil {
 		return err
@@ -2905,7 +2905,7 @@ func printAccountBalances(w io.Writer, accounts []data.ListAccountBalancesRow) e
 	return tw.Flush()
 }
 
-func printAllocations(w io.Writer, allocations []data.ListAllocationsByBudgetRow) error {
+func printAllocations(w io.Writer, allocations []data.ListAllocationsRow) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "MONTH\tCATEGORY\tAMOUNT"); err != nil {
 		return err
@@ -2918,7 +2918,7 @@ func printAllocations(w io.Writer, allocations []data.ListAllocationsByBudgetRow
 	return tw.Flush()
 }
 
-func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, now time.Time) error {
+func printGoals(w io.Writer, goals []data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, now time.Time) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "TYPE\tCATEGORY\tSTART\tEND\tAMOUNT\tMONTHLY"); err != nil {
 		return err
@@ -2944,7 +2944,7 @@ func printGoals(w io.Writer, goals []data.ListGoalsByBudgetRow, allocations map[
 	return tw.Flush()
 }
 
-func buildCategoryAllocations(rows []data.ListAllocationsByBudgetRow) map[int64]map[time.Time]int64 {
+func buildCategoryAllocations(rows []data.ListAllocationsRow) map[int64]map[time.Time]int64 {
 	byCategory := make(map[int64]map[time.Time]int64)
 	for _, r := range rows {
 		if byCategory[r.CategoryID] == nil {
@@ -2984,7 +2984,7 @@ func validGoalType(t string) bool {
 	return t == "monthly" || t == "save" || t == "refill"
 }
 
-func goalActiveInMonth(g data.ListGoalsByBudgetRow, month time.Time) bool {
+func goalActiveInMonth(g data.ListGoalsRow, month time.Time) bool {
 	if month.Before(g.Start) {
 		return false
 	}
@@ -2994,7 +2994,7 @@ func goalActiveInMonth(g data.ListGoalsByBudgetRow, month time.Time) bool {
 	return true
 }
 
-func goalMonthlyValue(g data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, plan bool) int64 {
+func goalMonthlyValue(g data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, plan bool) int64 {
 	if !goalActiveInMonth(g, month) {
 		return 0
 	}
@@ -3033,7 +3033,7 @@ func goalMonthlyValue(g data.ListGoalsByBudgetRow, allocations map[int64]map[tim
 	return g.Amount
 }
 
-func goalWarning(g data.ListGoalsByBudgetRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, plan bool) string {
+func goalWarning(g data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time, plan bool) string {
 	if !goalActiveInMonth(g, month) {
 		return ""
 	}
@@ -3121,7 +3121,7 @@ func categoryAvailableBeforeMonthPlan(allocations map[int64]map[time.Time]int64,
 	return categoryAvailableBeforeMonth(allocations, spending, category, month)
 }
 
-func printTransactionsByBudget(w io.Writer, transactions []data.ListTransactionsByBudgetRow) error {
+func printTransactionsByBudget(w io.Writer, transactions []data.ListTransactionsRow) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "ID\tDATE\tACCOUNT\tPAYEE\tOUTFLOW\tINFLOW\tNOTE"); err != nil {
 		return err

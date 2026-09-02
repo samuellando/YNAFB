@@ -11,6 +11,10 @@ UPDATE budget
 SET name = ?
 WHERE id = ?;
 
+-- name: DeleteBudget :exec
+DELETE FROM budget
+WHERE id = ?;
+
 -- name: ListAllocationMonthsByBudget :many
 SELECT DISTINCT month
 FROM allocation

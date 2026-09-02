@@ -21,6 +21,10 @@ UPDATE "transaction"
 SET date = ?, account = ?, payee = ?, total_outflow = ?, total_inflow = ?, note = ?
 WHERE id = ?;
 
+-- name: DeleteTransaction :exec
+DELETE FROM "transaction"
+WHERE id = ?;
+
 -- name: ListAccountTransactions :many
 SELECT
   t.id,
@@ -51,3 +55,18 @@ LEFT JOIN account AS ao ON ao.id = ts.other_account
 LEFT JOIN category AS c ON c.id = ts.category
 WHERE t.account = @account OR ts.other_account = @other_account
 ORDER BY t.date DESC, payee ASC, t.id ASC, ts.id ASC;
+
+-- name: ListTransactions :many
+SELECT
+  t.id,
+  t.date,
+  a.name AS account_name,
+  p.name AS payee_name,
+  t.total_outflow,
+  t.total_inflow,
+  t.note
+FROM "transaction" AS t
+JOIN account AS a ON a.id = t.account
+JOIN payee AS p ON p.id = t.payee
+WHERE a.budget = ?
+ORDER BY t.date DESC, t.id DESC;

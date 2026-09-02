@@ -15,6 +15,16 @@ UPDATE category
 SET name = ?, category_group = ?
 WHERE id = ?;
 
+-- name: DeleteCategory :exec
+DELETE FROM category
+WHERE id = ?;
+
+-- name: ListCategories :many
+SELECT id, budget, name
+FROM category
+WHERE budget = ?
+ORDER BY name;
+
 -- name: CreateCategoryGroup :one
 INSERT INTO category_group (
   budget,
@@ -40,3 +50,13 @@ INSERT INTO category_group (
 )
 ON CONFLICT (budget, name) DO UPDATE SET name = excluded.name
 RETURNING id;
+
+-- name: DeleteCategoryGroup :exec
+DELETE FROM category_group
+WHERE id = ?;
+
+-- name: ListCategoryGroups :many
+SELECT id, budget, name
+FROM category_group
+WHERE budget = ?
+ORDER BY name;
