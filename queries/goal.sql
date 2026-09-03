@@ -38,3 +38,8 @@ FROM goal AS g
 JOIN category AS c ON c.id = g.category
 WHERE g.budget = ?
 ORDER BY c.name;
+
+-- name: GetGoalByCategory :one
+SELECT id, budget, type, start, "end", category, amount
+FROM goal
+WHERE budget = ? AND category = ?;

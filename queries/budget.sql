@@ -15,43 +15,42 @@ WHERE id = ?;
 DELETE FROM budget
 WHERE id = ?;
 
--- name: ListAllocationMonthsByBudget :many
-SELECT DISTINCT month
-FROM allocation
-WHERE budget = ?
+-- name: ListBudgets :many
+SELECT id, name
+FROM budget
+ORDER BY id;
+
+-- name: GetBudgetByName :one
+SELECT id, name
+FROM budget
+WHERE name = ?;
+
+-- name: ListBudgetActivityMonths :many
+SELECT DISTINCT
+  CAST(unixepoch(date(t.date, 'unixepoch', 'start of month')) AS UNIX_EPOCH_INTEGER) as month
+FROM "transaction" as t
+JOIN account as acc ON t.account = acc.id
+WHERE acc.budget = @budget
+UNION
+SELECT DISTINCT
+  CAST(unixepoch(date(a.month, 'unixepoch', 'start of month')) AS UNIX_EPOCH_INTEGER) as month
+FROM allocation as a
+WHERE a.budget = @budget
 ORDER BY month;
 
--- name: ListTransactionDatesByBudget :many
-SELECT t.date
-FROM "transaction" AS t
-JOIN account AS a ON a.id = t.account
-WHERE a.budget = ?;
-
 -- name: ListBudgetMonthCategories :many
-SELECT
+SELECT 
   c.id,
-  c.name,
-  g.name,
-  COALESCE(a.amount, 0) AS allocated,
-  CAST(COALESCE(s.spent, 0) AS INTEGER) AS spent
+  c.name AS category_name,
+  cg.name AS category_gorup_name,
+  COALESCE(allocated, 0) AS allocated,
+  COALESCE(spent, 0) AS spend,
+  COALESCE(available, 0) AS available
 FROM category AS c
-LEFT JOIN category_group AS g ON c.category_group = g.id
-LEFT JOIN allocation AS a
-  ON a.category = c.id
- AND a.budget = @budget
- AND a.month >= @start AND a.month < @end
-LEFT JOIN (
-  SELECT
-    ts.category,
-    SUM(ts.outflow - ts.inflow) AS spent
-  FROM transaction_category AS ts
-  JOIN "transaction" AS t ON t.id = ts."transaction"
-  WHERE t.date >= @start AND t.date < @end
-    AND ts.category IS NOT NULL
-  GROUP BY ts.category
-) AS s ON s.category = c.id
-WHERE c.budget = @budget
-ORDER BY g.name, c.name;
+LEFT JOIN category_group AS cg ON c.category_group = cg.id
+LEFT JOIN budget_month_categories AS bmc ON bmc.category_id = c.id AND bmc.month = @month
+WHERE c.budget = @budget 
+ORDER BY gc.name, c.name;
 
 -- name: ListCategoryMonthlySpendingByBudget :many
 SELECT

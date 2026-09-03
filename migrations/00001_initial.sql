@@ -50,7 +50,8 @@ CREATE TABLE "transaction_category" (
 CREATE TABLE category (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name TEXT NOT NULL, category_group INTEGER REFERENCES category_group (id) ON DELETE SET NULL,
+    name TEXT NOT NULL, 
+    category_group INTEGER REFERENCES category_group (id) ON DELETE SET NULL,
     UNIQUE (budget, name),
     CHECK (name IS NOT 'income')
 );

@@ -23,6 +23,11 @@ FROM account
 WHERE budget = ?
 ORDER BY name;
 
+-- name: GetAccountByName :one
+SELECT id, budget, name
+FROM account
+WHERE budget = ? AND name = ?;
+
 -- name: ListAccountsBalances :many
 SELECT
    a.id,

@@ -222,17 +222,13 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			if len(positional) == 1 {
-				allocMonths, err := queries.ListAllocationMonthsByBudget(ctx, budget.ID)
+				allocMonths, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
 				if err != nil {
 					return err
 				}
+				fmt.Println(allocMonths)
 
-				txDates, err := queries.ListTransactionDatesByBudget(ctx, budget.ID)
-				if err != nil {
-					return err
-				}
-
-				return printBudgetMonths(stdout, distinctBudgetMonths(allocMonths, txDates))
+				return printBudgetMonths(stdout, allocMonths)
 			}
 
 			month, err := parseMonth("month", positional[1])
@@ -2642,30 +2638,13 @@ func printCreated(w io.Writer, resource string, id int64) {
 	fmt.Fprintf(w, "created %s %d\n", resource, id)
 }
 
-func distinctBudgetMonths(allocMonths []types.UnixTime, txDates []types.UnixTime) []string {
-	seen := make(map[string]struct{})
-	for _, m := range allocMonths {
-		seen[m.Format("2006-01")] = struct{}{}
-	}
-	for _, d := range txDates {
-		seen[d.Format("2006-01")] = struct{}{}
-	}
-
-	months := make([]string, 0, len(seen))
-	for m := range seen {
-		months = append(months, m)
-	}
-	sort.Strings(months)
-	return months
-}
-
-func printBudgetMonths(w io.Writer, months []string) error {
+func printBudgetMonths(w io.Writer, months []types.UnixTime) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "MONTH"); err != nil {
 		return err
 	}
 	for _, m := range months {
-		if _, err := fmt.Fprintf(tw, "%s\n", m); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\n", m.Time.Format("2006-01")); err != nil {
 			return err
 		}
 	}

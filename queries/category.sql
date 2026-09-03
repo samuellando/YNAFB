@@ -25,6 +25,11 @@ FROM category
 WHERE budget = ?
 ORDER BY name;
 
+-- name: GetCategoryByName :one
+SELECT id, budget, name
+FROM category
+WHERE budget = ? AND name = ?;
+
 -- name: CreateCategoryGroup :one
 INSERT INTO category_group (
   budget,
@@ -60,3 +65,8 @@ SELECT id, budget, name
 FROM category_group
 WHERE budget = ?
 ORDER BY name;
+
+-- name: GetCategoryGroupByName :one
+SELECT id, budget, name
+FROM category_group
+WHERE budget = ? AND name = ?;

@@ -22,3 +22,8 @@ SELECT id, budget, name
 FROM payee
 WHERE budget = ?
 ORDER BY name;
+
+-- name: GetPayeeByName :one
+SELECT id, budget, name
+FROM payee
+WHERE budget = ? AND name = ?;
