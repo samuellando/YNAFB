@@ -239,8 +239,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
 				Budget: budget.ID,
-				Start:  types.UnixTime{Time: month},
-				End:    types.UnixTime{Time: end},
+				Month:  types.UnixTime{Time: month},
 			})
 			if err != nil {
 				return err
@@ -264,33 +263,15 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			netWorth, err := queries.GetBudgetBalanceAsOf(ctx, data.GetBudgetBalanceAsOfParams{
-				Budget: budget.ID,
-				End:    types.UnixTime{Time: end},
-			})
-			if err != nil {
-				return err
-			}
-
-			uncategorized, err := queries.GetUncategorizedAmountByBudget(ctx, data.GetUncategorizedAmountByBudgetParams{
-				Budget: budget.ID,
-				End:    types.UnixTime{Time: end},
-			})
-			if err != nil {
-				return err
-			}
-
-			income, err := queries.GetIncomeByBudgetMonth(ctx, data.GetIncomeByBudgetMonthParams{
-				Budget: budget.ID,
-				Start:  types.UnixTime{Time: month},
-				End:    types.UnixTime{Time: end},
-			})
+			summary, err := queries.GetBudgetMonthSummary(ctx, types.UnixTime{Time: month})
 			if err != nil {
 				return err
 			}
 
 			remaining := categoryRemaining(rows, allocations, spending, month, end, plan)
 			allocated, spent, remainingTotal := budgetMonthTotals(rows, remaining)
+			income := summaryInt64(summary.Income)
+			uncategorized := summaryInt64(summary.Uncategorized)
 			if plan {
 				spent = 0
 				income = 0
@@ -300,7 +281,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			spendingMap := buildCategorySpending(spending)
 			goalsTotal := budgetMonthGoalTotal(goals, allocMap, spendingMap, month, plan)
 
-			if err := printBudgetMonthSummary(stdout, netWorth-remainingAllocations(remaining), income, goalsTotal, allocated, spent, remainingTotal, uncategorized); err != nil {
+			if err := printBudgetMonthSummary(stdout, summaryInt64(summary.ReadyToAssign), income, goalsTotal, allocated, spent, remainingTotal, uncategorized); err != nil {
 				return err
 			}
 
@@ -2692,20 +2673,27 @@ func budgetMonthGoalTotal(goals []data.ListGoalsRow, allocations map[int64]map[t
 func budgetMonthTotals(rows []data.ListBudgetMonthCategoriesRow, remaining map[int64]int64) (allocated, spent, remainingTotal int64) {
 	for _, r := range rows {
 		allocated += r.Allocated
-		spent += r.Spent
+		spent += r.Spend
 		remainingTotal += remaining[r.ID]
 	}
 	return allocated, spent, remainingTotal
 }
 
-func remainingAllocations(remaining map[int64]int64) int64 {
-	var total int64
-	for _, rem := range remaining {
-		if rem > 0 {
-			total += rem
+func summaryInt64(value interface{}) int64 {
+	switch n := value.(type) {
+	case int64:
+		return n
+	case float64:
+		return int64(n)
+	case []byte:
+		i, err := strconv.ParseInt(string(n), 10, 64)
+		if err != nil {
+			return 0
 		}
+		return i
+	default:
+		return 0
 	}
-	return total
 }
 
 func categoryRemaining(rows []data.ListBudgetMonthCategoriesRow, allocations []data.ListAllocationsRow, spending []data.ListCategoryMonthlySpendingByBudgetRow, month, end time.Time, plan bool) map[int64]int64 {
@@ -2792,7 +2780,7 @@ func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategori
 
 	groups := make(map[string][]data.ListBudgetMonthCategoriesRow)
 	for _, r := range rows {
-		name := stringValue(r.Name_2)
+		name := stringValue(r.CategoryGorupName)
 		if name == "" {
 			name = ungroupedLabel
 		}
@@ -2827,7 +2815,7 @@ func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategori
 		for _, r := range groups[name] {
 			goal := ""
 			warning := ""
-			spent := r.Spent
+			spent := r.Spend
 			if g, ok := goalsByCategory[r.ID]; ok && goalActiveInMonth(g, month) {
 				goal = formatCents(goalMonthlyValue(g, allocations, spending, month, plan))
 				warning = goalWarning(g, allocations, spending, month, plan)
@@ -2835,7 +2823,7 @@ func printBudgetMonthCategories(w io.Writer, rows []data.ListBudgetMonthCategori
 			if plan {
 				spent = 0
 			}
-			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", stringValue(r.Name), goal, formatCents(r.Allocated), formatCents(spent), formatCents(remaining[r.ID]), warning); err != nil {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", stringValue(r.CategoryName), goal, formatCents(r.Allocated), formatCents(spent), formatCents(remaining[r.ID]), warning); err != nil {
 				return err
 			}
 		}

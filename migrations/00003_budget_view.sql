@@ -74,7 +74,7 @@ SELECT
      COALESCE((
       SELECT sum(total_inflow - total_outflow) 
       FROM "transaction"
-      WHERE  date >= month_start AND date < month_end
+      WHERE  date < month_end
      ), 0)
      - COALESCE((
       SELECT sum(available) 

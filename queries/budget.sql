@@ -50,7 +50,7 @@ FROM category AS c
 LEFT JOIN category_group AS cg ON c.category_group = cg.id
 LEFT JOIN budget_month_categories AS bmc ON bmc.category_id = c.id AND bmc.month = @month
 WHERE c.budget = @budget 
-ORDER BY gc.name, c.name;
+ORDER BY cg.name, c.name;
 
 -- name: ListCategoryMonthlySpendingByBudget :many
 SELECT
@@ -66,23 +66,23 @@ GROUP BY ts.category, month;
 
 -- name: GetBudgetMonthSummary :one
 SELECT
-  COALESCE(ready_to_assign, (
-    SELECT ready_to_assign 
-    FROM budget_month_summary AS bms
-    WHERE bms.month < @month
-    ORDER BY bms.month desc
+  COALESCE(bms.ready_to_assign, (
+    SELECT prev.ready_to_assign
+    FROM budget_month_summary AS prev
+    WHERE prev.month < @month
+    ORDER BY prev.month desc
     LIMIT 1
   ) , 0) AS ready_to_assign,
-  COALESCE(income, 0) AS income,
-  COALESCE(allocated, 0) AS allocated,
-  COALESCE(spent, 0) AS spent,
-  COALESCE(available, (
-    SELECT available 
-    FROM budget_month_summary AS bms
-    WHERE bms.month < @month
-    ORDER BY bms.month desc
+  COALESCE(bms.income, 0) AS income,
+  COALESCE(bms.allocated, 0) AS allocated,
+  COALESCE(bms.spent, 0) AS spent,
+  COALESCE(bms.available, (
+    SELECT prev.available
+    FROM budget_month_summary AS prev
+    WHERE prev.month < @month
+    ORDER BY prev.month desc
     LIMIT 1
   ) , 0) AS available,
-  COALESCE(uncategorized, 0) AS uncategorized
-FROM budget_month_summary
-WHERE month = @month;
+  COALESCE(bms.uncategorized, 0) AS uncategorized
+FROM (SELECT @month AS month) AS requested
+LEFT JOIN budget_month_summary AS bms ON bms.month = requested.month;
