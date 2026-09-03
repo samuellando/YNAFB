@@ -48,6 +48,76 @@ FROM one
 GROUP BY month, category_id
 ORDER BY month, category_id;
 
+CREATE VIEW budget_month_summary AS
+WITH months AS (
+  SELECT DISTINCT 
+    CAST(unixepoch(date(month, 'unixepoch', 'start of month')) AS UNIX_EPOCH_INTEGER) AS month_start,
+    CAST(unixepoch(date(month, 'unixepoch', 'start of month', '+1 month')) AS UNIX_EPOCH_INTEGER) AS month_end
+  FROM allocation
+  UNION
+  SELECT DISTINCT 
+    CAST(unixepoch(date(t.date, 'unixepoch', 'start of month')) AS UNIX_EPOCH_INTEGER) AS month_start,
+    CAST(unixepoch(date(t.date, 'unixepoch', 'start of month', '+1 month')) AS UNIX_EPOCH_INTEGER) AS month_end
+  FROM "transaction" AS t
+),
+income AS (
+    SELECT
+        t.date,
+        tc.inflow AS net_inflow
+    FROM transaction_category AS tc
+    JOIN "transaction" AS t ON tc."transaction" = t.id
+    WHERE tc.income
+)
+SELECT
+   month_start AS month,
+   (
+     COALESCE((
+      SELECT sum(total_inflow - total_outflow) 
+      FROM "transaction"
+      WHERE  date >= month_start AND date < month_end
+     ), 0)
+     - COALESCE((
+      SELECT sum(available) 
+      FROM budget_month_categories 
+      WHERE month = month_start
+     ), 0)
+   ) AS ready_to_assign,
+   COALESCE((
+    SELECT sum(net_inflow)
+    FROM income 
+    WHERE date >= month_start AND date < month_end
+   ), 0) AS income,
+   COALESCE((
+    SELECT sum(allocated) 
+    FROM budget_month_categories 
+    WHERE month = month_start
+   ), 0) AS allocated,
+   COALESCE((
+    SELECT sum(spent) 
+    FROM budget_month_categories 
+    WHERE month = month_start
+   ), 0) AS spent,
+   COALESCE((
+    SELECT sum(available) 
+    FROM budget_month_categories 
+    WHERE month = month_start
+   ), 0) AS available,
+   (
+    COALESCE((
+      SELECT sum(total_inflow + total_outflow) 
+      FROM "transaction"
+      WHERE date >= month_start AND date < month_end
+      ), 0) -
+    COALESCE((
+      SELECT sum(inflow + outflow) 
+      FROM transaction_category AS tc
+      JOIN  "transaction" AS t ON tc."transaction" = t.id
+      WHERE t.date >= month_start AND t.date < month_end
+      ), 0)
+   ) AS uncategorized
+FROM months;
+
 -- +goose down
 
 DROP VIEW budget_month_categories;
+DROP VIEW budget_month_summary;
