@@ -8,4 +8,14 @@ sql:
         package: "data"
         out: "data"
         sql_package: "database/sql"
+        overrides:
+          - db_type: "UNIX_EPOCH_INTEGER"
+            go_type:
+              import: "samuellando.com/YNAFB/internal/db/types"
+              type: "UnixTime"
+          - db_type: "UNIX_EPOCH_INTEGER"
+            nullable: true
+            go_type:
+              import: "samuellando.com/YNAFB/internal/db/types"
+              type: "NullUnixTime"
 

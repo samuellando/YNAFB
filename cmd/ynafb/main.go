@@ -18,6 +18,7 @@ import (
 
 	"samuellando.com/YNAFB/data"
 	dbutil "samuellando.com/YNAFB/internal/db"
+	"samuellando.com/YNAFB/internal/db/types"
 	"samuellando.com/YNAFB/internal/importer"
 )
 
@@ -242,8 +243,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
 				Budget: budget.ID,
-				Start:  month,
-				End:    end,
+				Start:  types.UnixTime{Time: month},
+				End:    types.UnixTime{Time: end},
 			})
 			if err != nil {
 				return err
@@ -261,7 +262,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			spending, err := queries.ListCategoryMonthlySpendingByBudget(ctx, data.ListCategoryMonthlySpendingByBudgetParams{
 				Budget: budget.ID,
-				End:    end,
+				End:    types.UnixTime{Time: end},
 			})
 			if err != nil {
 				return err
@@ -269,7 +270,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			netWorth, err := queries.GetBudgetBalanceAsOf(ctx, data.GetBudgetBalanceAsOfParams{
 				Budget: budget.ID,
-				End:    end,
+				End:    types.UnixTime{Time: end},
 			})
 			if err != nil {
 				return err
@@ -277,7 +278,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			uncategorized, err := queries.GetUncategorizedAmountByBudget(ctx, data.GetUncategorizedAmountByBudgetParams{
 				Budget: budget.ID,
-				End:    end,
+				End:    types.UnixTime{Time: end},
 			})
 			if err != nil {
 				return err
@@ -285,8 +286,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			income, err := queries.GetIncomeByBudgetMonth(ctx, data.GetIncomeByBudgetMonthParams{
 				Budget: budget.ID,
-				Start:  month,
-				End:    end,
+				Start:  types.UnixTime{Time: month},
+				End:    types.UnixTime{Time: end},
 			})
 			if err != nil {
 				return err
@@ -426,10 +427,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			transactions, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
-				Account:      accountID,
-				OtherAccount: sql.NullInt64{Int64: accountID, Valid: true},
-			})
+			transactions, err := queries.ListAccountTransactions(ctx, accountID)
 			if err != nil {
 				return err
 			}
@@ -526,7 +524,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			result, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
 				Budget:   budget.ID,
 				Category: category,
-				Month:    month,
+				Month:    types.UnixTime{Time: month},
 				Amount:   amount,
 			})
 			if err != nil {
@@ -565,7 +563,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				Amount:   amount,
 				Budget:   budget.ID,
 				Category: category,
-				Month:    month,
+				Month:    types.UnixTime{Time: month},
 			})
 			if err != nil {
 				return err
@@ -613,7 +611,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err := queries.DeleteAllocationByCategoryAndMonth(ctx, data.DeleteAllocationByCategoryAndMonthParams{
 				Budget:   budget.ID,
 				Category: category,
-				Month:    month,
+				Month:    types.UnixTime{Time: month},
 			}); err != nil {
 				return err
 			}
@@ -926,8 +924,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			result, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 				Budget:   budget.ID,
 				Type:     goalType,
-				Start:    start,
-				End:      end,
+				Start:    types.UnixTime{Time: start},
+				End:      types.NullUnixTime{Time: end.Time, Valid: end.Valid},
 				Category: category,
 				Amount:   amount,
 			})
@@ -983,8 +981,8 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			rows, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
 				Type:     goalType,
-				Start:    start,
-				End:      end,
+				Start:    types.UnixTime{Time: start},
+				End:      types.NullUnixTime{Time: end.Time, Valid: end.Valid},
 				Amount:   amount,
 				Budget:   budget.ID,
 				Category: category,
@@ -1017,7 +1015,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			spending, err := queries.ListCategoryMonthlySpendingByBudget(ctx, data.ListCategoryMonthlySpendingByBudgetParams{
 				Budget: budget.ID,
-				End:    monthStart(time.Now()).AddDate(0, 1, 0),
+				End:    types.UnixTime{Time: monthStart(time.Now()).AddDate(0, 1, 0)},
 			})
 			if err != nil {
 				return err
@@ -1317,7 +1315,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			result, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-				Date:         date,
+				Date:         types.UnixTime{Time: date},
 				Account:      account,
 				Payee:        payee,
 				TotalOutflow: totalOutflow,
@@ -1372,7 +1370,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			rows, err := queries.UpdateTransaction(ctx, data.UpdateTransactionParams{
-				Date:         date,
+				Date:         types.UnixTime{Time: date},
 				Account:      account,
 				Payee:        payee,
 				TotalOutflow: totalOutflow,
@@ -1827,7 +1825,7 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 		}
 
 		_, err = txQueries.CreateTransaction(ctx, data.CreateTransactionParams{
-			Date:         entry.TransDate,
+			Date:         types.UnixTime{Time: entry.TransDate},
 			Account:      accountID,
 			Payee:        payeeID,
 			TotalOutflow: entry.Outflow,
@@ -1850,7 +1848,7 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 func reconcileAccount(ctx context.Context, queries *data.Queries, budget budgetContext, accountID int64, accountName string, date time.Time, stdin io.Reader, stdout io.Writer) error {
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: accountID,
-		Date:      date,
+		Date:      types.UnixTime{Time: date},
 	})
 	if err != nil {
 		return err
@@ -1883,7 +1881,7 @@ func reconcileAccount(ctx context.Context, queries *data.Queries, budget budgetC
 
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: accountID,
-		Date:      date,
+		Date:      types.UnixTime{Time: date},
 	})
 	if err != nil {
 		return err
@@ -1917,10 +1915,7 @@ type categorizeRow struct {
 }
 
 func categorizeAccount(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, accountID int64, accountName string, stdin io.Reader, stdout io.Writer) error {
-	transactions, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
-		Account:      accountID,
-		OtherAccount: sql.NullInt64{Int64: accountID, Valid: true},
-	})
+	transactions, err := queries.ListAccountTransactions(ctx, accountID)
 	if err != nil {
 		return err
 	}
@@ -2032,10 +2027,10 @@ func categorizeQueue(accountID int64, transactions []data.ListAccountTransaction
 			t := rows[0]
 			queue = append(queue, categorizeTransaction{
 				ID:                     t.ID,
-				Date:                   t.Date,
-				TransactionAccount:     t.TransactionAccount,
-				TransactionAccountName: stringValue(t.TransactionAccountName),
-				PayeeName:              stringValue(t.PayeeName),
+				Date:                   t.Date.Time,
+				TransactionAccount:     t.Account.ID,
+				TransactionAccountName: stringValue(t.Account.Name),
+				PayeeName:              stringValue(t.Payee.Name),
 				TotalOutflow:           t.TotalOutflow,
 				TotalInflow:            t.TotalInflow,
 				Reconciled:             t.Reconciled,
@@ -2050,13 +2045,18 @@ func categorizeQueue(accountID int64, transactions []data.ListAccountTransaction
 }
 
 func categorizeNeedsAttention(accountID int64, rows []data.ListAccountTransactionsRow) bool {
-	if rows[0].TransactionAccount != accountID {
+	if rows[0].Account.ID != accountID {
+		return false
+	}
+
+	// Incoming mirrored transfers are already categorized on the source side.
+	if rows[0].SourceAccountID.Valid {
 		return false
 	}
 
 	var out, in int64
 	for _, r := range rows {
-		if r.CategoryID.Valid {
+		if r.CategoryID.Valid || r.ToAccountID.Valid || r.Income {
 			out += nullableInt64Value(r.Outflow)
 			in += nullableInt64Value(r.Inflow)
 		}
@@ -2077,16 +2077,16 @@ func loadCategorizations(rows []data.ListAccountTransactionsRow) []categorizeRow
 			outflow: nullableInt64Value(r.Outflow),
 			inflow:  nullableInt64Value(r.Inflow),
 		}
-		if r.OtherAccount.Valid {
+		if r.SourceAccountID.Valid {
 			row.transfer = true
-			row.targetID = r.OtherAccount.Int64
-			row.targetName = stringValue(r.OtherAccountName)
+			row.targetID = r.SourceAccountID.Int64
+			row.targetName = stringValue(r.SourceAccountName)
 		} else if r.Income {
 			row.income = true
 			row.targetName = "Income"
 		} else {
 			row.transfer = false
-			row.targetID = r.Category.Int64
+			row.targetID = r.CategoryID.Int64
 			row.targetName = stringValue(r.CategoryName)
 		}
 		working = append(working, row)
@@ -2176,16 +2176,22 @@ func printCategorizeTransaction(stdout io.Writer, accountID int64, tx categorize
 }
 
 func synthesizeRows(tx categorizeTransaction, working []categorizeRow) []data.ListAccountTransactionsRow {
+	payee := data.Payee{
+		Name: tx.PayeeName,
+	}
+	account := data.Account{
+		Name: tx.TransactionAccountName,
+		ID:   tx.TransactionAccount,
+	}
 	base := data.ListAccountTransactionsRow{
-		ID:                     tx.ID,
-		Date:                   tx.Date,
-		TransactionAccount:     tx.TransactionAccount,
-		TransactionAccountName: tx.TransactionAccountName,
-		PayeeName:              tx.PayeeName,
-		TotalOutflow:           tx.TotalOutflow,
-		TotalInflow:            tx.TotalInflow,
-		Reconciled:             tx.Reconciled,
-		Note:                   tx.Note,
+		ID:           tx.ID,
+		Date:         types.UnixTime{Time: tx.Date},
+		Account:      account,
+		Payee:        payee,
+		TotalOutflow: tx.TotalOutflow,
+		TotalInflow:  tx.TotalInflow,
+		Reconciled:   tx.Reconciled,
+		Note:         tx.Note,
 	}
 
 	if len(working) == 0 {
@@ -2199,13 +2205,13 @@ func synthesizeRows(tx categorizeTransaction, working []categorizeRow) []data.Li
 		r.Outflow = sql.NullInt64{Int64: row.outflow, Valid: true}
 		r.Inflow = sql.NullInt64{Int64: row.inflow, Valid: true}
 		if row.transfer {
-			r.OtherAccount = sql.NullInt64{Int64: row.targetID, Valid: true}
-			r.OtherAccountName = row.targetName
+			r.ToAccountID = sql.NullInt64{Int64: row.targetID, Valid: true}
+			r.ToAccountName = sql.NullString{String: row.targetName, Valid: true}
 		} else if row.income {
 			r.Income = true
 		} else {
-			r.Category = sql.NullInt64{Int64: row.targetID, Valid: true}
-			r.CategoryName = row.targetName
+			r.CategoryID = sql.NullInt64{Int64: row.targetID, Valid: true}
+			r.CategoryName = sql.NullString{String: row.targetName, Valid: true}
 		}
 		rows = append(rows, r)
 	}
@@ -2636,7 +2642,7 @@ func printCreated(w io.Writer, resource string, id int64) {
 	fmt.Fprintf(w, "created %s %d\n", resource, id)
 }
 
-func distinctBudgetMonths(allocMonths []time.Time, txDates []time.Time) []string {
+func distinctBudgetMonths(allocMonths []types.UnixTime, txDates []types.UnixTime) []string {
 	seen := make(map[string]struct{})
 	for _, m := range allocMonths {
 		seen[m.Format("2006-01")] = struct{}{}
@@ -2950,7 +2956,7 @@ func buildCategoryAllocations(rows []data.ListAllocationsRow) map[int64]map[time
 		if byCategory[r.CategoryID] == nil {
 			byCategory[r.CategoryID] = make(map[time.Time]int64)
 		}
-		byCategory[r.CategoryID][r.Month] = r.Amount
+		byCategory[r.CategoryID][r.Month.Time] = r.Amount
 	}
 	return byCategory
 }
@@ -2985,7 +2991,7 @@ func validGoalType(t string) bool {
 }
 
 func goalActiveInMonth(g data.ListGoalsRow, month time.Time) bool {
-	if month.Before(g.Start) {
+	if month.Before(g.Start.Time) {
 		return false
 	}
 	if g.End.Valid && g.End.Time.Before(month) {
@@ -3013,7 +3019,7 @@ func goalMonthlyValue(g data.ListGoalsRow, allocations map[int64]map[time.Time]i
 
 		var allocated int64
 		for allocMonth, amount := range allocations[g.CategoryID] {
-			if !allocMonth.Before(g.Start) && allocMonth.Before(month) {
+			if !allocMonth.Before(g.Start.Time) && allocMonth.Before(month) {
 				allocated += amount
 			}
 		}
@@ -3187,7 +3193,7 @@ func printTransaction(w io.Writer, accountID int64, transactions []data.ListAcco
 	if categoryCount > 1 || hasMismatchedSingleCategory(accountID, transactions) {
 		transaction := transactions[0]
 		totalOutflow, totalInflow := displayedTotals(accountID, transactions)
-		if categoryCount == 1 && transaction.TransactionAccount == accountID {
+		if categoryCount == 1 && transaction.Account.ID == accountID {
 			totalOutflow = transaction.TotalOutflow
 			totalInflow = transaction.TotalInflow
 		}
@@ -3195,7 +3201,7 @@ func printTransaction(w io.Writer, accountID int64, transactions []data.ListAcco
 			w,
 			strconv.FormatInt(transaction.ID, 10),
 			transaction.Date.Format("2006-01-02"),
-			stringValue(transaction.PayeeName),
+			stringValue(transaction.Payee.Name),
 			"category",
 			formatCents(totalOutflow),
 			formatCents(totalInflow),
@@ -3229,7 +3235,7 @@ func printTransaction(w io.Writer, accountID int64, transactions []data.ListAcco
 	target := ""
 	outflow := formatCents(transaction.TotalOutflow)
 	inflow := formatCents(transaction.TotalInflow)
-	if categoryCount == 1 {
+	if len(transactions) == 1 && transactionHasTarget(transaction) {
 		target = transactionTarget(accountID, transaction)
 		outflow, inflow = displayedCategoryAmounts(accountID, transaction)
 	}
@@ -3238,7 +3244,7 @@ func printTransaction(w io.Writer, accountID int64, transactions []data.ListAcco
 		w,
 		strconv.FormatInt(transaction.ID, 10),
 		transaction.Date.Format("2006-01-02"),
-		stringValue(transaction.PayeeName),
+		stringValue(transaction.Payee.Name),
 		target,
 		outflow,
 		inflow,
@@ -3269,6 +3275,10 @@ func displayedTotals(accountID int64, transactions []data.ListAccountTransaction
 	return outflow, inflow
 }
 
+func transactionHasTarget(transaction data.ListAccountTransactionsRow) bool {
+	return transaction.CategoryID.Valid || transaction.ToAccountID.Valid || transaction.Income || transaction.SourceAccountID.Valid
+}
+
 func actualCategoryCount(transactions []data.ListAccountTransactionsRow) int {
 	count := 0
 	for _, transaction := range transactions {
@@ -3286,7 +3296,7 @@ func hasMismatchedSingleCategory(accountID int64, transactions []data.ListAccoun
 	}
 
 	transaction := transactions[0]
-	if transaction.TransactionAccount != accountID {
+	if transaction.Account.ID != accountID {
 		return false
 	}
 
@@ -3300,11 +3310,11 @@ func writeAccountTransactionRow(w io.Writer, id, date, payee, target, outflow, i
 
 func transactionTarget(accountID int64, transaction data.ListAccountTransactionsRow) string {
 	if isMirroredTransferRow(accountID, transaction) {
-		return "@" + stringValue(transaction.TransactionAccountName)
+		return "@" + stringValue(transaction.SourceAccountName)
 	}
 
-	if transaction.OtherAccount.Valid {
-		return "@" + stringValue(transaction.OtherAccountName)
+	if transaction.ToAccountID.Valid {
+		return "@" + stringValue(transaction.ToAccountName)
 	}
 
 	if transaction.Income {
@@ -3316,14 +3326,14 @@ func transactionTarget(accountID int64, transaction data.ListAccountTransactions
 
 func displayedCategoryAmounts(accountID int64, transaction data.ListAccountTransactionsRow) (string, string) {
 	if isMirroredTransferRow(accountID, transaction) {
-		return nullableCentsString(transaction.Inflow), nullableCentsString(transaction.Outflow)
+		return formatCents(transaction.TotalOutflow), formatCents(transaction.TotalInflow)
 	}
 
 	return nullableCentsString(transaction.Outflow), nullableCentsString(transaction.Inflow)
 }
 
 func isMirroredTransferRow(accountID int64, transaction data.ListAccountTransactionsRow) bool {
-	return transaction.TransactionAccount != accountID && transaction.OtherAccount.Valid && transaction.OtherAccount.Int64 == accountID
+	return transaction.SourceAccountID.Valid
 }
 
 func nullableCentsString(value sql.NullInt64) string {
@@ -3355,8 +3365,24 @@ func nullableInt64Value(value sql.NullInt64) int64 {
 }
 
 func stringValue(value interface{}) string {
-	if value == nil {
+	switch v := value.(type) {
+	case nil:
 		return ""
+	case sql.NullString:
+		if !v.Valid {
+			return ""
+		}
+		return v.String
+	case sql.NullInt64:
+		if !v.Valid {
+			return ""
+		}
+		return strconv.FormatInt(v.Int64, 10)
+	case sql.NullBool:
+		if !v.Valid {
+			return ""
+		}
+		return strconv.FormatBool(v.Bool)
 	}
 
 	return fmt.Sprint(value)

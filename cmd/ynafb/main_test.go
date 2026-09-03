@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/db/types"
 	"samuellando.com/YNAFB/internal/importer"
 	"samuellando.com/YNAFB/internal/importer/testparser"
 )
@@ -2338,10 +2339,10 @@ func TestGoalMonthlyValue(t *testing.T) {
 			CategoryID:   1,
 			CategoryName: "Cat",
 			Amount:       amount,
-			Start:        mustMonth(start),
+			Start:        types.UnixTime{Time: mustMonth(start)},
 		}
 		if end != "" {
-			g.End = sql.NullTime{Time: mustMonth(end), Valid: true}
+			g.End = types.NullUnixTime{Time: mustMonth(end), Valid: true}
 		}
 		return g
 	}
@@ -2411,10 +2412,10 @@ func TestGoalWarning(t *testing.T) {
 			CategoryID:   1,
 			CategoryName: "Cat",
 			Amount:       amount,
-			Start:        mustMonth(start),
+			Start:        types.UnixTime{Time: mustMonth(start)},
 		}
 		if end != "" {
-			g.End = sql.NullTime{Time: mustMonth(end), Valid: true}
+			g.End = types.NullUnixTime{Time: mustMonth(end), Valid: true}
 		}
 		return g
 	}
@@ -2471,13 +2472,13 @@ func TestGoalWarning(t *testing.T) {
 }
 
 func TestCategoryRemaining(t *testing.T) {
-	mustMonth := func(s string) time.Time {
+	mustMonth := func(s string) types.UnixTime {
 		t.Helper()
 		parsed, err := time.Parse("2006-01", s)
 		if err != nil {
 			t.Fatalf("parse month %q: %v", s, err)
 		}
-		return parsed
+		return types.UnixTime{Time: parsed}
 	}
 
 	rows := []data.ListBudgetMonthCategoriesRow{
@@ -2506,7 +2507,7 @@ func TestCategoryRemaining(t *testing.T) {
 	end := month.AddDate(0, 1, 0)
 
 	t.Run("normal rolls prior months forward", func(t *testing.T) {
-		got := categoryRemaining(rows, allocations, spending, month, end, false)
+		got := categoryRemaining(rows, allocations, spending, month.Time, end, false)
 		// cat 1: July 40000-5000=35000, Aug 10000-3000=7000; total 42000
 		if got[1] != 42000 {
 			t.Fatalf("cat 1 remaining = %d, want 42000", got[1])
@@ -2522,7 +2523,7 @@ func TestCategoryRemaining(t *testing.T) {
 	})
 
 	t.Run("plan ignores carryover and spending, counts only target month allocation", func(t *testing.T) {
-		got := categoryRemaining(rows, allocations, spending, month, end, true)
+		got := categoryRemaining(rows, allocations, spending, month.Time, end, true)
 		// cat 1: Aug 10000 only (spending ignored)
 		if got[1] != 10000 {
 			t.Fatalf("plan cat 1 remaining = %d, want 10000", got[1])

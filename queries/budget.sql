@@ -56,7 +56,7 @@ ORDER BY g.name, c.name;
 -- name: ListCategoryMonthlySpendingByBudget :many
 SELECT
   ts.category,
-  CAST(substr(t.date, 1, 4) AS INTEGER) * 100 + CAST(substr(t.date, 6, 2) AS INTEGER) AS month,
+  CAST(strftime('%Y', t.date, 'unixepoch') AS INTEGER) * 100 + CAST(strftime('%m', t.date, 'unixepoch') AS INTEGER) AS month,
   CAST(SUM(ts.outflow - ts.inflow) AS INTEGER) AS net
 FROM transaction_category AS ts
 JOIN "transaction" AS t ON t.id = ts."transaction"
