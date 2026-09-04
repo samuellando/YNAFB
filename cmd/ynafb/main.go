@@ -956,20 +956,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			allocations, err := queries.ListAllocations(ctx, budget.ID)
-			if err != nil {
-				return err
-			}
-
-			spending, err := queries.ListCategoryMonthlySpendingByBudget(ctx, data.ListCategoryMonthlySpendingByBudgetParams{
-				Budget: budget.ID,
-				End:    types.UnixTime{Time: monthStart(time.Now()).AddDate(0, 1, 0)},
-			})
-			if err != nil {
-				return err
-			}
-
-			return printGoals(stdout, goals, buildCategoryAllocations(allocations), buildCategorySpending(spending), monthStart(time.Now()))
+			return printGoals(stdout, goals)
 
 		case "delete":
 			if len(args) != 1 {
@@ -2738,9 +2725,9 @@ func printAllocations(w io.Writer, allocations []data.ListAllocationsRow) error 
 	return tw.Flush()
 }
 
-func printGoals(w io.Writer, goals []data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, now time.Time) error {
+func printGoals(w io.Writer, goals []data.ListGoalsRow) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "TYPE\tCATEGORY\tSTART\tEND\tAMOUNT\tMONTHLY"); err != nil {
+	if _, err := fmt.Fprintln(tw, "TYPE\tCATEGORY\tSTART\tEND\tAMOUNT"); err != nil {
 		return err
 	}
 	for _, g := range goals {
@@ -2750,13 +2737,12 @@ func printGoals(w io.Writer, goals []data.ListGoalsRow, allocations map[int64]ma
 		}
 		if _, err := fmt.Fprintf(
 			tw,
-			"%s\t%s\t%s\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\n",
 			stringValue(g.Type),
 			stringValue(g.CategoryName),
 			g.Start.Format("2006-01"),
 			end,
 			formatCents(g.Amount),
-			formatCents(goalMonthlyValue(g, allocations, spending, now)),
 		); err != nil {
 			return err
 		}
@@ -2771,20 +2757,6 @@ func buildCategoryAllocations(rows []data.ListAllocationsRow) map[int64]map[time
 			byCategory[r.CategoryID] = make(map[time.Time]int64)
 		}
 		byCategory[r.CategoryID][r.Month.Time] = r.Amount
-	}
-	return byCategory
-}
-
-func buildCategorySpending(rows []data.ListCategoryMonthlySpendingByBudgetRow) map[int64]map[int64]int64 {
-	byCategory := make(map[int64]map[int64]int64)
-	for _, r := range rows {
-		if !r.Category.Valid {
-			continue
-		}
-		if byCategory[r.Category.Int64] == nil {
-			byCategory[r.Category.Int64] = make(map[int64]int64)
-		}
-		byCategory[r.Category.Int64][r.Month] = r.Net
 	}
 	return byCategory
 }

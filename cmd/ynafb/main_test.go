@@ -1367,7 +1367,8 @@ func TestTransactionCreateDollarAmounts(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"transaction", "create", "2026-08-28", "Checking", "Market", "12.50", "3.25", "both"},
+		{"transaction", "create", "2026-08-28", "Checking", "Market", "12.50", "0.00", "outflow"},
+		{"transaction", "create", "2026-08-29", "Checking", "Refund", "0.00", "3.25", "inflow"},
 	})
 
 	stdout, stderr, exitCode := invoke(t, dbPath, "transaction", "list")

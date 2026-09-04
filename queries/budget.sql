@@ -62,18 +62,6 @@ LEFT JOIN budget_month_categories AS bmc ON bmc.category_id = c.id AND bmc.month
 WHERE c.budget = @budget 
 ORDER BY cg.name ASC NULLS FIRST, c.name;
 
--- name: ListCategoryMonthlySpendingByBudget :many
-SELECT
-  ts.category,
-  CAST(strftime('%Y', t.date, 'unixepoch') AS INTEGER) * 100 + CAST(strftime('%m', t.date, 'unixepoch') AS INTEGER) AS month,
-  CAST(SUM(ts.outflow - ts.inflow) AS INTEGER) AS net
-FROM transaction_category AS ts
-JOIN "transaction" AS t ON t.id = ts."transaction"
-JOIN category AS c ON c.id = ts.category
-WHERE c.budget = @budget
-  AND t.date < @end
-GROUP BY ts.category, month;
-
 -- name: GetBudgetMonthSummary :one
 SELECT
   COALESCE(bms.ready_to_assign, (

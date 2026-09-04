@@ -1,13 +1,13 @@
 -- +goose up
 CREATE TABLE budget (
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE CHECK (name <> '')
 );
 
 CREATE TABLE account (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL CHECK (name <> ''),
     UNIQUE (budget, name)
 );
 
@@ -19,12 +19,14 @@ CREATE TABLE "transaction" (
     total_outflow INTEGER NOT NULL DEFAULT 0,
     total_inflow INTEGER NOT NULL DEFAULT 0,
     note TEXT NOT NULL DEFAULT ''
+    CHECK (total_inflow = 0 OR total_outflow = 0),
+    CHECK (total_inflow >= 0 AND total_outflow >= 0)
 );
 
 CREATE TABLE payee (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL CHECK (name <> ''),
     UNIQUE (budget, name)
 );
 
@@ -44,22 +46,24 @@ CREATE TABLE "transaction_category" (
     ),
     CHECK (
         NOT INCOME OR (outflow = 0 and inflow > 0)
-    )
+    ),
+    CHECK (inflow = 0 OR outflow = 0),
+    CHECK (inflow >= 0 AND outflow >= 0)
 );
 
 CREATE TABLE category (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name TEXT NOT NULL, 
+    name TEXT NOT NULL CHECK (name <> ''), 
     category_group INTEGER REFERENCES category_group (id) ON DELETE SET NULL,
     UNIQUE (budget, name),
-    CHECK (name IS NOT 'income')
+    CHECK (lower(name) IS NOT 'income')
 );
 
 CREATE TABLE category_group (
     id INTEGER PRIMARY KEY,
     budget INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL CHECK (name <> ''),
     UNIQUE (budget, name)
 );
 
@@ -69,7 +73,7 @@ CREATE TABLE "payee_default_category" (
     other_account INTEGER REFERENCES account (id) ON DELETE CASCADE,
     category INTEGER REFERENCES category (id) ON DELETE CASCADE,
     income BOOL NOT NULL DEFAULT false,
-    percent INTEGER NOT NULL,
+    percent INTEGER NOT NULL CHECK (percent >= 0 AND percent <= 100),
     CHECK (
         (CASE WHEN other_account IS NOT NULL THEN 1 ELSE 0 END
        + CASE WHEN category IS NOT NULL THEN 1 ELSE 0 END
@@ -102,5 +106,6 @@ CREATE TABLE "goal" (
     amount   INTEGER NOT NULL,
     UNIQUE (budget, category),
     CHECK (type IN ('monthly', 'refill') OR "end" IS NOT NULL),
-    CHECK ("end" IS NULL OR "end" >= start)
+    CHECK ("end" IS NULL OR "end" >= start),
+    CHECK (amount > 0)
 );
