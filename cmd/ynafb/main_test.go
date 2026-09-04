@@ -2441,58 +2441,6 @@ func TestGoalWarning(t *testing.T) {
 	}
 }
 
-func TestCategoryRemaining(t *testing.T) {
-	mustMonth := func(s string) types.UnixTime {
-		t.Helper()
-		parsed, err := time.Parse("2006-01", s)
-		if err != nil {
-			t.Fatalf("parse month %q: %v", s, err)
-		}
-		return types.UnixTime{Time: parsed}
-	}
-
-	rows := []data.ListBudgetMonthCategoriesRow{
-		{ID: 1},
-		{ID: 2},
-		{ID: 3},
-	}
-
-	allocations := []data.ListAllocationsRow{
-		{Month: mustMonth("2026-07"), CategoryID: 1, Amount: 40000},
-		{Month: mustMonth("2026-08"), CategoryID: 1, Amount: 10000},
-		{Month: mustMonth("2026-07"), CategoryID: 2, Amount: 10000},
-		{Month: mustMonth("2026-08"), CategoryID: 2, Amount: 5000},
-		{Month: mustMonth("2026-07"), CategoryID: 3, Amount: 10000},
-		{Month: mustMonth("2026-08"), CategoryID: 3, Amount: 10000},
-	}
-
-	spending := []data.ListCategoryMonthlySpendingByBudgetRow{
-		{Category: sql.NullInt64{Int64: 1, Valid: true}, Month: 202607, Net: 5000},
-		{Category: sql.NullInt64{Int64: 1, Valid: true}, Month: 202608, Net: 3000},
-		{Category: sql.NullInt64{Int64: 2, Valid: true}, Month: 202608, Net: 20000},
-		{Category: sql.NullInt64{Int64: 3, Valid: true}, Month: 202607, Net: 20000},
-	}
-
-	month := mustMonth("2026-08")
-	end := month.AddDate(0, 1, 0)
-
-	t.Run("rolls prior months forward", func(t *testing.T) {
-		got := categoryRemaining(rows, allocations, spending, month.Time, end)
-		// cat 1: July 40000-5000=35000, Aug 10000-3000=7000; total 42000
-		if got[1] != 42000 {
-			t.Fatalf("cat 1 remaining = %d, want 42000", got[1])
-		}
-		// cat 2: July +10000, Aug 5000-20000=-15000 → 10000-15000 = -5000, target is last month so unclamped
-		if got[2] != -5000 {
-			t.Fatalf("cat 2 remaining = %d, want -5000", got[2])
-		}
-		// cat 3: July 10000-20000 = -10000, clamped to 0 before Aug, then +10000 = 10000
-		if got[3] != 10000 {
-			t.Fatalf("cat 3 remaining = %d, want 10000", got[3])
-		}
-	})
-}
-
 func TestBudgetShowGoal(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 

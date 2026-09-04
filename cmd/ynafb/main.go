@@ -1533,19 +1533,6 @@ func parseTime(name, value string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("parse %s: expected RFC3339 or YYYY-MM-DD", name)
 }
 
-func parseNullableTime(name, value string) (sql.NullTime, error) {
-	if strings.EqualFold(value, "null") {
-		return sql.NullTime{}, nil
-	}
-
-	parsed, err := parseTime(name, value)
-	if err != nil {
-		return sql.NullTime{}, err
-	}
-
-	return sql.NullTime{Time: parsed, Valid: true}, nil
-}
-
 func parseMonth(name, value string) (time.Time, error) {
 	parsed, err := time.Parse("2006-01", value)
 	if err != nil {
@@ -2629,109 +2616,6 @@ func printBudgetMonthSummary(w io.Writer, summary data.GetBudgetMonthSummaryRow,
 		return err
 	}
 	return nil
-}
-
-func budgetMonthGoalTotal(goals []data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time) int64 {
-	var total int64
-	for _, g := range goals {
-		if goalActiveInMonth(g, month) {
-			total += goalMonthlyValue(g, allocations, spending, month)
-		}
-	}
-	return total
-}
-
-func budgetMonthTotals(rows []data.ListBudgetMonthCategoriesRow) (allocated, spent int64) {
-	for _, r := range rows {
-		allocated += r.Allocated
-		spent += r.Spent
-	}
-	return allocated, spent
-}
-
-func summaryInt64(value interface{}) int64 {
-	switch n := value.(type) {
-	case int64:
-		return n
-	case float64:
-		return int64(n)
-	case []byte:
-		i, err := strconv.ParseInt(string(n), 10, 64)
-		if err != nil {
-			return 0
-		}
-		return i
-	default:
-		return 0
-	}
-}
-
-func categoryRemaining(rows []data.ListBudgetMonthCategoriesRow, allocations []data.ListAllocationsRow, spending []data.ListCategoryMonthlySpendingByBudgetRow, month, end time.Time) map[int64]int64 {
-	target := int64(month.Year())*100 + int64(month.Month())
-
-	type monthly struct {
-		allocated map[int64]int64
-		spent     map[int64]int64
-	}
-	perCat := make(map[int64]*monthly)
-	get := func(cat int64) *monthly {
-		m := perCat[cat]
-		if m == nil {
-			m = &monthly{allocated: make(map[int64]int64), spent: make(map[int64]int64)}
-			perCat[cat] = m
-		}
-		return m
-	}
-
-	for _, a := range allocations {
-		if !a.Month.Before(end) {
-			continue
-		}
-		key := int64(a.Month.Year())*100 + int64(a.Month.Month())
-		get(a.CategoryID).allocated[key] += a.Amount
-	}
-	for _, s := range spending {
-		get(s.Category.Int64).spent[s.Month] += s.Net
-	}
-
-	result := make(map[int64]int64, len(rows))
-	for _, r := range rows {
-		m := perCat[r.ID]
-		if m == nil {
-			result[r.ID] = 0
-			continue
-		}
-		keys := make([]int64, 0, len(m.allocated)+len(m.spent))
-		seen := make(map[int64]struct{})
-		for k := range m.allocated {
-			if _, ok := seen[k]; !ok {
-				seen[k] = struct{}{}
-				keys = append(keys, k)
-			}
-		}
-		for k := range m.spent {
-			if _, ok := seen[k]; !ok {
-				seen[k] = struct{}{}
-				keys = append(keys, k)
-			}
-		}
-		sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-
-		remaining := int64(0)
-		for _, k := range keys {
-			if remaining < 0 {
-				remaining = 0
-			}
-			remaining += m.allocated[k] - m.spent[k]
-		}
-		if len(keys) == 0 || keys[len(keys)-1] != target {
-			if remaining < 0 {
-				remaining = 0
-			}
-		}
-		result[r.ID] = remaining
-	}
-	return result
 }
 
 const ungroupedLabel = "No group"
