@@ -77,7 +77,12 @@ SELECT
       WHERE  date < month_end
      ), 0)
      - COALESCE((
-      SELECT sum(available) 
+      SELECT sum(
+        CASE
+          WHEN available > 0 THEN available
+          ELSE 0
+        END
+      ) 
       FROM budget_month_categories 
       WHERE month = month_start
      ), 0)
