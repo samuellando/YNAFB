@@ -989,7 +989,7 @@ func TestListCommands(t *testing.T) {
 		{[]string{"category", "list"}, "NAME\nGroceries\nHousehold\n"},
 		{[]string{"payee", "list"}, "NAME\nCafe\nMarket\n"},
 		{[]string{"allocation", "list"}, "MONTH    CATEGORY   AMOUNT\n2026-08  Groceries  50.00\n2026-08  Household  25.00\n"},
-		{[]string{"goal", "list"}, "TYPE     CATEGORY   START    END  AMOUNT   MONTHLY\nmonthly  Groceries  2020-01       1000.00  1000.00\n"},
+		{[]string{"goal", "list"}, "TYPE     CATEGORY   START    END  AMOUNT\nmonthly  Groceries  2020-01       1000.00\n"},
 		{[]string{"transaction", "list"}, "ID  DATE        ACCOUNT   PAYEE   OUTFLOW  INFLOW  NOTE\n2   2026-08-29  Savings   Cafe    10.00    0.00    coffee\n1   2026-08-28  Checking  Market  25.00    0.00    shop\n"},
 	}
 
@@ -1432,7 +1432,7 @@ func TestEmptyLists(t *testing.T) {
 		{[]string{"category", "list"}, "NAME\n"},
 		{[]string{"payee", "list"}, "NAME\n"},
 		{[]string{"allocation", "list"}, "MONTH  CATEGORY  AMOUNT\n"},
-		{[]string{"goal", "list"}, "TYPE  CATEGORY  START  END  AMOUNT  MONTHLY\n"},
+		{[]string{"goal", "list"}, "TYPE  CATEGORY  START  END  AMOUNT\n"},
 		{[]string{"transaction", "list"}, "ID  DATE  ACCOUNT  PAYEE  OUTFLOW  INFLOW  NOTE\n"},
 	}
 
@@ -2840,11 +2840,11 @@ func TestGoalListOrderingAndTypes(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"TYPE     CATEGORY  START    END      AMOUNT  MONTHLY",
-		"save     Apple     2020-01  2020-12  120.00  0.00",
-		"monthly  Mango     2020-01           10.00   10.00",
-		"refill   Repair    2020-01           500.00  500.00",
-		"monthly  Zebra     2020-01           5.00    5.00",
+		"TYPE     CATEGORY  START    END      AMOUNT",
+		"save     Apple     2020-01  2020-12  120.00",
+		"monthly  Mango     2020-01           10.00",
+		"refill   Repair    2020-01           500.00",
+		"monthly  Zebra     2020-01           5.00",
 		"",
 	}, "\n")
 
