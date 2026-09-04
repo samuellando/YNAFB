@@ -2251,12 +2251,12 @@ func TestBudgetShowMonth(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -97.00",
+		"Ready to assign: -97.00",
 		"Income: 0.00",
 		"Goals: 0.00",
 		"Allocated: 75.00",
 		"Spent: 45.00",
-		"Remaining: 30.00",
+		"Available: 30.00",
 		"Uncategorized: 7.00",
 		"",
 		"No group:",
@@ -2298,8 +2298,8 @@ func TestBudgetShowEmpty(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("budget show month failed: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\n" {
-		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Available: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nRemaining: 0.00\nUncategorized: 0.00\n\n")
+	if stdout != "Ready to assign: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nAvailable: 0.00\nUncategorized: 0.00\n\n" {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Ready to assign: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nAvailable: 0.00\nUncategorized: 0.00\n\n")
 	}
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
@@ -2545,12 +2545,12 @@ func TestBudgetShowGoal(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -75.00",
+		"Ready to assign: -75.00",
 		"Income: 0.00",
 		"Goals: 250.00",
 		"Allocated: 75.00",
 		"Spent: 25.00",
-		"Remaining: 50.00",
+		"Available: 50.00",
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
@@ -2596,12 +2596,12 @@ func TestBudgetShowRefillGoal(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -400.00",
+		"Ready to assign: -400.00",
 		"Income: 0.00",
 		"Goals: 650.00",
 		"Allocated: 0.00",
 		"Spent: 0.00",
-		"Remaining: 350.00",
+		"Available: 350.00",
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
@@ -2653,12 +2653,12 @@ func TestBudgetShowIncomeAndUncategorized(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: 50.00",
+		"Ready to assign: 50.00",
 		"Income: 200.00",
 		"Goals: 0.00",
 		"Allocated: 100.00",
 		"Spent: 40.00",
-		"Remaining: 60.00",
+		"Available: 60.00",
 		"Uncategorized: 50.00",
 		"",
 		"No group:",
@@ -2715,12 +2715,12 @@ func TestBudgetShowGoalVariants(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -333.00",
+		"Ready to assign: -333.00",
 		"Income: 42.00",
 		"Goals: 150.00",
 		"Allocated: 75.00",
 		"Spent: 0.00",
-		"Remaining: 375.00",
+		"Available: 375.00",
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
@@ -2772,12 +2772,12 @@ func TestBudgetShowRollover(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -150.00",
+		"Ready to assign: -150.00",
 		"Income: 0.00",
 		"Goals: 0.00",
 		"Allocated: 50.00",
 		"Spent: 20.00",
-		"Remaining: 90.00",
+		"Available: 90.00",
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
@@ -2822,12 +2822,12 @@ func TestBudgetShowNoNegativeRollover(t *testing.T) {
 	}
 
 	want := strings.Join([]string{
-		"Available: -70.00",
+		"Ready to assign: -70.00",
 		"Income: 0.00",
 		"Goals: 0.00",
 		"Allocated: 50.00",
 		"Spent: 70.00",
-		"Remaining: -20.00",
+		"Available: -20.00",
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
@@ -2846,12 +2846,12 @@ func TestBudgetShowNoNegativeRollover(t *testing.T) {
 	}
 
 	want = strings.Join([]string{
-		"Available: -120.00",
+		"Ready to assign: -120.00",
 		"Income: 0.00",
 		"Goals: 0.00",
 		"Allocated: 50.00",
 		"Spent: 0.00",
-		"Remaining: 50.00",
+		"Available: 50.00",
 		"Uncategorized: 0.00",
 		"",
 		"No group:",
