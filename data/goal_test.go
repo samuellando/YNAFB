@@ -8,25 +8,11 @@ import (
 	"samuellando.com/YNAFB/internal/db/types"
 )
 
-func mustTime(t *testing.T, y int, m time.Month, d int) types.UnixTime {
-	t.Helper()
-	return types.UnixTime{Time: time.Date(y, m, d, 0, 0, 0, 0, time.UTC)}
-}
-
 func TestCreateGoal(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	start := mustTime(t, 2026, 1, 1)
 	goal, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
@@ -65,18 +51,9 @@ func TestCreateGoal(t *testing.T) {
 func TestCreateGoalInvalidType(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateGoal(ctx, data.CreateGoalParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "bogus",
 		Start:    mustTime(t, 2026, 1, 1),
@@ -92,18 +69,9 @@ func TestCreateGoalInvalidType(t *testing.T) {
 func TestCreateGoalSaveRequiresEnd(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateGoal(ctx, data.CreateGoalParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "save",
 		Start:    mustTime(t, 2026, 1, 1),
@@ -119,18 +87,9 @@ func TestCreateGoalSaveRequiresEnd(t *testing.T) {
 func TestCreateGoalEndBeforeStart(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateGoal(ctx, data.CreateGoalParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
 		Start:    mustTime(t, 2026, 9, 1),
@@ -146,17 +105,8 @@ func TestCreateGoalEndBeforeStart(t *testing.T) {
 func TestCreateGoalDuplicateBudgetCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	params := data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
@@ -168,7 +118,7 @@ func TestCreateGoalDuplicateBudgetCategory(t *testing.T) {
 	if _, err := queries.CreateGoal(ctx, params); err != nil {
 		t.Fatal(err)
 	}
-	_, err = queries.CreateGoal(ctx, params)
+	_, err := queries.CreateGoal(ctx, params)
 	if err == nil {
 		t.Error("Duplicate goal for the same budget and category should raise an error")
 	}
@@ -177,18 +127,9 @@ func TestCreateGoalDuplicateBudgetCategory(t *testing.T) {
 func TestCreateGoalZeroAmountRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateGoal(ctx, data.CreateGoalParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
 		Start:    mustTime(t, 2026, 1, 1),
@@ -204,18 +145,9 @@ func TestCreateGoalZeroAmountRejected(t *testing.T) {
 func TestCreateGoalNegativeAmountRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateGoal(ctx, data.CreateGoalParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
 		Start:    mustTime(t, 2026, 1, 1),
@@ -231,18 +163,9 @@ func TestCreateGoalNegativeAmountRejected(t *testing.T) {
 func TestCreateGoalNonExistingBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateGoal(ctx, data.CreateGoalParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   99,
 		Type:     "monthly",
 		Start:    mustTime(t, 2026, 1, 1),
@@ -258,11 +181,8 @@ func TestCreateGoalNonExistingBudget(t *testing.T) {
 func TestCreateGoalNonExistingCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateGoal(ctx, data.CreateGoalParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
 		Start:    mustTime(t, 2026, 1, 1),
@@ -278,17 +198,8 @@ func TestCreateGoalNonExistingCategory(t *testing.T) {
 func TestDeleteBudgetCascadesGoals(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
@@ -323,17 +234,8 @@ func TestDeleteBudgetCascadesGoals(t *testing.T) {
 func TestDeleteCategoryCascadesGoals(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
@@ -368,17 +270,8 @@ func TestDeleteCategoryCascadesGoals(t *testing.T) {
 func TestUpdateGoalZeroAmountRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	if _, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
@@ -389,7 +282,7 @@ func TestUpdateGoalZeroAmountRejected(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = queries.UpdateGoal(ctx, data.UpdateGoalParams{
+	_, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
 		Type:     "monthly",
 		Start:    mustTime(t, 2026, 1, 1),
 		End:      types.NullUnixTime{},
@@ -405,17 +298,8 @@ func TestUpdateGoalZeroAmountRejected(t *testing.T) {
 func TestUpdateGoal(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
@@ -466,17 +350,8 @@ func TestUpdateGoal(t *testing.T) {
 func TestDeleteGoal(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
@@ -511,17 +386,8 @@ func TestDeleteGoal(t *testing.T) {
 func TestListGoals(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	start := mustTime(t, 2026, 1, 1)
 	goal, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
@@ -567,17 +433,8 @@ func TestListGoals(t *testing.T) {
 func TestGetGoalByCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 		Budget:   budget.ID,
 		Type:     "monthly",
@@ -607,18 +464,9 @@ func TestGetGoalByCategory(t *testing.T) {
 func TestGetGoalByCategoryDoesNotExist(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.GetGoalByCategory(ctx, data.GetGoalByCategoryParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.GetGoalByCategory(ctx, data.GetGoalByCategoryParams{
 		Budget:   budget.ID,
 		Category: category.ID,
 	})

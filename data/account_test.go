@@ -1,44 +1,15 @@
 package data_test
 
 import (
-	"context"
-	"database/sql"
 	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/db"
 	"testing"
-
-	"github.com/pressly/goose/v3"
 )
-
-func setup(t *testing.T) (*sql.DB, *data.Queries, context.Context) {
-	goose.SetLogger(goose.NopLogger())
-	db, err := dbutil.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	queries := data.New(db)
-	ctx := context.Background()
-	return db, queries, ctx
-}
-
-func teardown(db *sql.DB) {
-	db.Close()
-}
 
 func TestCreateAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	if account.Budget != budget.ID {
 		t.Error("budget id does not match")
 	}
@@ -65,11 +36,8 @@ func TestCreateAccountNonExistingBudget(t *testing.T) {
 func TestCreateAccountEmptyName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateAccount(ctx, data.CreateAccountParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.CreateAccount(ctx, data.CreateAccountParams{
 		Budget: budget.ID,
 		Name:   "",
 	})
@@ -81,51 +49,24 @@ func TestCreateAccountEmptyName(t *testing.T) {
 func TestCreateAccountDuplicateNameConstraint(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	budget2, err := queries.CreateBudget(ctx, "testBudget2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateAccount(ctx, data.CreateAccountParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	budget2 := newBudget(t, queries, ctx, "testBudget2")
+	newAccount(t, queries, ctx, budget.ID, "testaccount")
+	_, err := queries.CreateAccount(ctx, data.CreateAccountParams{
 		Budget: budget.ID,
 		Name:   "testaccount",
 	})
 	if err == nil {
 		t.Error("Should get an error for duplicate account name in same budget")
 	}
-	_, err = queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget2.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Error("Should not get an error for duplicate account names accorss budgets")
-	}
+	newAccount(t, queries, ctx, budget2.ID, "testaccount")
 }
 
 func TestDeleteAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	accounts, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -149,17 +90,8 @@ func TestDeleteAccount(t *testing.T) {
 func TestDeleteBudgetCascades(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	accounts, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -183,17 +115,8 @@ func TestDeleteBudgetCascades(t *testing.T) {
 func TestGetAccountByNamwe(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	nameAccount, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
 		Name:   "testaccount",
 		Budget: budget.ID,
@@ -215,11 +138,8 @@ func TestGetAccountByNamwe(t *testing.T) {
 func TestGetAccountByNamweDoesNotExist(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.GetAccountByName(ctx, data.GetAccountByNameParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
 		Name:   "testaccount",
 		Budget: budget.ID,
 	})
@@ -231,17 +151,8 @@ func TestGetAccountByNamweDoesNotExist(t *testing.T) {
 func TestUpodateAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	n, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
 		Name: "newName",
 		ID:   account.ID,

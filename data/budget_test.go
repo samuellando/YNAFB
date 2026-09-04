@@ -9,10 +9,7 @@ import (
 func TestCreateBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
 	if budget.Name != "testBudget" {
 		t.Error("budget name does not match")
 	}
@@ -33,9 +30,7 @@ func TestCreateBudgetEmptyName(t *testing.T) {
 func TestCreateBudgetDuplicateName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	if _, err := queries.CreateBudget(ctx, "testBudget"); err != nil {
-		t.Fatal(err)
-	}
+	newBudget(t, queries, ctx, "testBudget")
 	_, err := queries.CreateBudget(ctx, "testBudget")
 	if err == nil {
 		t.Error("Duplicate budget name should raise an error")
@@ -45,10 +40,7 @@ func TestCreateBudgetDuplicateName(t *testing.T) {
 func TestUpdateBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
 	n, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
 		Name: "newName",
 		ID:   budget.ID,
@@ -86,10 +78,7 @@ func TestUpdateBudgetNonexistent(t *testing.T) {
 func TestDeleteBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
 	budgets, err := queries.ListBudgets(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -113,12 +102,8 @@ func TestDeleteBudget(t *testing.T) {
 func TestListBudgets(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	if _, err := queries.CreateBudget(ctx, "budgetB"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateBudget(ctx, "budgetA"); err != nil {
-		t.Fatal(err)
-	}
+	newBudget(t, queries, ctx, "budgetB")
+	newBudget(t, queries, ctx, "budgetA")
 	budgets, err := queries.ListBudgets(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -137,10 +122,7 @@ func TestListBudgets(t *testing.T) {
 func TestGetBudgetByName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
 	nameBudget, err := queries.GetBudgetByName(ctx, "testBudget")
 	if err != nil {
 		t.Fatal(err)

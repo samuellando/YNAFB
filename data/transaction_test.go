@@ -9,36 +9,11 @@ import (
 func TestCreateTransaction(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	date := mustTime(t, 2026, 1, 1)
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         date,
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-		Note:         "testnote",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, date, 1000, 0, "testnote")
 	if transaction.Date.Unix() != date.Unix() {
 		t.Error("date does not match")
 	}
@@ -65,25 +40,10 @@ func TestCreateTransaction(t *testing.T) {
 func TestCreateTransactionBothInflowAndOutflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
 		Date:         mustTime(t, 2026, 1, 1),
 		Account:      account.ID,
 		Payee:        payee.ID,
@@ -98,25 +58,10 @@ func TestCreateTransactionBothInflowAndOutflowRejected(t *testing.T) {
 func TestCreateTransactionNegativeOutflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
 		Date:         mustTime(t, 2026, 1, 1),
 		Account:      account.ID,
 		Payee:        payee.ID,
@@ -131,25 +76,10 @@ func TestCreateTransactionNegativeOutflowRejected(t *testing.T) {
 func TestCreateTransactionNegativeInflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
 		Date:         mustTime(t, 2026, 1, 1),
 		Account:      account.ID,
 		Payee:        payee.ID,
@@ -164,35 +94,11 @@ func TestCreateTransactionNegativeInflowRejected(t *testing.T) {
 func TestUpdateTransactionBothInflowAndOutflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.UpdateTransaction(ctx, data.UpdateTransactionParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	_, err := queries.UpdateTransaction(ctx, data.UpdateTransactionParams{
 		Date:         mustTime(t, 2026, 1, 1),
 		Account:      account.ID,
 		Payee:        payee.ID,
@@ -208,18 +114,9 @@ func TestUpdateTransactionBothInflowAndOutflowRejected(t *testing.T) {
 func TestCreateTransactionNonExistingAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
 		Date:         mustTime(t, 2026, 1, 1),
 		Account:      99,
 		Payee:        payee.ID,
@@ -234,18 +131,9 @@ func TestCreateTransactionNonExistingAccount(t *testing.T) {
 func TestCreateTransactionNonExistingPayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
 		Date:         mustTime(t, 2026, 1, 1),
 		Account:      account.ID,
 		Payee:        99,
@@ -260,34 +148,10 @@ func TestCreateTransactionNonExistingPayee(t *testing.T) {
 func TestDeleteAccountCascadesTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	transactions, err := queries.ListTransactions(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -311,34 +175,10 @@ func TestDeleteAccountCascadesTransactions(t *testing.T) {
 func TestDeletePayeeCascadesTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	transactions, err := queries.ListTransactions(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -362,35 +202,10 @@ func TestDeletePayeeCascadesTransactions(t *testing.T) {
 func TestUpdateTransaction(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-		Note:         "testnote",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "testnote")
 	date := mustTime(t, 2026, 2, 1)
 	n, err := queries.UpdateTransaction(ctx, data.UpdateTransactionParams{
 		Date:         date,
@@ -431,34 +246,10 @@ func TestUpdateTransaction(t *testing.T) {
 func TestDeleteTransaction(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	transactions, err := queries.ListTransactions(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -482,45 +273,11 @@ func TestDeleteTransaction(t *testing.T) {
 func TestListTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx1, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-		Note:         "first",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 2, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 2000,
-		TotalInflow:  0,
-		Note:         "second",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	tx1 := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "first")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "second")
 	transactions, err := queries.ListTransactions(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)

@@ -1,7 +1,6 @@
 package data_test
 
 import (
-	"database/sql"
 	"testing"
 
 	"samuellando.com/YNAFB/data"
@@ -10,43 +9,11 @@ import (
 func TestReconcileAccountTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx1, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 3, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 2000,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	tx1 := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 3, 1), 2000, 0, "")
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
@@ -75,51 +42,12 @@ func TestReconcileAccountTransactions(t *testing.T) {
 func TestReconcileAccountTransactionsIncludesTransfers(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherAccount, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "otheraccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	tx, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 15),
-		Account:      otherAccount.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tx.ID,
-		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      3000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	tx := newTransaction(t, queries, ctx, otherAccount.ID, payee.ID, mustTime(t, 2026, 1, 15), 3000, 0, "")
+	newTransfer(t, queries, ctx, tx.ID, account.ID, 3000, 0)
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
@@ -142,33 +70,10 @@ func TestReconcileAccountTransactionsIncludesTransfers(t *testing.T) {
 func TestReconcileAccountTransactionsIdempotent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	params := data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
@@ -199,17 +104,8 @@ func TestReconcileAccountTransactionsIdempotent(t *testing.T) {
 func TestReconcileAccountTransactionsEmpty(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
@@ -232,40 +128,17 @@ func TestReconcileAccountTransactionsEmpty(t *testing.T) {
 func TestDeleteAccountCascadesReconciliations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err = queries.DeleteAccount(ctx, account.ID)
+	err := queries.DeleteAccount(ctx, account.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,41 +154,17 @@ func TestDeleteAccountCascadesReconciliations(t *testing.T) {
 func TestDeleteTransactionCascadesReconciliations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err = queries.DeleteTransaction(ctx, transaction.ID)
+	err := queries.DeleteTransaction(ctx, transaction.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

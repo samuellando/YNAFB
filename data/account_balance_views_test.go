@@ -11,10 +11,7 @@ import (
 func TestListAccountsBalancesEmpty(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -27,17 +24,8 @@ func TestListAccountsBalancesEmpty(t *testing.T) {
 func TestListAccountsBalancesNoTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -62,22 +50,9 @@ func TestListAccountsBalancesNoTransactions(t *testing.T) {
 func TestListAccountsBalancesMultipleAccounts(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "account1",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "account2",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	newAccount(t, queries, ctx, budget.ID, "account1")
+	newAccount(t, queries, ctx, budget.ID, "account2")
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -103,28 +78,10 @@ func TestListAccountsBalancesMultipleAccounts(t *testing.T) {
 func TestListAccountsBalancesScopedToBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget1, err := queries.CreateBudget(ctx, "testBudget1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	budget2, err := queries.CreateBudget(ctx, "testBudget2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account1, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget1.ID,
-		Name:   "same",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	account2, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget2.ID,
-		Name:   "same",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget1 := newBudget(t, queries, ctx, "testBudget1")
+	budget2 := newBudget(t, queries, ctx, "testBudget2")
+	account1 := newAccount(t, queries, ctx, budget1.ID, "same")
+	account2 := newAccount(t, queries, ctx, budget2.ID, "same")
 	balances1, err := queries.ListAccountsBalances(ctx, budget1.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -150,51 +107,12 @@ func TestListAccountsBalancesScopedToBudget(t *testing.T) {
 func TestListAccountsBalancesCategorySpend(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -213,44 +131,11 @@ func TestListAccountsBalancesCategorySpend(t *testing.T) {
 func TestListAccountsBalancesIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  5000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{},
-		Income:       true,
-		Outflow:      0,
-		Inflow:       5000,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, transaction.ID, 5000)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -269,51 +154,12 @@ func TestListAccountsBalancesIncome(t *testing.T) {
 func TestListAccountsBalancesTransferOutSourcePrimary(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      source.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      3000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -336,51 +182,12 @@ func TestListAccountsBalancesTransferOutSourcePrimary(t *testing.T) {
 func TestListAccountsBalancesTransferInMirrored(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      target.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  500,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: source.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      0,
-		Inflow:       500,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, target.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, transaction.ID, source.ID, 0, 500)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -403,68 +210,14 @@ func TestListAccountsBalancesTransferInMirrored(t *testing.T) {
 func TestListAccountsBalancesSplitTransfer(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target1, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target1",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target2, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target2",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      source.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target1.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target2.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      2000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target1 := newAccount(t, queries, ctx, budget.ID, "target1")
+	target2 := newAccount(t, queries, ctx, budget.ID, "target2")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction.ID, target1.ID, 1000, 0)
+	newTransfer(t, queries, ctx, transaction.ID, target2.ID, 2000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -490,33 +243,10 @@ func TestListAccountsBalancesSplitTransfer(t *testing.T) {
 func TestListAccountsBalancesZeroAmountTransaction(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 0, "")
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -535,98 +265,17 @@ func TestListAccountsBalancesZeroAmountTransaction(t *testing.T) {
 func TestListAccountsBalancesMixed(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherAccount, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "otheraccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	spend, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  spend.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	income, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 2),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  5000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  income.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{},
-		Income:       true,
-		Outflow:      0,
-		Inflow:       5000,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	transfer, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 3),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 2000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transfer.ID,
-		OtherAccount: sql.NullInt64{Int64: otherAccount.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      2000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	spend := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, spend.ID, category.ID, 1000, 0)
+	income := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 2), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, income.ID, 5000)
+	transfer := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 3), 2000, 0, "")
+	newTransfer(t, queries, ctx, transfer.ID, otherAccount.ID, 2000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -649,71 +298,14 @@ func TestListAccountsBalancesMixed(t *testing.T) {
 func TestListAccountsBalancesReconciledAndUnreconciled(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	reconciled, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  reconciled.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	unreconciled, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 2, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 2000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  unreconciled.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      2000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	reconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, reconciled.ID, category.ID, 1000, 0)
+	unreconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	newCategoryLine(t, queries, ctx, unreconciled.ID, category.ID, 2000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -738,51 +330,12 @@ func TestListAccountsBalancesReconciledAndUnreconciled(t *testing.T) {
 func TestListAccountsBalancesTransferReconciledPerAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      source.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      3000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: target.ID,
 		Date:      mustTime(t, 2026, 2, 1),
@@ -811,17 +364,8 @@ func TestListAccountsBalancesTransferReconciledPerAccount(t *testing.T) {
 func TestGetAccountBalancesNoTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	balances, err := queries.GetAccountBalances(ctx, account.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -843,51 +387,12 @@ func TestGetAccountBalancesNoTransactions(t *testing.T) {
 func TestGetAccountBalancesCategorySpend(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
 	balances, err := queries.GetAccountBalances(ctx, account.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -903,44 +408,11 @@ func TestGetAccountBalancesCategorySpend(t *testing.T) {
 func TestGetAccountBalancesIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  5000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{},
-		Income:       true,
-		Outflow:      0,
-		Inflow:       5000,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, transaction.ID, 5000)
 	balances, err := queries.GetAccountBalances(ctx, account.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -956,51 +428,12 @@ func TestGetAccountBalancesIncome(t *testing.T) {
 func TestGetAccountBalancesTransferTarget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      source.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      3000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
 	balances, err := queries.GetAccountBalances(ctx, target.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -1013,51 +446,12 @@ func TestGetAccountBalancesTransferTarget(t *testing.T) {
 func TestGetAccountBalancesTransferSource(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      source.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      3000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
 	balances, err := queries.GetAccountBalances(ctx, source.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -1070,51 +464,12 @@ func TestGetAccountBalancesTransferSource(t *testing.T) {
 func TestGetAccountBalancesMirroredTransfer(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      target.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  500,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: source.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      0,
-		Inflow:       500,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, target.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, transaction.ID, source.ID, 0, 500)
 	balances, err := queries.GetAccountBalances(ctx, target.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -1127,71 +482,14 @@ func TestGetAccountBalancesMirroredTransfer(t *testing.T) {
 func TestGetAccountBalancesReconciled(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	reconciled, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  reconciled.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	unreconciled, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 2, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 2000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  unreconciled.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      2000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	reconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, reconciled.ID, category.ID, 1000, 0)
+	unreconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	newCategoryLine(t, queries, ctx, unreconciled.ID, category.ID, 2000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -1213,33 +511,10 @@ func TestGetAccountBalancesReconciled(t *testing.T) {
 func TestGetAccountBalancesZeroAmountTransaction(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 0, "")
 	balances, err := queries.GetAccountBalances(ctx, account.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -1264,17 +539,8 @@ func TestGetAccountBalancesNonExistent(t *testing.T) {
 func TestGetAccountBalanceAsOfNoTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 15),
@@ -1290,33 +556,10 @@ func TestGetAccountBalanceAsOfNoTransactions(t *testing.T) {
 func TestGetAccountBalanceAsOfBeforeFirstTransaction(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 15),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 15), 1000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 1),
@@ -1332,33 +575,10 @@ func TestGetAccountBalanceAsOfBeforeFirstTransaction(t *testing.T) {
 func TestGetAccountBalanceAsOfInclusiveOfDate(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 15),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 15), 1000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 15),
@@ -1374,51 +594,12 @@ func TestGetAccountBalanceAsOfInclusiveOfDate(t *testing.T) {
 func TestGetAccountBalanceAsOfCategorySpend(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -1434,44 +615,11 @@ func TestGetAccountBalanceAsOfCategorySpend(t *testing.T) {
 func TestGetAccountBalanceAsOfIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  5000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{},
-		Income:       true,
-		Outflow:      0,
-		Inflow:       5000,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, transaction.ID, 5000)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -1487,51 +635,12 @@ func TestGetAccountBalanceAsOfIncome(t *testing.T) {
 func TestGetAccountBalanceAsOfTransferSourcePrimary(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      source.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      3000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
 	sourceBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: source.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -1557,51 +666,12 @@ func TestGetAccountBalanceAsOfTransferSourcePrimary(t *testing.T) {
 func TestGetAccountBalanceAsOfTransferMirrored(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      target.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  500,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: source.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      0,
-		Inflow:       500,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, target.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, transaction.ID, source.ID, 0, 500)
 	targetBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: target.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -1627,42 +697,11 @@ func TestGetAccountBalanceAsOfTransferMirrored(t *testing.T) {
 func TestGetAccountBalanceAsOfExcludesLaterTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 2, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 2000,
-		TotalInflow:  0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -1688,51 +727,12 @@ func TestGetAccountBalanceAsOfExcludesLaterTransactions(t *testing.T) {
 func TestGetAccountBalanceAsOfExcludesTransfersAfterDate(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "source",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "target",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 2, 1),
-		Account:      source.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 3000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: target.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      3000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	source := newAccount(t, queries, ctx, budget.ID, "source")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 2, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: target.ID,
 		Date:      mustTime(t, 2026, 1, 31),
@@ -1748,98 +748,17 @@ func TestGetAccountBalanceAsOfExcludesTransfersAfterDate(t *testing.T) {
 func TestGetAccountBalanceAsOfCombined(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherAccount, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "otheraccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	spend, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  spend.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	income, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 2),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 0,
-		TotalInflow:  5000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  income.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{},
-		Income:       true,
-		Outflow:      0,
-		Inflow:       5000,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	incoming, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 3),
-		Account:      otherAccount.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 2000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  incoming.ID,
-		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      2000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	spend := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, spend.ID, category.ID, 1000, 0)
+	income := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 2), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, income.ID, 5000)
+	incoming := newTransaction(t, queries, ctx, otherAccount.ID, payee.ID, mustTime(t, 2026, 1, 3), 2000, 0, "")
+	newTransfer(t, queries, ctx, incoming.ID, account.ID, 2000, 0)
 	before, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 1),

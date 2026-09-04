@@ -17,48 +17,12 @@ type transactionContext struct {
 
 func createTransactionContext(t *testing.T, queries *data.Queries, ctx context.Context) transactionContext {
 	t.Helper()
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherAccount, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "otheraccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
-		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
-		TotalOutflow: 1000,
-		TotalInflow:  0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	return transactionContext{
 		transaction:  transaction,
 		category:     category,
@@ -71,17 +35,7 @@ func TestCreateTransactionCategoryCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	txCategory := newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
 	if txCategory.Transaction != tc.transaction.ID {
 		t.Error("transaction id does not match")
 	}
@@ -109,17 +63,7 @@ func TestCreateTransactionCategoryOtherAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      0,
-		Inflow:       1000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	txCategory := newTransfer(t, queries, ctx, tc.transaction.ID, tc.otherAccount.ID, 0, 1000)
 	if !txCategory.OtherAccount.Valid || txCategory.OtherAccount.Int64 != tc.otherAccount.ID {
 		t.Error("other account id does not match")
 	}
@@ -135,17 +79,7 @@ func TestCreateTransactionCategoryIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{},
-		Income:       true,
-		Outflow:      0,
-		Inflow:       5000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	txCategory := newIncomeLine(t, queries, ctx, tc.transaction.ID, 5000)
 	if !txCategory.Income {
 		t.Error("income should be true")
 	}
@@ -195,18 +129,8 @@ func TestUpdateTransactionCategoryIncomeViolation(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.UpdateTransactionCategory(ctx, data.UpdateTransactionCategoryParams{
+	txCategory := newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
+	_, err := queries.UpdateTransactionCategory(ctx, data.UpdateTransactionCategoryParams{
 		Transaction:  tc.transaction.ID,
 		OtherAccount: sql.NullInt64{},
 		Category:     sql.NullInt64{},
@@ -354,18 +278,8 @@ func TestDeleteTransactionCascadesTransactionCategories(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = queries.DeleteTransaction(ctx, tc.transaction.ID)
+	txCategory := newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
+	err := queries.DeleteTransaction(ctx, tc.transaction.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,16 +296,7 @@ func TestDeleteAccountCascadesTransactionCategories(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Outflow:      0,
-		Inflow:       1000,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	newTransfer(t, queries, ctx, tc.transaction.ID, tc.otherAccount.ID, 0, 1000)
 	err := queries.DeleteAccount(ctx, tc.otherAccount.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -409,16 +314,7 @@ func TestDeleteCategoryCascadesTransactionCategories(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
 	err := queries.DeleteCategory(ctx, tc.category.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -436,18 +332,8 @@ func TestUpdateTransactionCategoryBothInflowAndOutflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.UpdateTransactionCategory(ctx, data.UpdateTransactionCategoryParams{
+	txCategory := newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
+	_, err := queries.UpdateTransactionCategory(ctx, data.UpdateTransactionCategoryParams{
 		Transaction:  tc.transaction.ID,
 		OtherAccount: sql.NullInt64{},
 		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
@@ -465,17 +351,7 @@ func TestUpdateTransactionCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	txCategory := newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
 	n, err := queries.UpdateTransactionCategory(ctx, data.UpdateTransactionCategoryParams{
 		Transaction:  tc.transaction.ID,
 		OtherAccount: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
@@ -504,18 +380,8 @@ func TestDeleteTransactionCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-		Transaction:  tc.transaction.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:       false,
-		Outflow:      1000,
-		Inflow:       0,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = queries.DeleteTransactionCategory(ctx, txCategory.ID)
+	txCategory := newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
+	err := queries.DeleteTransactionCategory(ctx, txCategory.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,16 +399,7 @@ func TestDeleteTransactionCategoriesByTransaction(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	for i := 0; i < 2; i++ {
-		if _, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
-			Transaction:  tc.transaction.ID,
-			OtherAccount: sql.NullInt64{},
-			Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
-			Income:       false,
-			Outflow:      1000,
-			Inflow:       0,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
 	}
 	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM "transaction_category" WHERE "transaction" = ?`, tc.transaction.ID).Scan(&count); err != nil {

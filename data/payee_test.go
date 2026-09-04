@@ -9,17 +9,8 @@ import (
 func TestCreatePayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	if payee.Budget != budget.ID {
 		t.Error("budget id does not match")
 	}
@@ -46,11 +37,8 @@ func TestCreatePayeeNonExistingBudget(t *testing.T) {
 func TestCreatePayeeEmptyName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayee(ctx, data.CreatePayeeParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
 		Budget: budget.ID,
 		Name:   "",
 	})
@@ -62,22 +50,10 @@ func TestCreatePayeeEmptyName(t *testing.T) {
 func TestCreatePayeeDuplicateNameConstraint(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	budget2, err := queries.CreateBudget(ctx, "testBudget2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayee(ctx, data.CreatePayeeParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	budget2 := newBudget(t, queries, ctx, "testBudget2")
+	newPayee(t, queries, ctx, budget.ID, "testpayee")
+	_, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
 		Budget: budget.ID,
 		Name:   "testpayee",
 	})
@@ -96,17 +72,8 @@ func TestCreatePayeeDuplicateNameConstraint(t *testing.T) {
 func TestUpdatePayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	n, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
 		Name: "newName",
 		ID:   payee.ID,
@@ -132,17 +99,8 @@ func TestUpdatePayee(t *testing.T) {
 func TestDeletePayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	payees, err := queries.ListPayees(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -166,17 +124,8 @@ func TestDeletePayee(t *testing.T) {
 func TestDeleteBudgetCascadesPayees(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	payees, err := queries.ListPayees(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -200,32 +149,11 @@ func TestDeleteBudgetCascadesPayees(t *testing.T) {
 func TestListPayees(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	budget2, err := queries.CreateBudget(ctx, "testBudget2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "payeeB",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "payeeA",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget2.ID,
-		Name:   "otherBudgetPayee",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	budget2 := newBudget(t, queries, ctx, "testBudget2")
+	newPayee(t, queries, ctx, budget.ID, "payeeB")
+	newPayee(t, queries, ctx, budget.ID, "payeeA")
+	newPayee(t, queries, ctx, budget2.ID, "otherBudgetPayee")
 	payees, err := queries.ListPayees(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -244,17 +172,8 @@ func TestListPayees(t *testing.T) {
 func TestGetPayeeByName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	namePayee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
 		Name:   "testpayee",
 		Budget: budget.ID,
@@ -276,11 +195,8 @@ func TestGetPayeeByName(t *testing.T) {
 func TestGetPayeeByNameDoesNotExist(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
 		Name:   "testpayee",
 		Budget: budget.ID,
 	})

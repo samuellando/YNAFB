@@ -10,24 +10,9 @@ import (
 func TestCreatePayeeDefaultCategoryCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -61,24 +46,9 @@ func TestCreatePayeeDefaultCategoryCategory(t *testing.T) {
 func TestCreatePayeeDefaultCategoryOtherAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
@@ -100,17 +70,8 @@ func TestCreatePayeeDefaultCategoryOtherAccount(t *testing.T) {
 func TestCreatePayeeDefaultCategoryIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -135,32 +96,11 @@ func TestCreatePayeeDefaultCategoryIncome(t *testing.T) {
 func TestCreatePayeeDefaultCategoryXorViolation(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
 		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
@@ -185,18 +125,9 @@ func TestCreatePayeeDefaultCategoryXorViolation(t *testing.T) {
 func TestCreatePayeeDefaultCategoryNonExistingPayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        99,
 		OtherAccount: sql.NullInt64{},
 		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
@@ -211,18 +142,9 @@ func TestCreatePayeeDefaultCategoryNonExistingPayee(t *testing.T) {
 func TestCreatePayeeDefaultCategoryNonExistingOtherAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	_, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{Int64: 99, Valid: true},
 		Category:     sql.NullInt64{},
@@ -237,18 +159,9 @@ func TestCreatePayeeDefaultCategoryNonExistingOtherAccount(t *testing.T) {
 func TestCreatePayeeDefaultCategoryNonExistingCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	_, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
 		Category:     sql.NullInt64{Int64: 99, Valid: true},
@@ -263,24 +176,9 @@ func TestCreatePayeeDefaultCategoryNonExistingCategory(t *testing.T) {
 func TestDeletePayeeCascadesPayeeDefaultCategories(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -314,24 +212,9 @@ func TestDeletePayeeCascadesPayeeDefaultCategories(t *testing.T) {
 func TestDeleteAccountCascadesPayeeDefaultCategories(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	if _, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
@@ -341,7 +224,7 @@ func TestDeleteAccountCascadesPayeeDefaultCategories(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err = queries.DeleteAccount(ctx, account.ID)
+	err := queries.DeleteAccount(ctx, account.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,24 +240,9 @@ func TestDeleteAccountCascadesPayeeDefaultCategories(t *testing.T) {
 func TestDeleteCategoryCascadesPayeeDefaultCategories(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	if _, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -384,7 +252,7 @@ func TestDeleteCategoryCascadesPayeeDefaultCategories(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err = queries.DeleteCategory(ctx, category.ID)
+	err := queries.DeleteCategory(ctx, category.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,25 +268,10 @@ func TestDeleteCategoryCascadesPayeeDefaultCategories(t *testing.T) {
 func TestCreatePayeeDefaultCategoryPercentNegativeRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
 		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
@@ -433,25 +286,10 @@ func TestCreatePayeeDefaultCategoryPercentNegativeRejected(t *testing.T) {
 func TestCreatePayeeDefaultCategoryPercentOver100Rejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	_, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
 		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
@@ -466,24 +304,9 @@ func TestCreatePayeeDefaultCategoryPercentOver100Rejected(t *testing.T) {
 func TestCreatePayeeDefaultCategoryPercentZeroAllowed(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -502,24 +325,9 @@ func TestCreatePayeeDefaultCategoryPercentZeroAllowed(t *testing.T) {
 func TestUpdatePayeeDefaultCategoryPercentOver100Rejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -546,31 +354,10 @@ func TestUpdatePayeeDefaultCategoryPercentOver100Rejected(t *testing.T) {
 func TestUpdatePayeeDefaultCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -611,24 +398,9 @@ func TestUpdatePayeeDefaultCategory(t *testing.T) {
 func TestDeletePayeeDefaultCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
@@ -662,24 +434,9 @@ func TestDeletePayeeDefaultCategory(t *testing.T) {
 func TestDeletePayeeDefaultCategoriesByPayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	for i := 0; i < 2; i++ {
 		if _, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 			Payee:        payee.ID,
@@ -714,38 +471,11 @@ func TestDeletePayeeDefaultCategoriesByPayee(t *testing.T) {
 func TestListPayeeDefaultCategoriesByPayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	payee2, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "otherpayee",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Budget: budget.ID,
-		Name:   "testcategory",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
-		Budget: budget.ID,
-		Name:   "testaccount",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	payee2 := newPayee(t, queries, ctx, budget.ID, "otherpayee")
+	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	categoryDefault, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
