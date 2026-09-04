@@ -50,17 +50,7 @@ SELECT
     ELSE
       allocated - spent
   END
-  ) AS INTEGER) AS available,
-  CAST((
-  CASE
-    WHEN month < unixepoch() THEN
-      SUM(MAX(allocated - spent, 0)) OVER (
-        PARTITION by category_id
-        ORDER BY month
-      ) - MAX(allocated - spent, 0)
-      ELSE 0
-    END
-  ) AS INTEGER) AS carry_over
+  ) AS INTEGER) AS available
 FROM one
 GROUP BY month, category_id
 ORDER BY month, category_id;

@@ -54,8 +54,19 @@ WITH goal_data AS (
       "end",
       amount,
       CAST(COALESCE(allocated, 0) AS INTEGER) AS allocated_mtd,
-      CAST(COALESCE(bmc.carry_over, 0) AS INTEGER) AS carry_over,
-      CAST(MAX((strftime('%Y', "end", 'unixepoch') - strftime('%Y', CAST(@month AS UNIX_EPOCH_INTEGER), 'unixepoch')) * 12 
+      CAST((CASE
+          WHEN CAST(@month AS UNIX_EPOCH_INTEGER) < unixepoch() THEN
+            COALESCE((
+                SELECT MAX(prior.available, 0)
+                FROM budget_month_categories AS prior
+                WHERE prior.category_id = g.category AND prior.month < @month
+                ORDER BY prior.month DESC
+                LIMIT 1
+            ), 0)
+          ELSE 0
+        END
+      ) AS INTEGER) AS carry_over,
+      CAST(MAX((strftime('%Y', "end", 'unixepoch') - strftime('%Y', @month, 'unixepoch')) * 12 
         + (strftime('%m', "end", 'unixepoch') - strftime('%m', @month, 'unixepoch')), 0) AS INTEGER) as remaining_months,
       CAST(COALESCE((SELECT 
           sum(allocated)

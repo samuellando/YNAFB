@@ -41,16 +41,26 @@ ORDER BY month;
 -- name: ListBudgetMonthCategories :many
 SELECT 
   c.id,
+  c.id AS category_id,
   c.name AS category_name,
   cg.name AS category_gorup_name,
   COALESCE(allocated, 0) AS allocated,
-  COALESCE(spent, 0) AS spend,
-  COALESCE(available, 0) AS available
+  COALESCE(spent, 0) AS spent,
+  CAST(CASE
+    WHEN bmc.month IS NULL AND CAST(@month AS UNIX_EPOCH_INTEGER) < unixepoch() THEN COALESCE((
+      SELECT MAX(prior.available, 0)
+      FROM budget_month_categories AS prior
+      WHERE prior.category_id = c.id AND prior.month < @month
+      ORDER BY prior.month DESC
+      LIMIT 1
+    ), 0)
+    ELSE COALESCE(bmc.available, 0)
+  END AS INTEGER) AS available
 FROM category AS c
 LEFT JOIN category_group AS cg ON c.category_group = cg.id
 LEFT JOIN budget_month_categories AS bmc ON bmc.category_id = c.id AND bmc.month = @month
 WHERE c.budget = @budget 
-ORDER BY cg.name, c.name;
+ORDER BY cg.name ASC NULLS FIRST, c.name;
 
 -- name: ListCategoryMonthlySpendingByBudget :many
 SELECT
