@@ -40,10 +40,27 @@ SELECT
   category_id,
   allocated,
   spent,
-  SUM(MAX(allocated - spent, 0)) OVER (
-    PARTITION by category_id
-    ORDER BY month
-  ) - MAX(allocated - spent, 0) + allocated - spent as available
+  CAST((
+  CASE
+    WHEN month < unixepoch() THEN
+        SUM(MAX(allocated - spent, 0)) OVER (
+        PARTITION by category_id
+        ORDER BY month
+        ) - MAX(allocated - spent, 0) + allocated - spent 
+    ELSE
+      allocated - spent
+  END
+  ) AS INTEGER) AS available,
+  CAST((
+  CASE
+    WHEN month < unixepoch() THEN
+      SUM(MAX(allocated - spent, 0)) OVER (
+        PARTITION by category_id
+        ORDER BY month
+      ) - MAX(allocated - spent, 0)
+      ELSE 0
+    END
+  ) AS INTEGER) AS carry_over
 FROM one
 GROUP BY month, category_id
 ORDER BY month, category_id;
@@ -70,7 +87,7 @@ income AS (
 )
 SELECT
    month_start AS month,
-   (
+   CAST((
      COALESCE((
       SELECT sum(total_inflow - total_outflow) 
       FROM "transaction"
@@ -86,28 +103,28 @@ SELECT
       FROM budget_month_categories 
       WHERE month = month_start
      ), 0)
-   ) AS ready_to_assign,
-   COALESCE((
+   ) AS INTEGER) AS ready_to_assign,
+   CAST(COALESCE((
     SELECT sum(net_inflow)
     FROM income 
     WHERE date >= month_start AND date < month_end
-   ), 0) AS income,
-   COALESCE((
+   ), 0) AS INTEGER) AS income,
+   CAST(COALESCE((
     SELECT sum(allocated) 
     FROM budget_month_categories 
     WHERE month = month_start
-   ), 0) AS allocated,
-   COALESCE((
+   ), 0) AS INTEGER) AS allocated,
+   CAST(COALESCE((
     SELECT sum(spent) 
     FROM budget_month_categories 
     WHERE month = month_start
-   ), 0) AS spent,
-   COALESCE((
+   ), 0) AS INTEGER) AS spent,
+   CAST(COALESCE((
     SELECT sum(available) 
     FROM budget_month_categories 
     WHERE month = month_start
-   ), 0) AS available,
-   (
+   ), 0) AS INTEGER) AS available,
+   CAST((
     COALESCE((
       SELECT sum(total_inflow + total_outflow) 
       FROM "transaction"
@@ -119,7 +136,7 @@ SELECT
       JOIN  "transaction" AS t ON tc."transaction" = t.id
       WHERE t.date >= month_start AND t.date < month_end
       ), 0)
-   ) AS uncategorized
+   ) AS INTEGER) AS uncategorized
 FROM months;
 
 -- +goose down
