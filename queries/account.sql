@@ -17,12 +17,6 @@ WHERE id = ?;
 DELETE FROM account
 WHERE id = ?;
 
--- name: ListAccounts :many
-SELECT id, budget, name
-FROM account
-WHERE budget = ?
-ORDER BY name;
-
 -- name: GetAccountByName :one
 SELECT id, budget, name
 FROM account
