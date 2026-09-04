@@ -82,4 +82,4 @@ LEFT JOIN account AS oa ON tc.other_account = oa.id
 LEFT JOIN category AS c ON tc.category = c.id
 LEFT JOIN payee AS p ON at.payee = p.id
 WHERE at.account_id = ?
-ORDER BY at.date DESC, payee ASC, at.transaction_id, tc.id;
+ORDER BY at.date DESC, p.name ASC, at.transaction_id, tc.id;
