@@ -53,7 +53,9 @@ WITH goal_data AS (
       start,
       "end",
       amount,
+      -- How much was allocated this month
       CAST(COALESCE(allocated, 0) AS INTEGER) AS allocated_mtd,
+      -- Left over available from previous months
       CAST((CASE
           WHEN CAST(@month AS UNIX_EPOCH_INTEGER) < unixepoch() THEN
             COALESCE((
