@@ -70,6 +70,20 @@ func newCategory(t *testing.T, queries *data.Queries, ctx context.Context, budge
 	return c
 }
 
+func newAllocation(t *testing.T, queries *data.Queries, ctx context.Context, budget, category int64, month types.UnixTime, amount int64) data.Allocation {
+	t.Helper()
+	a, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
+		Budget:   budget,
+		Category: category,
+		Month:    month,
+		Amount:   amount,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
 func newTransaction(t *testing.T, queries *data.Queries, ctx context.Context, account, payee int64, date types.UnixTime, out, in int64, note string) data.Transaction {
 	t.Helper()
 	tx, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
