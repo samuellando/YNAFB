@@ -9,7 +9,10 @@ import (
 func TestCreateBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
+	budget, err := queries.CreateBudget(ctx, "testBudget")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if budget.Name != "testBudget" {
 		t.Error("budget name does not match")
 	}
@@ -30,7 +33,9 @@ func TestCreateBudgetEmptyName(t *testing.T) {
 func TestCreateBudgetDuplicateName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	newBudget(t, queries, ctx, "testBudget")
+	if _, err := queries.CreateBudget(ctx, "testBudget"); err != nil {
+		t.Fatal(err)
+	}
 	_, err := queries.CreateBudget(ctx, "testBudget")
 	if err == nil {
 		t.Error("Duplicate budget name should raise an error")

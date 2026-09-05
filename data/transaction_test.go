@@ -13,7 +13,17 @@ func TestCreateTransaction(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	date := mustTime(t, 2026, 1, 1)
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, date, 1000, 0, "testnote")
+	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+		Date:         date,
+		Account:      account.ID,
+		Payee:        payee.ID,
+		TotalOutflow: 1000,
+		TotalInflow:  0,
+		Note:         "testnote",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if transaction.Date.Unix() != date.Unix() {
 		t.Error("date does not match")
 	}

@@ -10,7 +10,13 @@ func TestCreatePayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
+		Budget: budget.ID,
+		Name:   "testpayee",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if payee.Budget != budget.ID {
 		t.Error("budget id does not match")
 	}
@@ -52,7 +58,12 @@ func TestCreatePayeeDuplicateNameConstraint(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	budget2 := newBudget(t, queries, ctx, "testBudget2")
-	newPayee(t, queries, ctx, budget.ID, "testpayee")
+	if _, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
+		Budget: budget.ID,
+		Name:   "testpayee",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	_, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
 		Budget: budget.ID,
 		Name:   "testpayee",

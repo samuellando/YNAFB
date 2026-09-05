@@ -11,7 +11,13 @@ func TestCreateCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
+		Budget: budget.ID,
+		Name:   "testcategory",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if category.Budget != budget.ID {
 		t.Error("budget id does not match")
 	}
@@ -177,7 +183,12 @@ func TestCreateCategoryDuplicateNameConstraint(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	budget2 := newBudget(t, queries, ctx, "testBudget2")
-	newCategory(t, queries, ctx, budget.ID, "testcategory")
+	if _, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
+		Budget: budget.ID,
+		Name:   "testcategory",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	_, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
 		Budget: budget.ID,
 		Name:   "testcategory",
@@ -185,7 +196,12 @@ func TestCreateCategoryDuplicateNameConstraint(t *testing.T) {
 	if err == nil {
 		t.Error("Should get an error for duplicate category name in same budget")
 	}
-	newCategory(t, queries, ctx, budget2.ID, "testcategory")
+	if _, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
+		Budget: budget2.ID,
+		Name:   "testcategory",
+	}); err != nil {
+		t.Error("Should not get an error for duplicate category names across budgets")
+	}
 }
 
 func TestUpdateCategory(t *testing.T) {

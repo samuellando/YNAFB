@@ -9,7 +9,13 @@ func TestCreateAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	account, err := queries.CreateAccount(ctx, data.CreateAccountParams{
+		Budget: budget.ID,
+		Name:   "testaccount",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if account.Budget != budget.ID {
 		t.Error("budget id does not match")
 	}
@@ -51,7 +57,12 @@ func TestCreateAccountDuplicateNameConstraint(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	budget2 := newBudget(t, queries, ctx, "testBudget2")
-	newAccount(t, queries, ctx, budget.ID, "testaccount")
+	if _, err := queries.CreateAccount(ctx, data.CreateAccountParams{
+		Budget: budget.ID,
+		Name:   "testaccount",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	_, err := queries.CreateAccount(ctx, data.CreateAccountParams{
 		Budget: budget.ID,
 		Name:   "testaccount",
@@ -59,7 +70,13 @@ func TestCreateAccountDuplicateNameConstraint(t *testing.T) {
 	if err == nil {
 		t.Error("Should get an error for duplicate account name in same budget")
 	}
-	newAccount(t, queries, ctx, budget2.ID, "testaccount")
+	_, err = queries.CreateAccount(ctx, data.CreateAccountParams{
+		Budget: budget2.ID,
+		Name:   "testaccount",
+	})
+	if err != nil {
+		t.Error("Should not get an error for duplicate account names across budgets")
+	}
 }
 
 func TestDeleteAccount(t *testing.T) {

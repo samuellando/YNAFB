@@ -12,7 +12,15 @@ func TestCreateAllocation(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := mustTime(t, 2026, 1, 1)
-	allocation := newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
+	allocation, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
+		Budget:   budget.ID,
+		Category: category.ID,
+		Month:    month,
+		Amount:   5000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if allocation.Budget != budget.ID {
 		t.Error("budget id does not match")
 	}
@@ -124,7 +132,9 @@ func TestCreateAllocationDuplicateBudgetCategoryMonth(t *testing.T) {
 		Month:    mustTime(t, 2026, 1, 1),
 		Amount:   5000,
 	}
-	newAllocation(t, queries, ctx, params.Budget, params.Category, params.Month, params.Amount)
+	if _, err := queries.CreateAllocation(ctx, params); err != nil {
+		t.Fatal(err)
+	}
 	_, err := queries.CreateAllocation(ctx, params)
 	if err == nil {
 		t.Error("Duplicate allocation for the same budget, category and month should raise an error")

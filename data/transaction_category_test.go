@@ -35,7 +35,17 @@ func TestCreateTransactionCategoryCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newCategoryLine(t, queries, ctx, tc.transaction.ID, tc.category.ID, 1000, 0)
+	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
+		Transaction:  tc.transaction.ID,
+		OtherAccount: sql.NullInt64{},
+		Category:     sql.NullInt64{Int64: tc.category.ID, Valid: true},
+		Income:       false,
+		Outflow:      1000,
+		Inflow:       0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if txCategory.Transaction != tc.transaction.ID {
 		t.Error("transaction id does not match")
 	}
@@ -63,7 +73,17 @@ func TestCreateTransactionCategoryOtherAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newTransfer(t, queries, ctx, tc.transaction.ID, tc.otherAccount.ID, 0, 1000)
+	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
+		Transaction:  tc.transaction.ID,
+		OtherAccount: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
+		Category:     sql.NullInt64{},
+		Income:       false,
+		Outflow:      0,
+		Inflow:       1000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !txCategory.OtherAccount.Valid || txCategory.OtherAccount.Int64 != tc.otherAccount.ID {
 		t.Error("other account id does not match")
 	}
@@ -79,7 +99,17 @@ func TestCreateTransactionCategoryIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newIncomeLine(t, queries, ctx, tc.transaction.ID, 5000)
+	txCategory, err := queries.CreateTransactionCategory(ctx, data.CreateTransactionCategoryParams{
+		Transaction:  tc.transaction.ID,
+		OtherAccount: sql.NullInt64{},
+		Category:     sql.NullInt64{},
+		Income:       true,
+		Outflow:      0,
+		Inflow:       5000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !txCategory.Income {
 		t.Error("income should be true")
 	}
