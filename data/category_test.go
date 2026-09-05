@@ -87,14 +87,14 @@ func TestDeleteBudgetCascadesCategories(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	categories, err := queries.ListCategories(ctx, budget.ID)
+	categories, err := queries.ListCategories(ctx, data.ListCategoriesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(categories) != 1 {
 		t.Fatal("There should be one category before")
 	}
-	err = queries.DeleteBudget(ctx, budget.ID)
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,14 +112,14 @@ func TestDeleteBudgetCascadesCategoryGroups(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
-	groups, err := queries.ListCategoryGroups(ctx, budget.ID)
+	groups, err := queries.ListCategoryGroups(ctx, data.ListCategoryGroupsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(groups) != 1 {
 		t.Fatal("There should be one category group before")
 	}
-	err = queries.DeleteBudget(ctx, budget.ID)
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestDeleteCategory(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	categories, err := queries.ListCategories(ctx, budget.ID)
+	categories, err := queries.ListCategories(ctx, data.ListCategoriesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestDeleteCategory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	categories, err = queries.ListCategories(ctx, budget.ID)
+	categories, err = queries.ListCategories(ctx, data.ListCategoriesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestListCategories(t *testing.T) {
 	newCategory(t, queries, ctx, budget.ID, "categoryB")
 	newCategory(t, queries, ctx, budget.ID, "categoryA")
 	newCategory(t, queries, ctx, budget2.ID, "otherBudgetCategory")
-	categories, err := queries.ListCategories(ctx, budget.ID)
+	categories, err := queries.ListCategories(ctx, data.ListCategoriesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +465,7 @@ func TestDeleteCategoryGroup(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
-	groups, err := queries.ListCategoryGroups(ctx, budget.ID)
+	groups, err := queries.ListCategoryGroups(ctx, data.ListCategoryGroupsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +476,7 @@ func TestDeleteCategoryGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	groups, err = queries.ListCategoryGroups(ctx, budget.ID)
+	groups, err = queries.ListCategoryGroups(ctx, data.ListCategoryGroupsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,7 +491,7 @@ func TestListCategoryGroups(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	newCategoryGroup(t, queries, ctx, budget.ID, "groupB")
 	newCategoryGroup(t, queries, ctx, budget.ID, "groupA")
-	groups, err := queries.ListCategoryGroups(ctx, budget.ID)
+	groups, err := queries.ListCategoryGroups(ctx, data.ListCategoryGroupsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

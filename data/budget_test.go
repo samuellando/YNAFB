@@ -103,18 +103,18 @@ func TestDeleteBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	budgets, err := queries.ListBudgets(ctx, budget.LoginID)
+	budgets, err := queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(budgets) != 1 {
 		t.Fatal("There should be one budget before")
 	}
-	err = queries.DeleteBudget(ctx, budget.ID)
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	budgets, err = queries.ListBudgets(ctx, budget.LoginID)
+	budgets, err = queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestListBudgets(t *testing.T) {
 	login := newLogin(t, queries, ctx, "user")
 	newBudgetForLogin(t, queries, ctx, login.ID, "budgetB")
 	newBudgetForLogin(t, queries, ctx, login.ID, "budgetA")
-	budgets, err := queries.ListBudgets(ctx, login.ID)
+	budgets, err := queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: login.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestListBudgetsScopedToLogin(t *testing.T) {
 	login2 := newLogin(t, queries, ctx, "user2")
 	newBudgetForLogin(t, queries, ctx, login1.ID, "budget1")
 	newBudgetForLogin(t, queries, ctx, login2.ID, "budget2")
-	budgets, err := queries.ListBudgets(ctx, login1.ID)
+	budgets, err := queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: login1.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestListBudgetActivityMonthsEmpty(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
+	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestListBudgetActivityMonthsFromTransactions(t *testing.T) {
 	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
 	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 3, 1), 2000, 0, "")
 	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 31), 500, 0, "")
-	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
+	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestListBudgetActivityMonthsFromAllocations(t *testing.T) {
 	feb := mustTime(t, 2026, 2, 1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 8000)
-	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
+	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestListBudgetActivityMonthsUnionDedupeOrder(t *testing.T) {
 	newTrx(t, queries, ctx, account, payee, feb, 2000, 0, "")
 	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 5000)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, mar, 8000)
-	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
+	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +295,7 @@ func TestListBudgetActivityMonthsExcludesOtherBudgets(t *testing.T) {
 	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	newTrx(t, queries, ctx, otherAccount, otherPayee, mustTime(t, 2026, 2, 1), 1000, 0, "")
 	newAllocation(t, queries, ctx, otherBudget.ID, otherCategory.ID, mustTime(t, 2026, 3, 1), 5000)
-	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
+	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +314,7 @@ func TestListBudgetActivityMonthsNormalizesToStartOfMonth(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 15), 1000, 0, "")
-	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
+	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

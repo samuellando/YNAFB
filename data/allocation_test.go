@@ -75,14 +75,14 @@ func TestDeleteBudgetCascadesAllocations(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	newAllocation(t, queries, ctx, budget.ID, category.ID, mustTime(t, 2026, 1, 1), 5000)
-	allocations, err := queries.ListAllocations(ctx, budget.ID)
+	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(allocations) != 1 {
 		t.Fatal("There should be one allocation before")
 	}
-	err = queries.DeleteBudget(ctx, budget.ID)
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestDeleteCategoryCascadesAllocations(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	newAllocation(t, queries, ctx, budget.ID, category.ID, mustTime(t, 2026, 1, 1), 5000)
-	allocations, err := queries.ListAllocations(ctx, budget.ID)
+	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestUpdateAllocation(t *testing.T) {
 	if n != 1 {
 		t.Error("The number of affected rows should be 1")
 	}
-	allocations, err := queries.ListAllocations(ctx, budget.ID)
+	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestDeleteAllocationByCategoryAndMonth(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := mustTime(t, 2026, 1, 1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	allocations, err := queries.ListAllocations(ctx, budget.ID)
+	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestDeleteAllocationByCategoryAndMonth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	allocations, err = queries.ListAllocations(ctx, budget.ID)
+	allocations, err = queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestListAllocations(t *testing.T) {
 	feb := mustTime(t, 2026, 2, 1)
 	allocation := newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 8000)
-	allocations, err := queries.ListAllocations(ctx, budget.ID)
+	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

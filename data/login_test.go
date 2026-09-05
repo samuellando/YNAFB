@@ -49,7 +49,7 @@ func TestGetLoginByUsername(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	login := newLogin(t, queries, ctx, "alice")
-	got, err := queries.GetLoginByUsername(ctx, "alice")
+	got, err := queries.GetLoginByUsername(ctx, data.GetLoginByUsernameParams{Username: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestGetLoginByUsername(t *testing.T) {
 func TestGetLoginByUsernameDoesNotExist(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	_, err := queries.GetLoginByUsername(ctx, "nobody")
+	_, err := queries.GetLoginByUsername(ctx, data.GetLoginByUsernameParams{Username: "nobody"})
 	if err == nil {
 		t.Fatal("Getting a non existent login by username should fail")
 	}
@@ -104,7 +104,7 @@ func TestUpdateLoginPassword(t *testing.T) {
 	if n != 1 {
 		t.Error("The number of affected rows should be 1")
 	}
-	got, err := queries.GetLoginByUsername(ctx, "alice")
+	got, err := queries.GetLoginByUsername(ctx, data.GetLoginByUsernameParams{Username: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +117,10 @@ func TestDeleteLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	login := newLogin(t, queries, ctx, "alice")
-	if err := queries.DeleteLogin(ctx, login.ID); err != nil {
+	if err := queries.DeleteLogin(ctx, data.DeleteLoginParams{ID: login.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := queries.GetLoginByUsername(ctx, "alice"); err == nil {
+	if _, err := queries.GetLoginByUsername(ctx, data.GetLoginByUsernameParams{Username: "alice"}); err == nil {
 		t.Fatal("Deleting a login should make it unretrievable")
 	}
 }
@@ -130,7 +130,7 @@ func TestDeleteLoginCascadesBudgets(t *testing.T) {
 	defer teardown(db)
 	login := newLogin(t, queries, ctx, "alice")
 	budget := newBudgetForLogin(t, queries, ctx, login.ID, "testBudget")
-	if err := queries.DeleteLogin(ctx, login.ID); err != nil {
+	if err := queries.DeleteLogin(ctx, data.DeleteLoginParams{ID: login.ID}); err != nil {
 		t.Fatal(err)
 	}
 	var count int

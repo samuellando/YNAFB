@@ -113,7 +113,7 @@ func TestDeletePayee(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	payees, err := queries.ListPayees(ctx, budget.ID)
+	payees, err := queries.ListPayees(ctx, data.ListPayeesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestDeletePayee(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payees, err = queries.ListPayees(ctx, budget.ID)
+	payees, err = queries.ListPayees(ctx, data.ListPayeesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,14 +138,14 @@ func TestDeleteBudgetCascadesPayees(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	payees, err := queries.ListPayees(ctx, budget.ID)
+	payees, err := queries.ListPayees(ctx, data.ListPayeesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(payees) != 1 {
 		t.Fatal("There should be one payee before")
 	}
-	err = queries.DeleteBudget(ctx, budget.ID)
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestListPayees(t *testing.T) {
 	newPayee(t, queries, ctx, budget.ID, "payeeB")
 	newPayee(t, queries, ctx, budget.ID, "payeeA")
 	newPayee(t, queries, ctx, budget2.ID, "otherBudgetPayee")
-	payees, err := queries.ListPayees(ctx, budget.ID)
+	payees, err := queries.ListPayees(ctx, data.ListPayeesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

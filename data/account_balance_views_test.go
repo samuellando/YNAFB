@@ -12,7 +12,7 @@ func TestListAccountsBalancesEmpty(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestListAccountsBalancesNoTransactions(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestListAccountsBalancesMultipleAccounts(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	newAccount(t, queries, ctx, budget.ID, "account1")
 	newAccount(t, queries, ctx, budget.ID, "account2")
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestListAccountsBalancesScopedToBudget(t *testing.T) {
 	budget2 := newBudget(t, queries, ctx, "testBudget2")
 	account1 := newAccount(t, queries, ctx, budget1.ID, "same")
 	account2 := newAccount(t, queries, ctx, budget2.ID, "same")
-	balances1, err := queries.ListAccountsBalances(ctx, budget1.ID)
+	balances1, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget1.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestListAccountsBalancesScopedToBudget(t *testing.T) {
 	if balances1[0].ID != account1.ID {
 		t.Error("budget1 returned the wrong account")
 	}
-	balances2, err := queries.ListAccountsBalances(ctx, budget2.ID)
+	balances2, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget2.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestListAccountsBalancesCategorySpend(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestListAccountsBalancesIncome(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
 	newIncomeLine(t, queries, ctx, transaction, 5000)
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestListAccountsBalancesTransferOutSourcePrimary(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
 	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestListAccountsBalancesTransferInMirrored(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	transaction := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
 	newTransfer(t, queries, ctx, transaction, source, 0, 500)
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestListAccountsBalancesSplitTransfer(t *testing.T) {
 	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
 	newTransfer(t, queries, ctx, transaction, target1, 1000, 0)
 	newTransfer(t, queries, ctx, transaction, target2, 2000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestListAccountsBalancesMixed(t *testing.T) {
 	newIncomeLine(t, queries, ctx, income, 5000)
 	transfer := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 3), 2000, 0, "")
 	newTransfer(t, queries, ctx, transfer, otherAccount, 2000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestListAccountsBalancesReconciledAndUnreconciled(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestListAccountsBalancesTransferReconciledPerAccount(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

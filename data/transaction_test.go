@@ -188,7 +188,7 @@ func TestDeleteAccountCascadesTransactions(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, budget.ID)
+	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestDeletePayeeCascadesTransactions(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, budget.ID)
+	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestUpdateTrx(t *testing.T) {
 	if n != 1 {
 		t.Error("The number of affected rows should be 1")
 	}
-	transactions, err := queries.ListTrxs(ctx, budget.ID)
+	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestDeleteTrx(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, budget.ID)
+	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestDeleteTrx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	transactions, err = queries.ListTrxs(ctx, budget.ID)
+	transactions, err = queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestListTrxs(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	tx1 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "first")
 	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "second")
-	transactions, err := queries.ListTrxs(ctx, budget.ID)
+	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestListTrxsScopedToBudget(t *testing.T) {
 	payee2 := newPayee(t, queries, ctx, budget2.ID, "payee2")
 	newTrx(t, queries, ctx, account1, payee1, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	newTrx(t, queries, ctx, account2, payee2, mustTime(t, 2026, 1, 2), 2000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, budget1.ID)
+	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget1.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

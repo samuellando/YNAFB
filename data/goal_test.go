@@ -201,14 +201,14 @@ func TestDeleteBudgetCascadesGoals(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal := newGoal(t, queries, ctx, budget.ID, category.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 5000)
-	goals, err := queries.ListGoals(ctx, budget.ID)
+	goals, err := queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(goals) != 1 {
 		t.Fatal("There should be one goal before")
 	}
-	err = queries.DeleteBudget(ctx, budget.ID)
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestDeleteCategoryCascadesGoals(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal := newGoal(t, queries, ctx, budget.ID, category.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 5000)
-	goals, err := queries.ListGoals(ctx, budget.ID)
+	goals, err := queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +314,7 @@ func TestDeleteGoal(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	goal := newGoal(t, queries, ctx, budget.ID, category.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 5000)
-	goals, err := queries.ListGoals(ctx, budget.ID)
+	goals, err := queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestDeleteGoal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goals, err = queries.ListGoals(ctx, budget.ID)
+	goals, err = queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +341,7 @@ func TestListGoals(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	start := mustTime(t, 2026, 1, 1)
 	goal := newGoal(t, queries, ctx, budget.ID, category.ID, "save", start, types.NullUnixTime{Time: time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC), Valid: true}, 5000)
-	goals, err := queries.ListGoals(ctx, budget.ID)
+	goals, err := queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

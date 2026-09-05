@@ -183,7 +183,7 @@ func executeLogin(ctx context.Context, queries *data.Queries, action string, arg
 			return fmt.Errorf("login delete requires [username]")
 		}
 
-		login, err := queries.GetLoginByUsername(ctx, args[0])
+		login, err := queries.GetLoginByUsername(ctx, data.GetLoginByUsernameParams{Username: args[0]})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("unknown login %q", args[0])
@@ -191,7 +191,7 @@ func executeLogin(ctx context.Context, queries *data.Queries, action string, arg
 			return err
 		}
 
-		if err := queries.DeleteLogin(ctx, login.ID); err != nil {
+		if err := queries.DeleteLogin(ctx, data.DeleteLoginParams{ID: login.ID}); err != nil {
 			return err
 		}
 
@@ -209,7 +209,7 @@ func resolveLogin(ctx context.Context, queries *data.Queries, loginName string) 
 		name = defaultLogin
 	}
 
-	login, err := queries.GetLoginByUsername(ctx, name)
+	login, err := queries.GetLoginByUsername(ctx, data.GetLoginByUsernameParams{Username: name})
 	if err == nil {
 		return loginContext{ID: login.ID, Username: login.Username}, nil
 	}
@@ -272,7 +272,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			return nil
 
 		case "list":
-			budgets, err := queries.ListBudgets(ctx, login.ID)
+			budgets, err := queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: login.ID})
 			if err != nil {
 				return err
 			}
@@ -289,7 +289,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			if err := queries.DeleteBudget(ctx, budget.ID); err != nil {
+			if err := queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID}); err != nil {
 				return err
 			}
 
@@ -314,7 +314,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			if len(positional) == 1 {
-				allocMonths, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
+				allocMonths, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
 				if err != nil {
 					return err
 				}
@@ -425,7 +425,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			accounts, err := queries.ListAccountsBalances(ctx, budget.ID)
+			accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 			if err != nil {
 				return err
 			}
@@ -641,7 +641,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			allocations, err := queries.ListAllocations(ctx, budget.ID)
+			allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
 			if err != nil {
 				return err
 			}
@@ -813,7 +813,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			categories, err := queries.ListCategories(ctx, budget.ID)
+			categories, err := queries.ListCategories(ctx, data.ListCategoriesParams{BudgetID: budget.ID})
 			if err != nil {
 				return err
 			}
@@ -908,7 +908,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			groups, err := queries.ListCategoryGroups(ctx, budget.ID)
+			groups, err := queries.ListCategoryGroups(ctx, data.ListCategoryGroupsParams{BudgetID: budget.ID})
 			if err != nil {
 				return err
 			}
@@ -1071,7 +1071,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			goals, err := queries.ListGoals(ctx, budget.ID)
+			goals, err := queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID})
 			if err != nil {
 				return err
 			}
@@ -1177,7 +1177,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			payees, err := queries.ListPayees(ctx, budget.ID)
+			payees, err := queries.ListPayees(ctx, data.ListPayeesParams{BudgetID: budget.ID})
 			if err != nil {
 				return err
 			}
@@ -1468,7 +1468,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			transactions, err := queries.ListTrxs(ctx, budget.ID)
+			transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
 			if err != nil {
 				return err
 			}
@@ -1774,7 +1774,7 @@ func resolveBudget(ctx context.Context, queries *data.Queries, login loginContex
 		return budgetContext{ID: budget.ID, Name: stringValue(budget.Name)}, nil
 	}
 
-	budgets, err := queries.ListBudgets(ctx, login.ID)
+	budgets, err := queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: login.ID})
 	if err != nil {
 		return budgetContext{}, err
 	}

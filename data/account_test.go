@@ -84,7 +84,7 @@ func TestDeleteAccount(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	accounts, err := queries.ListAccountsBalances(ctx, budget.ID)
+	accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestDeleteAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts, err = queries.ListAccountsBalances(ctx, budget.ID)
+	accounts, err = queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,18 +109,18 @@ func TestDeleteBudgetCascades(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	newAccount(t, queries, ctx, budget.ID, "testaccount")
-	accounts, err := queries.ListAccountsBalances(ctx, budget.ID)
+	accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(accounts) != 1 {
 		t.Fatal("There should be one account before")
 	}
-	err = queries.DeleteBudget(ctx, budget.ID)
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts, err = queries.ListAccountsBalances(ctx, budget.ID)
+	accounts, err = queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
