@@ -179,16 +179,7 @@ func TestDeletePayeeCascadesPayeeDefaultCategories(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Percent:      100,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	defaultCategory := newCategoryDefault(t, queries, ctx, payee.ID, category.ID, 100)
 	defaults, err := queries.ListPayeeDefaultCategoriesByPayee(ctx, payee.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -215,15 +206,7 @@ func TestDeleteAccountCascadesPayeeDefaultCategories(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	if _, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Percent:      100,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	newTransferDefault(t, queries, ctx, payee.ID, account.ID, 100)
 	err := queries.DeleteAccount(ctx, account.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -243,15 +226,7 @@ func TestDeleteCategoryCascadesPayeeDefaultCategories(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	if _, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Percent:      100,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	newCategoryDefault(t, queries, ctx, payee.ID, category.ID, 100)
 	err := queries.DeleteCategory(ctx, category.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -328,17 +303,8 @@ func TestUpdatePayeeDefaultCategoryPercentOver100Rejected(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Percent:      100,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.UpdatePayeeDefaultCategory(ctx, data.UpdatePayeeDefaultCategoryParams{
+	defaultCategory := newCategoryDefault(t, queries, ctx, payee.ID, category.ID, 100)
+	_, err := queries.UpdatePayeeDefaultCategory(ctx, data.UpdatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{},
 		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
@@ -358,16 +324,7 @@ func TestUpdatePayeeDefaultCategory(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Percent:      100,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	defaultCategory := newCategoryDefault(t, queries, ctx, payee.ID, category.ID, 100)
 	n, err := queries.UpdatePayeeDefaultCategory(ctx, data.UpdatePayeeDefaultCategoryParams{
 		Payee:        payee.ID,
 		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
@@ -401,16 +358,7 @@ func TestDeletePayeeDefaultCategory(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	defaultCategory, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Percent:      100,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	defaultCategory := newCategoryDefault(t, queries, ctx, payee.ID, category.ID, 100)
 	defaults, err := queries.ListPayeeDefaultCategoriesByPayee(ctx, payee.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -438,15 +386,7 @@ func TestDeletePayeeDefaultCategoriesByPayee(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	for i := 0; i < 2; i++ {
-		if _, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-			Payee:        payee.ID,
-			OtherAccount: sql.NullInt64{},
-			Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-			Income:       false,
-			Percent:      100,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		newCategoryDefault(t, queries, ctx, payee.ID, category.ID, 100)
 	}
 	defaults, err := queries.ListPayeeDefaultCategoriesByPayee(ctx, payee.ID)
 	if err != nil {
@@ -476,35 +416,9 @@ func TestListPayeeDefaultCategoriesByPayee(t *testing.T) {
 	payee2 := newPayee(t, queries, ctx, budget.ID, "otherpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	categoryDefault, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Percent:      100,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	transferDefault, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee.ID,
-		OtherAccount: sql.NullInt64{Int64: account.ID, Valid: true},
-		Category:     sql.NullInt64{},
-		Income:       false,
-		Percent:      50,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
-		Payee:        payee2.ID,
-		OtherAccount: sql.NullInt64{},
-		Category:     sql.NullInt64{Int64: category.ID, Valid: true},
-		Income:       false,
-		Percent:      100,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	categoryDefault := newCategoryDefault(t, queries, ctx, payee.ID, category.ID, 100)
+	transferDefault := newTransferDefault(t, queries, ctx, payee.ID, account.ID, 50)
+	newCategoryDefault(t, queries, ctx, payee2.ID, category.ID, 100)
 	defaults, err := queries.ListPayeeDefaultCategoriesByPayee(ctx, payee.ID)
 	if err != nil {
 		t.Fatal(err)

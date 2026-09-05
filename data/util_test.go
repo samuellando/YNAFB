@@ -70,6 +70,31 @@ func newCategory(t *testing.T, queries *data.Queries, ctx context.Context, budge
 	return c
 }
 
+func newCategoryGroup(t *testing.T, queries *data.Queries, ctx context.Context, budget int64, name string) int64 {
+	t.Helper()
+	id, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{Budget: budget, Name: name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func newGoal(t *testing.T, queries *data.Queries, ctx context.Context, budget, category int64, goalType string, start types.UnixTime, end types.NullUnixTime, amount int64) data.Goal {
+	t.Helper()
+	g, err := queries.CreateGoal(ctx, data.CreateGoalParams{
+		Budget:   budget,
+		Type:     goalType,
+		Start:    start,
+		End:      end,
+		Category: category,
+		Amount:   amount,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+
 func newAllocation(t *testing.T, queries *data.Queries, ctx context.Context, budget, category int64, month types.UnixTime, amount int64) data.Allocation {
 	t.Helper()
 	a, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
@@ -139,6 +164,36 @@ func newIncomeLine(t *testing.T, queries *data.Queries, ctx context.Context, tx 
 		t.Fatal(err)
 	}
 	return tc
+}
+
+func newCategoryDefault(t *testing.T, queries *data.Queries, ctx context.Context, payee, category, percent int64) data.PayeeDefaultCategory {
+	t.Helper()
+	pdc, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+		Payee:        payee,
+		OtherAccount: sql.NullInt64{},
+		Category:     sql.NullInt64{Int64: category, Valid: true},
+		Income:       false,
+		Percent:      percent,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pdc
+}
+
+func newTransferDefault(t *testing.T, queries *data.Queries, ctx context.Context, payee, otherAccount, percent int64) data.PayeeDefaultCategory {
+	t.Helper()
+	pdc, err := queries.CreatePayeeDefaultCategory(ctx, data.CreatePayeeDefaultCategoryParams{
+		Payee:        payee,
+		OtherAccount: sql.NullInt64{Int64: otherAccount, Valid: true},
+		Category:     sql.NullInt64{},
+		Income:       false,
+		Percent:      percent,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pdc
 }
 
 func listAccountTransactions(t *testing.T, queries *data.Queries, ctx context.Context, accountID int64) []data.ListAccountTransactionsRow {

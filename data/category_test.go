@@ -36,13 +36,7 @@ func TestCreateCategoryWithGroup(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
 	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
 		Budget:        budget.ID,
 		Name:          "testcategory",
@@ -63,14 +57,8 @@ func TestCreateCategoryNonExistingBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = queries.CreateCategory(ctx, data.CreateCategoryParams{
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
+	_, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
 		Budget:        99,
 		Name:          "testcategory",
 		CategoryGroup: sql.NullInt64{Int64: groupID, Valid: true},
@@ -123,13 +111,7 @@ func TestDeleteBudgetCascadesCategoryGroups(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
 	groups, err := queries.ListCategoryGroups(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -208,13 +190,7 @@ func TestUpdateCategory(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	n, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
 		Name:          "newName",
@@ -327,13 +303,7 @@ func TestDeleteCategoryGroupSetsCategoryGroupNull(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
 	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
 		Budget:        budget.ID,
 		Name:          "testcategory",
@@ -465,13 +435,7 @@ func TestUpdateCategoryGroup(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
 	n, err := queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
 		Name: "newName",
 		ID:   groupID,
@@ -498,13 +462,7 @@ func TestDeleteCategoryGroup(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
 	groups, err := queries.ListCategoryGroups(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -529,18 +487,8 @@ func TestListCategoryGroups(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	if _, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "groupB",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "groupA",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	newCategoryGroup(t, queries, ctx, budget.ID, "groupB")
+	newCategoryGroup(t, queries, ctx, budget.ID, "groupA")
 	groups, err := queries.ListCategoryGroups(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -560,13 +508,7 @@ func TestGetCategoryGroupByName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
-		Budget: budget.ID,
-		Name:   "testgroup",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	groupID := newCategoryGroup(t, queries, ctx, budget.ID, "testgroup")
 	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
 		Name:   "testgroup",
 		Budget: budget.ID,
