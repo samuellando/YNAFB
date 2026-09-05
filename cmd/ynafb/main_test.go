@@ -1225,8 +1225,8 @@ func TestCommandArgValidation(t *testing.T) {
 		{[]string{"transaction", "create", "2026-08-28"}, "transaction create requires [date] [account] [payee] [total_out] [total_in] [note]"},
 		{[]string{"transaction", "delete"}, "transaction delete requires [id]"},
 		{[]string{"transaction", "category", "delete"}, "transaction category delete requires [id]"},
-		{[]string{"transaction", "category"}, "transaction category requires a subcommand (create|delete)"},
-		{[]string{"payee", "default-category"}, "payee default-category requires a subcommand (create|delete)"},
+		{[]string{"transaction", "category"}, "transaction category requires a subcommand (create|update|delete)"},
+		{[]string{"payee", "default-category"}, "payee default-category requires a subcommand (create|update|delete)"},
 		{[]string{"payee", "default-category", "delete"}, "payee default-category delete requires [id]"},
 	}
 
@@ -1553,14 +1553,14 @@ func TestCategoryCreateWithGroup(t *testing.T) {
 	}
 
 	var grouped, ungrouped int64
-	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group = ?", groupID).Scan(&grouped); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group_id = ?", groupID).Scan(&grouped); err != nil {
 		t.Fatalf("count grouped: %v", err)
 	}
 	if grouped != 2 {
 		t.Fatalf("grouped categories = %d, want 2", grouped)
 	}
 
-	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group IS NULL").Scan(&ungrouped); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group_id IS NULL").Scan(&ungrouped); err != nil {
 		t.Fatalf("count ungrouped: %v", err)
 	}
 	if ungrouped != 1 {
@@ -1627,7 +1627,7 @@ func TestGroupCommands(t *testing.T) {
 	assertRowCount(t, dbPath, "category_group", 1)
 }
 
-func TestGroupDeleteUngroupsCategories(t *testing.T) {
+func TestGroupDeleteCascadesCategories(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
 	runCommands(t, dbPath, [][]string{
@@ -1659,18 +1659,18 @@ func TestGroupDeleteUngroupsCategories(t *testing.T) {
 		t.Fatalf("groups after delete = %d, want 0", count)
 	}
 
-	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group = ?", groupID).Scan(&count); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group_id = ?", groupID).Scan(&count); err != nil {
 		t.Fatalf("count grouped: %v", err)
 	}
 	if count != 0 {
 		t.Fatalf("grouped categories after delete = %d, want 0", count)
 	}
 
-	if err := db.QueryRow("SELECT COUNT(*) FROM category WHERE category_group IS NULL").Scan(&count); err != nil {
-		t.Fatalf("count ungrouped: %v", err)
+	if err := db.QueryRow("SELECT COUNT(*) FROM category").Scan(&count); err != nil {
+		t.Fatalf("count categories: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("ungrouped categories = %d, want 1", count)
+	if count != 0 {
+		t.Fatalf("total categories = %d, want 0 (group delete cascades)", count)
 	}
 }
 
@@ -2040,7 +2040,7 @@ func TestAccountCategorizeExcludesMirroredTransfers(t *testing.T) {
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
 		{"account", "create", "Savings"},
-		{"transaction", "create", "2026-08-28", "Savings", "Me", "0.00", "5.00", ""},
+		{"transaction", "create", "2026-08-28", "Savings", "Myself", "0.00", "5.00", ""},
 		{"transaction", "category", "create", "1", "0.00", "5.00", "--other-account", "Checking"},
 	})
 
@@ -2335,15 +2335,15 @@ func TestGoalWarning(t *testing.T) {
 
 	newGoal := func(type_, start, end string, amount, gap int64) data.ListGoalsValuesRow {
 		g := data.ListGoalsValuesRow{
-			ID:       1,
-			Type:     type_,
-			Category: 1,
-			Start:    types.UnixTime{Time: mustMonth(start)},
-			Amount:   amount,
-			Gap:      gap,
+			ID:          1,
+			Type:        type_,
+			CategoryID:  1,
+			StartDate:   types.UnixTime{Time: mustMonth(start)},
+			Amount:      amount,
+			Gap:         gap,
 		}
 		if end != "" {
-			g.End = types.NullUnixTime{Time: mustMonth(end), Valid: true}
+			g.EndDate = types.NullUnixTime{Time: mustMonth(end), Valid: true}
 		}
 		return g
 	}
@@ -3027,16 +3027,16 @@ func TestAccountCategorizeSaveDefaultPercentRounding(t *testing.T) {
 	runCommands(t, dbPath, [][]string{
 		{"budget", "create", "Home Budget"},
 		{"account", "create", "Checking"},
-		{"category", "create", "A"},
-		{"category", "create", "B"},
-		{"category", "create", "C"},
+		{"category", "create", "AAA"},
+		{"category", "create", "BBB"},
+		{"category", "create", "CCC"},
 		{"transaction", "create", "2026-08-28", "Checking", "Three Way", "10.00", "0.00", ""},
 	})
 
 	input := strings.Join([]string{
-		"a", "A", "3.33", "",
-		"a", "B", "3.33", "",
-		"a", "C", "3.34", "",
+		"a", "AAA", "3.33", "",
+		"a", "BBB", "3.33", "",
+		"a", "CCC", "3.34", "",
 		"o", "y",
 	}, "\n")
 
@@ -3159,6 +3159,154 @@ func TestAccountCategorizeOrderingAndCounts(t *testing.T) {
 	if !strings.Contains(stdout, "2026-08-30") {
 		t.Fatalf("expected newest transaction processed first, got %q", stdout)
 	}
+}
+
+func TestLoginCommands(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "login", "create", "alice")
+	if exitCode != 0 {
+		t.Fatalf("login create failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "created login 1\n" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "login", "create", "bob")
+	if exitCode != 0 {
+		t.Fatalf("login create failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "created login 2\n" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "login", "list")
+	if exitCode != 0 {
+		t.Fatalf("login list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "USERNAME\nalice\nbob\n" {
+		t.Fatalf("unexpected login list stdout: %q", stdout)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "login", "delete", "alice")
+	if exitCode != 0 {
+		t.Fatalf("login delete failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "deleted login \"alice\"\n" {
+		t.Fatalf("unexpected stdout: %q", stdout)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "login", "list")
+	if exitCode != 0 {
+		t.Fatalf("login list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "USERNAME\nbob\n" {
+		t.Fatalf("unexpected login list stdout after delete: %q", stdout)
+	}
+}
+
+func TestLoginValidation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	assertCommandFails(t, dbPath, "login create requires [username]", "login", "create")
+	assertCommandFails(t, dbPath, "login delete requires [username]", "login", "delete")
+	assertCommandFails(t, dbPath, `unknown login "nobody"`, "login", "delete", "nobody")
+	assertCommandFails(t, dbPath, `unsupported action "bogus" for resource "login"`, "login", "bogus")
+	assertCommandFails(t, dbPath, "CHECK constraint failed", "login", "create", "ab")
+
+	runCommands(t, dbPath, [][]string{{"login", "create", "alice"}})
+	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "login", "create", "alice")
+}
+
+func TestDefaultLoginAutoCreated(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{{"budget", "create", "Home Budget"}})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "login", "list")
+	if exitCode != 0 {
+		t.Fatalf("login list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "USERNAME\ncli\n" {
+		t.Fatalf("expected default cli login auto-created, got %q", stdout)
+	}
+}
+
+func TestLoginFlagSelectsUser(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"login", "create", "alice"},
+		{"login", "create", "bob"},
+	})
+
+	runCommands(t, dbPath, [][]string{
+		{"--login", "alice", "budget", "create", "Alice Budget"},
+		{"--login", "bob", "budget", "create", "Bob Budget"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "--login", "alice", "budget", "list")
+	if exitCode != 0 {
+		t.Fatalf("budget list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "NAME\nAlice Budget\n" {
+		t.Fatalf("alice budget list: got %q", stdout)
+	}
+
+	stdout, stderr, exitCode = invoke(t, dbPath, "--login", "bob", "budget", "list")
+	if exitCode != 0 {
+		t.Fatalf("budget list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "NAME\nBob Budget\n" {
+		t.Fatalf("bob budget list: got %q", stdout)
+	}
+}
+
+func TestBudgetsScopedToLogin(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"login", "create", "alice"},
+		{"login", "create", "bob"},
+	})
+
+	// Same budget name is allowed across different logins.
+	runCommands(t, dbPath, [][]string{
+		{"--login", "alice", "budget", "create", "Shared"},
+		{"--login", "bob", "budget", "create", "Shared"},
+	})
+
+	// A budget-requiring command without --login uses the default "cli" user,
+	// which has no budgets yet.
+	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "list")
+	if exitCode != 0 {
+		t.Fatalf("budget list failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if stdout != "NAME\n" {
+		t.Fatalf("cli budget list should be empty, got %q", stdout)
+	}
+}
+
+func TestLoginUnknown(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	assertCommandFails(t, dbPath, `unknown login "nobody"`, "--login", "nobody", "budget", "list")
+}
+
+func TestLoginDeleteCascadesBudgets(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
+
+	runCommands(t, dbPath, [][]string{
+		{"login", "create", "alice"},
+		{"--login", "alice", "budget", "create", "Alice Budget"},
+	})
+
+	stdout, stderr, exitCode := invoke(t, dbPath, "login", "delete", "alice")
+	if exitCode != 0 {
+		t.Fatalf("login delete failed: stdout=%q stderr=%q", stdout, stderr)
+	}
+
+	assertRowCount(t, dbPath, "budget", 0)
 }
 
 func invoke(t *testing.T, dbPath string, args ...string) (string, string, int) {
