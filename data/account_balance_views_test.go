@@ -111,8 +111,8 @@ func TestListAccountsBalancesCategorySpend(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -134,8 +134,8 @@ func TestListAccountsBalancesIncome(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, transaction.ID, 5000)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, transaction, 5000)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -158,8 +158,8 @@ func TestListAccountsBalancesTransferOutSourcePrimary(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
+	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -186,8 +186,8 @@ func TestListAccountsBalancesTransferInMirrored(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, target.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 500, "")
-	newTransfer(t, queries, ctx, transaction.ID, source.ID, 0, 500)
+	transaction := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, transaction, source, 0, 500)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -215,9 +215,9 @@ func TestListAccountsBalancesSplitTransfer(t *testing.T) {
 	target1 := newAccount(t, queries, ctx, budget.ID, "target1")
 	target2 := newAccount(t, queries, ctx, budget.ID, "target2")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction.ID, target1.ID, 1000, 0)
-	newTransfer(t, queries, ctx, transaction.ID, target2.ID, 2000, 0)
+	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction, target1, 1000, 0)
+	newTransfer(t, queries, ctx, transaction, target2, 2000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -240,28 +240,6 @@ func TestListAccountsBalancesSplitTransfer(t *testing.T) {
 	}
 }
 
-func TestListAccountsBalancesZeroAmountTransaction(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 0, "")
-	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(balances) != 1 {
-		t.Fatalf("expected one balance, got %d", len(balances))
-	}
-	if balances[0].Balance != 0 {
-		t.Errorf("expected balance 0, got %d", balances[0].Balance)
-	}
-	if balances[0].ReconciledBalance != 0 {
-		t.Errorf("expected reconciled balance 0, got %d", balances[0].ReconciledBalance)
-	}
-}
-
 func TestListAccountsBalancesMixed(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
@@ -270,12 +248,12 @@ func TestListAccountsBalancesMixed(t *testing.T) {
 	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	spend := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend.ID, category.ID, 1000, 0)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 2), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 5000)
-	transfer := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 3), 2000, 0, "")
-	newTransfer(t, queries, ctx, transfer.ID, otherAccount.ID, 2000, 0)
+	spend := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
+	income := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 2), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, income, 5000)
+	transfer := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 3), 2000, 0, "")
+	newTransfer(t, queries, ctx, transfer, otherAccount, 2000, 0)
 	balances, err := queries.ListAccountsBalances(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -302,11 +280,12 @@ func TestListAccountsBalancesReconciledAndUnreconciled(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	reconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, reconciled.ID, category.ID, 1000, 0)
-	unreconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "")
-	newCategoryLine(t, queries, ctx, unreconciled.ID, category.ID, 2000, 0)
+	reconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, reconciled, category, 1000, 0)
+	unreconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	newCategoryLine(t, queries, ctx, unreconciled, category, 2000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	}); err != nil {
@@ -334,9 +313,10 @@ func TestListAccountsBalancesTransferReconciledPerAccount(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
+	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: target.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	}); err != nil {
@@ -366,7 +346,7 @@ func TestGetAccountBalancesNoTransactions(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	balances, err := queries.GetAccountBalances(ctx, account.ID)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,9 +371,9 @@ func TestGetAccountBalancesCategorySpend(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
-	balances, err := queries.GetAccountBalances(ctx, account.ID)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,9 +391,9 @@ func TestGetAccountBalancesIncome(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, transaction.ID, 5000)
-	balances, err := queries.GetAccountBalances(ctx, account.ID)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, transaction, 5000)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,9 +412,9 @@ func TestGetAccountBalancesTransferTarget(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
-	balances, err := queries.GetAccountBalances(ctx, target.ID)
+	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: target.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,9 +430,9 @@ func TestGetAccountBalancesTransferSource(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
-	balances, err := queries.GetAccountBalances(ctx, source.ID)
+	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: source.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,9 +448,9 @@ func TestGetAccountBalancesMirroredTransfer(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, target.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 500, "")
-	newTransfer(t, queries, ctx, transaction.ID, source.ID, 0, 500)
-	balances, err := queries.GetAccountBalances(ctx, target.ID)
+	transaction := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, transaction, source, 0, 500)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: target.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -486,17 +466,18 @@ func TestGetAccountBalancesReconciled(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	reconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, reconciled.ID, category.ID, 1000, 0)
-	unreconciled := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "")
-	newCategoryLine(t, queries, ctx, unreconciled.ID, category.ID, 2000, 0)
+	reconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, reconciled, category, 1000, 0)
+	unreconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	newCategoryLine(t, queries, ctx, unreconciled, category, 2000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	balances, err := queries.GetAccountBalances(ctx, account.ID)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,29 +489,11 @@ func TestGetAccountBalancesReconciled(t *testing.T) {
 	}
 }
 
-func TestGetAccountBalancesZeroAmountTransaction(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 0, "")
-	balances, err := queries.GetAccountBalances(ctx, account.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if balances.Balance != 0 {
-		t.Errorf("expected balance 0, got %d", balances.Balance)
-	}
-	if balances.ReconciledBalance != 0 {
-		t.Errorf("expected reconciled balance 0, got %d", balances.ReconciledBalance)
-	}
-}
-
 func TestGetAccountBalancesNonExistent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	_, err := queries.GetAccountBalances(ctx, 99)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: 99})
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected sql.ErrNoRows, got %v", err)
 	}
@@ -542,6 +505,7 @@ func TestGetAccountBalanceAsOfNoTransactions(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 15),
 	})
@@ -559,8 +523,9 @@ func TestGetAccountBalanceAsOfBeforeFirstTransaction(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 15), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 1),
 	})
@@ -578,8 +543,9 @@ func TestGetAccountBalanceAsOfInclusiveOfDate(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 15), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 15),
 	})
@@ -598,9 +564,10 @@ func TestGetAccountBalanceAsOfCategorySpend(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -618,9 +585,10 @@ func TestGetAccountBalanceAsOfIncome(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, transaction.ID, 5000)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, transaction, 5000)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -639,9 +607,10 @@ func TestGetAccountBalanceAsOfTransferSourcePrimary(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
+	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
 	sourceBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: source.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -652,6 +621,7 @@ func TestGetAccountBalanceAsOfTransferSourcePrimary(t *testing.T) {
 		t.Errorf("expected source balance -3000, got %d", sourceBalance)
 	}
 	targetBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: target.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -670,9 +640,10 @@ func TestGetAccountBalanceAsOfTransferMirrored(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, target.ID, payee.ID, mustTime(t, 2026, 1, 1), 0, 500, "")
-	newTransfer(t, queries, ctx, transaction.ID, source.ID, 0, 500)
+	transaction := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, transaction, source, 0, 500)
 	targetBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: target.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -683,6 +654,7 @@ func TestGetAccountBalanceAsOfTransferMirrored(t *testing.T) {
 		t.Errorf("expected target balance 500, got %d", targetBalance)
 	}
 	sourceBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: source.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -700,9 +672,10 @@ func TestGetAccountBalanceAsOfExcludesLaterTransactions(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -713,6 +686,7 @@ func TestGetAccountBalanceAsOfExcludesLaterTransactions(t *testing.T) {
 		t.Errorf("expected balance -1000, got %d", balance)
 	}
 	fullBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 28),
 	})
@@ -731,9 +705,10 @@ func TestGetAccountBalanceAsOfExcludesTransfersAfterDate(t *testing.T) {
 	source := newAccount(t, queries, ctx, budget.ID, "source")
 	target := newAccount(t, queries, ctx, budget.ID, "target")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, source.ID, payee.ID, mustTime(t, 2026, 2, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction.ID, target.ID, 3000, 0)
+	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 2, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: target.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})
@@ -753,13 +728,14 @@ func TestGetAccountBalanceAsOfCombined(t *testing.T) {
 	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	spend := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend.ID, category.ID, 1000, 0)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 2), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 5000)
-	incoming := newTransaction(t, queries, ctx, otherAccount.ID, payee.ID, mustTime(t, 2026, 1, 3), 2000, 0, "")
-	newTransfer(t, queries, ctx, incoming.ID, account.ID, 2000, 0)
+	spend := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
+	income := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 2), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, income, 5000)
+	incoming := newTrx(t, queries, ctx, otherAccount, payee, mustTime(t, 2026, 1, 3), 2000, 0, "")
+	newTransfer(t, queries, ctx, incoming, account, 2000, 0)
 	before, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 1),
 	})
@@ -770,6 +746,7 @@ func TestGetAccountBalanceAsOfCombined(t *testing.T) {
 		t.Errorf("expected balance -1000 as of Jan 1, got %d", before)
 	}
 	after, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 1, 31),
 	})

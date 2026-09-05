@@ -12,9 +12,10 @@ func TestReconcileAccountTransactions(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	tx1 := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 3, 1), 2000, 0, "")
+	tx1 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 3, 1), 2000, 0, "")
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	})
@@ -25,30 +26,31 @@ func TestReconcileAccountTransactions(t *testing.T) {
 		t.Fatalf("Expected 1 reconciled transaction, got %d", n)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account = ?`, account.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account_id = ?`, account.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
 		t.Fatalf("Expected 1 reconciliation row, got %d", count)
 	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account = ? AND "transaction" = ?`, account.ID, tx1.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account_id = ? AND trx_id = ?`, account.ID, tx1.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
-		t.Fatalf("Expected the transaction before the cutoff date to be reconciled, got %d", count)
+		t.Fatalf("Expected the transaction before the cutoff date to be reconciled by trx_id, got %d", count)
 	}
 }
 
-func TestReconcileAccountTransactionsIncludesTransfers(t *testing.T) {
+func TestReconcileAccountTransactionsReconcilesTransferLine(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	tx := newTransaction(t, queries, ctx, otherAccount.ID, payee.ID, mustTime(t, 2026, 1, 15), 3000, 0, "")
-	newTransfer(t, queries, ctx, tx.ID, account.ID, 3000, 0)
+	tx := newTrx(t, queries, ctx, otherAccount, payee, mustTime(t, 2026, 1, 15), 3000, 0, "")
+	line := newTransfer(t, queries, ctx, tx, account, 3000, 0)
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	})
@@ -59,11 +61,51 @@ func TestReconcileAccountTransactionsIncludesTransfers(t *testing.T) {
 		t.Fatalf("Expected 1 reconciled transaction, got %d", n)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account = ? AND "transaction" = ?`, account.ID, tx.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account_id = ? AND trx_line_id = ?`, account.ID, line.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
-		t.Fatalf("Expected the transfer into the account to be reconciled, got %d", count)
+		t.Fatalf("Expected the transfer line to be reconciled by trx_line_id, got %d", count)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account_id = ? AND trx_id = ?`, account.ID, tx.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("A transfer into the account should reconcile the line, not the transaction, got %d trx_id rows", count)
+	}
+}
+
+func TestReconcileAccountTransactionsOwnedAndTransferred(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	transferOut := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 2), 2000, 0, "")
+	newTransfer(t, queries, ctx, transferOut, target, 2000, 0)
+	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
+		AccountID: account.ID,
+		Date:      mustTime(t, 2026, 2, 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("Expected 2 owned transactions reconciled, got %d", n)
+	}
+	n, err = queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
+		AccountID: target.ID,
+		Date:      mustTime(t, 2026, 2, 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("Expected the transfer line reconciled in the target, got %d", n)
 	}
 }
 
@@ -73,8 +115,9 @@ func TestReconcileAccountTransactionsIdempotent(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	params := data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	}
@@ -93,7 +136,7 @@ func TestReconcileAccountTransactionsIdempotent(t *testing.T) {
 		t.Fatalf("Expected 0 affected rows on second reconcile, got %d", n)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account = ?`, account.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account_id = ?`, account.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -107,6 +150,7 @@ func TestReconcileAccountTransactionsEmpty(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	})
@@ -117,11 +161,32 @@ func TestReconcileAccountTransactionsEmpty(t *testing.T) {
 		t.Fatalf("Expected 0 reconciled transactions, got %d", n)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account = ?`, account.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account_id = ?`, account.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
 		t.Fatalf("Expected no reconciliation rows, got %d", count)
+	}
+}
+
+func TestReconcileAccountTransactionsScopedToBudget(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget1 := newBudget(t, queries, ctx, "budget1")
+	budget2 := newBudget(t, queries, ctx, "budget2")
+	account1 := newAccount(t, queries, ctx, budget1.ID, "account1")
+	payee1 := newPayee(t, queries, ctx, budget1.ID, "payee1")
+	newTrx(t, queries, ctx, account1, payee1, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget2.ID,
+		AccountID: account1.ID,
+		Date:      mustTime(t, 2026, 2, 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("Reconciling with a mismatched budget should affect 0 rows, got %d", n)
 	}
 }
 
@@ -131,19 +196,20 @@ func TestDeleteAccountCascadesReconciliations(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := queries.DeleteAccount(ctx, account.ID)
+	err := queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: account.ID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account = ?`, account.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE account_id = ?`, account.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
@@ -151,28 +217,58 @@ func TestDeleteAccountCascadesReconciliations(t *testing.T) {
 	}
 }
 
-func TestDeleteTransactionCascadesReconciliations(t *testing.T) {
+func TestDeleteTrxCascadesReconciliations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
 		AccountID: account.ID,
 		Date:      mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := queries.DeleteTransaction(ctx, transaction.ID)
+	err := queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: transaction.ID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE "transaction" = ?`, transaction.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE trx_id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
 		t.Fatal("Deleting a transaction should cascade delete its reconciliations")
+	}
+}
+
+func TestDeleteTrxLineCascadesReconciliations(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	target := newAccount(t, queries, ctx, budget.ID, "target")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	tx := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 2000, 0, "")
+	line := newTransfer(t, queries, ctx, tx, target, 2000, 0)
+	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID:  budget.ID,
+		AccountID: target.ID,
+		Date:      mustTime(t, 2026, 2, 1),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{ID: line.ID, BudgetID: budget.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM reconciliation WHERE trx_line_id = ?`, line.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("Deleting a transaction line should cascade delete its reconciliations")
 	}
 }

@@ -6,17 +6,18 @@ import (
 	"samuellando.com/YNAFB/data"
 )
 
-func TestCreateTransaction(t *testing.T) {
+func TestCreateTrx(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	date := mustTime(t, 2026, 1, 1)
-	transaction, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	transaction, err := queries.CreateTrx(ctx, data.CreateTrxParams{
+		BudgetID:     budget.ID,
+		AccountID:    account.ID,
+		PayeeID:      payee.ID,
 		Date:         date,
-		Account:      account.ID,
-		Payee:        payee.ID,
 		TotalOutflow: 1000,
 		TotalInflow:  0,
 		Note:         "testnote",
@@ -27,10 +28,10 @@ func TestCreateTransaction(t *testing.T) {
 	if transaction.Date.Unix() != date.Unix() {
 		t.Error("date does not match")
 	}
-	if transaction.Account != account.ID {
+	if transaction.AccountID != account.ID {
 		t.Error("account id does not match")
 	}
-	if transaction.Payee != payee.ID {
+	if transaction.PayeeID != payee.ID {
 		t.Error("payee id does not match")
 	}
 	if transaction.TotalOutflow != 1000 {
@@ -47,16 +48,17 @@ func TestCreateTransaction(t *testing.T) {
 	}
 }
 
-func TestCreateTransactionBothInflowAndOutflowRejected(t *testing.T) {
+func TestCreateTrxBothInflowAndOutflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	_, err := queries.CreateTrx(ctx, data.CreateTrxParams{
+		BudgetID:     budget.ID,
+		AccountID:    account.ID,
+		PayeeID:      payee.ID,
 		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
 		TotalOutflow: 1000,
 		TotalInflow:  500,
 	})
@@ -65,16 +67,17 @@ func TestCreateTransactionBothInflowAndOutflowRejected(t *testing.T) {
 	}
 }
 
-func TestCreateTransactionNegativeOutflowRejected(t *testing.T) {
+func TestCreateTrxNegativeOutflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	_, err := queries.CreateTrx(ctx, data.CreateTrxParams{
+		BudgetID:     budget.ID,
+		AccountID:    account.ID,
+		PayeeID:      payee.ID,
 		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
 		TotalOutflow: -1000,
 		TotalInflow:  0,
 	})
@@ -83,16 +86,17 @@ func TestCreateTransactionNegativeOutflowRejected(t *testing.T) {
 	}
 }
 
-func TestCreateTransactionNegativeInflowRejected(t *testing.T) {
+func TestCreateTrxNegativeInflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	_, err := queries.CreateTrx(ctx, data.CreateTrxParams{
+		BudgetID:     budget.ID,
+		AccountID:    account.ID,
+		PayeeID:      payee.ID,
 		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
 		TotalOutflow: 0,
 		TotalInflow:  -500,
 	})
@@ -101,35 +105,56 @@ func TestCreateTransactionNegativeInflowRejected(t *testing.T) {
 	}
 }
 
-func TestUpdateTransactionBothInflowAndOutflowRejected(t *testing.T) {
+func TestCreateTrxZeroAmountRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	_, err := queries.UpdateTransaction(ctx, data.UpdateTransactionParams{
+	_, err := queries.CreateTrx(ctx, data.CreateTrxParams{
+		BudgetID:     budget.ID,
+		AccountID:    account.ID,
+		PayeeID:      payee.ID,
 		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        payee.ID,
+		TotalOutflow: 0,
+		TotalInflow:  0,
+	})
+	if err == nil {
+		t.Error("A transaction with both inflow and outflow zero should be rejected")
+	}
+}
+
+func TestUpdateTrxBothInflowAndOutflowRejected(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	_, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
+		Date:         mustTime(t, 2026, 1, 1),
+		AccountID:    account.ID,
+		PayeeID:      payee.ID,
 		TotalOutflow: 1000,
 		TotalInflow:  500,
 		ID:           transaction.ID,
+		BudgetID:     budget.ID,
 	})
 	if err == nil {
 		t.Error("Updating a transaction to have both inflow and outflow should be rejected")
 	}
 }
 
-func TestCreateTransactionNonExistingAccount(t *testing.T) {
+func TestCreateTrxNonExistingAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	_, err := queries.CreateTrx(ctx, data.CreateTrxParams{
+		BudgetID:     budget.ID,
+		AccountID:    99,
+		PayeeID:      payee.ID,
 		Date:         mustTime(t, 2026, 1, 1),
-		Account:      99,
-		Payee:        payee.ID,
 		TotalOutflow: 1000,
 		TotalInflow:  0,
 	})
@@ -138,15 +163,16 @@ func TestCreateTransactionNonExistingAccount(t *testing.T) {
 	}
 }
 
-func TestCreateTransactionNonExistingPayee(t *testing.T) {
+func TestCreateTrxNonExistingPayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	_, err := queries.CreateTransaction(ctx, data.CreateTransactionParams{
+	_, err := queries.CreateTrx(ctx, data.CreateTrxParams{
+		BudgetID:     budget.ID,
+		AccountID:    account.ID,
+		PayeeID:      99,
 		Date:         mustTime(t, 2026, 1, 1),
-		Account:      account.ID,
-		Payee:        99,
 		TotalOutflow: 1000,
 		TotalInflow:  0,
 	})
@@ -161,20 +187,20 @@ func TestDeleteAccountCascadesTransactions(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTransactions(ctx, budget.ID)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	transactions, err := queries.ListTrxs(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(transactions) != 1 {
 		t.Fatal("There should be one transaction before")
 	}
-	err = queries.DeleteAccount(ctx, account.ID)
+	err = queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: account.ID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM "transaction" WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
@@ -188,20 +214,20 @@ func TestDeletePayeeCascadesTransactions(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTransactions(ctx, budget.ID)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	transactions, err := queries.ListTrxs(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(transactions) != 1 {
 		t.Fatal("There should be one transaction before")
 	}
-	err = queries.DeletePayee(ctx, payee.ID)
+	err = queries.DeletePayee(ctx, data.DeletePayeeParams{ID: payee.ID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM "transaction" WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
@@ -209,22 +235,23 @@ func TestDeletePayeeCascadesTransactions(t *testing.T) {
 	}
 }
 
-func TestUpdateTransaction(t *testing.T) {
+func TestUpdateTrx(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "testnote")
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "testnote")
 	date := mustTime(t, 2026, 2, 1)
-	n, err := queries.UpdateTransaction(ctx, data.UpdateTransactionParams{
+	n, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
 		Date:         date,
-		Account:      account.ID,
-		Payee:        payee.ID,
+		AccountID:    account.ID,
+		PayeeID:      payee.ID,
 		TotalOutflow: 2000,
 		TotalInflow:  0,
 		Note:         "newnote",
 		ID:           transaction.ID,
+		BudgetID:     budget.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +259,7 @@ func TestUpdateTransaction(t *testing.T) {
 	if n != 1 {
 		t.Error("The number of affected rows should be 1")
 	}
-	transactions, err := queries.ListTransactions(ctx, budget.ID)
+	transactions, err := queries.ListTrxs(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,25 +280,25 @@ func TestUpdateTransaction(t *testing.T) {
 	}
 }
 
-func TestDeleteTransaction(t *testing.T) {
+func TestDeleteTrx(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTransactions(ctx, budget.ID)
+	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	transactions, err := queries.ListTrxs(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(transactions) != 1 {
 		t.Fatal("There should be one transaction before")
 	}
-	err = queries.DeleteTransaction(ctx, transaction.ID)
+	err = queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: transaction.ID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	transactions, err = queries.ListTransactions(ctx, budget.ID)
+	transactions, err = queries.ListTrxs(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,15 +307,15 @@ func TestDeleteTransaction(t *testing.T) {
 	}
 }
 
-func TestListTransactions(t *testing.T) {
+func TestListTrxs(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	tx1 := newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "first")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 1), 2000, 0, "second")
-	transactions, err := queries.ListTransactions(ctx, budget.ID)
+	tx1 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "first")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "second")
+	transactions, err := queries.ListTrxs(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,5 +336,28 @@ func TestListTransactions(t *testing.T) {
 	}
 	if transactions[1].TotalOutflow != 1000 {
 		t.Error("second transaction total outflow does not match")
+	}
+}
+
+func TestListTrxsScopedToBudget(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget1 := newBudget(t, queries, ctx, "budget1")
+	budget2 := newBudget(t, queries, ctx, "budget2")
+	account1 := newAccount(t, queries, ctx, budget1.ID, "account1")
+	payee1 := newPayee(t, queries, ctx, budget1.ID, "payee1")
+	account2 := newAccount(t, queries, ctx, budget2.ID, "account2")
+	payee2 := newPayee(t, queries, ctx, budget2.ID, "payee2")
+	newTrx(t, queries, ctx, account1, payee1, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, account2, payee2, mustTime(t, 2026, 1, 2), 2000, 0, "")
+	transactions, err := queries.ListTrxs(ctx, budget1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(transactions) != 1 {
+		t.Fatalf("There should be one transaction for budget1, got %d", len(transactions))
+	}
+	if transactions[0].AccountName != "account1" {
+		t.Error("budget1 returned the wrong transaction")
 	}
 }

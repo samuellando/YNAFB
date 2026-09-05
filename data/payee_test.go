@@ -11,13 +11,13 @@ func TestCreatePayee(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
+		BudgetID: budget.ID,
+		Name:     "testpayee",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if payee.Budget != budget.ID {
+	if payee.BudgetID != budget.ID {
 		t.Error("budget id does not match")
 	}
 	if payee.Name != "testpayee" {
@@ -32,8 +32,8 @@ func TestCreatePayeeNonExistingBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	_, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: 1,
-		Name:   "testpayee",
+		BudgetID: 1,
+		Name:     "testpayee",
 	})
 	if err == nil {
 		t.Error("Non existing budget should raise an error")
@@ -45,8 +45,8 @@ func TestCreatePayeeEmptyName(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	_, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "",
+		BudgetID: budget.ID,
+		Name:     "",
 	})
 	if err == nil {
 		t.Error("Empty payee name should raise an error")
@@ -59,21 +59,21 @@ func TestCreatePayeeDuplicateNameConstraint(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	budget2 := newBudget(t, queries, ctx, "testBudget2")
 	if _, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
+		BudgetID: budget.ID,
+		Name:     "testpayee",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget.ID,
-		Name:   "testpayee",
+		BudgetID: budget.ID,
+		Name:     "testpayee",
 	})
 	if err == nil {
 		t.Error("Should get an error for duplicate payee name in same budget")
 	}
 	_, err = queries.CreatePayee(ctx, data.CreatePayeeParams{
-		Budget: budget2.ID,
-		Name:   "testpayee",
+		BudgetID: budget2.ID,
+		Name:     "testpayee",
 	})
 	if err != nil {
 		t.Error("Should not get an error for duplicate payee names across budgets")
@@ -86,8 +86,9 @@ func TestUpdatePayee(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	n, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
-		Name: "newName",
-		ID:   payee.ID,
+		Name:     "newName",
+		ID:       payee.ID,
+		BudgetID: budget.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -96,8 +97,8 @@ func TestUpdatePayee(t *testing.T) {
 		t.Error("The number of affected rows should be 1")
 	}
 	newNamePayee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
-		Name:   "newName",
-		Budget: budget.ID,
+		Name:     "newName",
+		BudgetID: budget.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -119,7 +120,7 @@ func TestDeletePayee(t *testing.T) {
 	if len(payees) != 1 {
 		t.Fatal("There should be one payee before")
 	}
-	err = queries.DeletePayee(ctx, payee.ID)
+	err = queries.DeletePayee(ctx, data.DeletePayeeParams{ID: payee.ID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,8 +187,8 @@ func TestGetPayeeByName(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	namePayee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
-		Name:   "testpayee",
-		Budget: budget.ID,
+		Name:     "testpayee",
+		BudgetID: budget.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +196,7 @@ func TestGetPayeeByName(t *testing.T) {
 	if payee.ID != namePayee.ID {
 		t.Error("getting payee by name, id does not match")
 	}
-	if namePayee.Budget != budget.ID {
+	if namePayee.BudgetID != budget.ID {
 		t.Error("getting payee by name, budget id does not match")
 	}
 	if namePayee.Name != "testpayee" {
@@ -208,8 +209,8 @@ func TestGetPayeeByNameDoesNotExist(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	_, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
-		Name:   "testpayee",
-		Budget: budget.ID,
+		Name:     "testpayee",
+		BudgetID: budget.ID,
 	})
 	if err == nil {
 		t.Fatal("Getting non existent payee by name should fail")

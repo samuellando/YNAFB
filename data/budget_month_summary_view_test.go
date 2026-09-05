@@ -1,12 +1,16 @@
 package data_test
 
-import "testing"
+import (
+	"testing"
+
+	"samuellando.com/YNAFB/data"
+)
 
 func TestGetBudgetMonthSummaryNoActivity(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	newBudget(t, queries, ctx, "testBudget")
-	summary, err := queries.GetBudgetMonthSummary(ctx, monthRelative(t, 2))
+	budget := newBudget(t, queries, ctx, "testBudget")
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: monthRelative(t, 2)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,9 +43,9 @@ func TestGetBudgetMonthSummaryIncomeAndAllocation(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 0, 8000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 8000)
-	summary, err := queries.GetBudgetMonthSummary(ctx, month)
+	income := newTrx(t, queries, ctx, account, payee, month, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income, 8000)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: month})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +78,11 @@ func TestGetBudgetMonthSummarySpent(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 0, 8000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 8000)
-	spend := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend.ID, category.ID, 1000, 0)
-	summary, err := queries.GetBudgetMonthSummary(ctx, month)
+	income := newTrx(t, queries, ctx, account, payee, month, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income, 8000)
+	spend := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: month})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,10 +115,10 @@ func TestGetBudgetMonthSummaryUncategorized(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 0, 8000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 8000)
-	newTransaction(t, queries, ctx, account.ID, payee.ID, month, 1000, 0, "")
-	summary, err := queries.GetBudgetMonthSummary(ctx, month)
+	income := newTrx(t, queries, ctx, account, payee, month, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income, 8000)
+	newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: month})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,9 +149,9 @@ func TestGetBudgetMonthSummaryIncomeOnly(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	month := monthRelative(t, 2)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 0, 8000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 8000)
-	summary, err := queries.GetBudgetMonthSummary(ctx, month)
+	income := newTrx(t, queries, ctx, account, payee, month, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income, 8000)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: month})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,9 +185,9 @@ func TestGetBudgetMonthSummaryGapMonthCarriesForward(t *testing.T) {
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 0, 8000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 8000)
-	summary, err := queries.GetBudgetMonthSummary(ctx, feb)
+	income := newTrx(t, queries, ctx, account, payee, jan, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income, 8000)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: feb})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,10 +221,10 @@ func TestGetBudgetMonthSummaryCumulativeAvailablePastMonth(t *testing.T) {
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	janSpend := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, janSpend.ID, category.ID, 1000, 0)
+	janSpend := newTrx(t, queries, ctx, account, payee, jan, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, janSpend, category, 1000, 0)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 2000)
-	summary, err := queries.GetBudgetMonthSummary(ctx, feb)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: feb})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +257,7 @@ func TestGetBudgetMonthSummaryFutureMonthStartsFresh(t *testing.T) {
 	future := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, past, 5000)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, future, 3000)
-	summary, err := queries.GetBudgetMonthSummary(ctx, future)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: future})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,11 +290,11 @@ func TestGetBudgetMonthSummaryOverspendDeductsFromReadyToAssign(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 0, 8000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 8000)
-	overspend := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 6000, 0, "")
-	newCategoryLine(t, queries, ctx, overspend.ID, category.ID, 6000, 0)
-	summary, err := queries.GetBudgetMonthSummary(ctx, month)
+	income := newTrx(t, queries, ctx, account, payee, month, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income, 8000)
+	overspend := newTrx(t, queries, ctx, account, payee, month, 6000, 0, "")
+	newCategoryLine(t, queries, ctx, overspend, category, 6000, 0)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: month})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,11 +328,11 @@ func TestGetBudgetMonthSummaryOverspendCarriesForward(t *testing.T) {
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 0, 8000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 8000)
-	overspend := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 6000, 0, "")
-	newCategoryLine(t, queries, ctx, overspend.ID, category.ID, 6000, 0)
-	summary, err := queries.GetBudgetMonthSummary(ctx, feb)
+	income := newTrx(t, queries, ctx, account, payee, jan, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income, 8000)
+	overspend := newTrx(t, queries, ctx, account, payee, jan, 6000, 0, "")
+	newCategoryLine(t, queries, ctx, overspend, category, 6000, 0)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget.ID, Month: feb})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,5 +353,28 @@ func TestGetBudgetMonthSummaryOverspendCarriesForward(t *testing.T) {
 	}
 	if summary.Uncategorized != 0 {
 		t.Errorf("expected uncategorized 0, got %d", summary.Uncategorized)
+	}
+}
+
+func TestGetBudgetMonthSummaryScopedToBudget(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget1 := newBudget(t, queries, ctx, "budget1")
+	budget2 := newBudget(t, queries, ctx, "budget2")
+	account1 := newAccount(t, queries, ctx, budget1.ID, "account1")
+	payee1 := newPayee(t, queries, ctx, budget1.ID, "payee1")
+	account2 := newAccount(t, queries, ctx, budget2.ID, "account2")
+	payee2 := newPayee(t, queries, ctx, budget2.ID, "payee2")
+	month := monthRelative(t, 2)
+	income1 := newTrx(t, queries, ctx, account1, payee1, month, 0, 8000, "")
+	newIncomeLine(t, queries, ctx, income1, 8000)
+	income2 := newTrx(t, queries, ctx, account2, payee2, month, 0, 5000, "")
+	newIncomeLine(t, queries, ctx, income2, 5000)
+	summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{BudgetID: budget1.ID, Month: month})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Income != 8000 {
+		t.Errorf("expected income 8000 for budget1, got %d", summary.Income)
 	}
 }

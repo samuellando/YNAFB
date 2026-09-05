@@ -16,8 +16,8 @@ func TestListGoalsValuesMonthlyNoAllocation(t *testing.T) {
 	newGoal(t, queries, ctx, budget.ID, category.ID, "monthly", start, types.NullUnixTime{}, 5000)
 	month := monthRelative(t, 2)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -29,13 +29,13 @@ func TestListGoalsValuesMonthlyNoAllocation(t *testing.T) {
 	if g.Type != "monthly" {
 		t.Errorf("expected type monthly, got %q", g.Type)
 	}
-	if g.Category != category.ID {
-		t.Errorf("expected category %d, got %d", category.ID, g.Category)
+	if g.CategoryID != category.ID {
+		t.Errorf("expected category %d, got %d", category.ID, g.CategoryID)
 	}
-	if g.Start.Unix() != start.Unix() {
+	if g.StartDate.Unix() != start.Unix() {
 		t.Error("goal start does not match")
 	}
-	if g.End.Valid {
+	if g.EndDate.Valid {
 		t.Error("goal end should be null")
 	}
 	if g.Amount != 5000 {
@@ -62,8 +62,8 @@ func TestListGoalsValuesMonthlyFullyAllocated(t *testing.T) {
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -93,8 +93,8 @@ func TestListGoalsValuesRefillWithCarryOver(t *testing.T) {
 	newAllocation(t, queries, ctx, budget.ID, category.ID, monthRelative(t, -2), 4000)
 	month := monthRelative(t, -1)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -125,12 +125,12 @@ func TestListGoalsValuesRefillCarryOverFlooredAtZero(t *testing.T) {
 	newGoal(t, queries, ctx, budget.ID, category.ID, "refill", start, types.NullUnixTime{}, 10000)
 	jan := monthRelative(t, -2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 3000)
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 5000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 5000, 0)
+	transaction := newTrx(t, queries, ctx, account, payee, jan, 5000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 5000, 0)
 	month := monthRelative(t, -1)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -158,8 +158,8 @@ func TestListGoalsValuesSave(t *testing.T) {
 	newAllocation(t, queries, ctx, budget.ID, category.ID, start, 6000)
 	month := monthRelative(t, -1)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestListGoalsValuesSave(t *testing.T) {
 		t.Fatalf("expected one goal, got %d", len(goals))
 	}
 	g := goals[0]
-	if !g.End.Valid || g.End.Time.Unix() != end.Unix() {
+	if !g.EndDate.Valid || g.EndDate.Time.Unix() != end.Unix() {
 		t.Error("goal end does not match")
 	}
 	if g.Allocated != 6000 {
@@ -194,8 +194,8 @@ func TestListGoalsValuesSaveGapZero(t *testing.T) {
 	month := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 2000)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -226,8 +226,8 @@ func TestListGoalsValuesSaveFullyFunded(t *testing.T) {
 	newAllocation(t, queries, ctx, budget.ID, category.ID, start, 6000)
 	month := monthRelative(t, -1)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -258,8 +258,8 @@ func TestListGoalsValuesExcludesInactive(t *testing.T) {
 	newGoal(t, queries, ctx, budget.ID, endingThisMonth.ID, "monthly", monthRelative(t, -3), types.NullUnixTime{Time: month.Time, Valid: true}, 1000)
 	active := newGoal(t, queries, ctx, budget.ID, activeCategory.ID, "monthly", monthRelative(t, -3), types.NullUnixTime{}, 1000)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -283,8 +283,8 @@ func TestListGoalsValuesScopedToBudget(t *testing.T) {
 	goal1 := newGoal(t, queries, ctx, budget1.ID, category1.ID, "monthly", start, types.NullUnixTime{}, 1000)
 	newGoal(t, queries, ctx, budget2.ID, category2.ID, "monthly", start, types.NullUnixTime{}, 1000)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget1.ID,
-		Month:  monthRelative(t, 1),
+		BudgetID: budget1.ID,
+		Month:    monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -307,8 +307,8 @@ func TestListGoalsValuesRefillOverfunded(t *testing.T) {
 	newAllocation(t, queries, ctx, budget.ID, category.ID, monthRelative(t, -2), 8000)
 	month := monthRelative(t, -1)
 	goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)

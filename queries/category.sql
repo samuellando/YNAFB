@@ -1,8 +1,8 @@
 -- name: CreateCategory :one
 INSERT INTO category (
-  budget,
+  budget_id,
   name,
-  category_group
+  category_group_id
 ) VALUES (
   ?,
   ?,
@@ -12,27 +12,27 @@ RETURNING *;
 
 -- name: UpdateCategory :execrows
 UPDATE category
-SET name = ?, category_group = ?
-WHERE id = ?;
+SET name = ?, category_group_id = ?
+WHERE id = ? AND budget_id = ?;
 
 -- name: DeleteCategory :exec
 DELETE FROM category
-WHERE id = ?;
+WHERE id = ? AND budget_id = ?;
 
 -- name: ListCategories :many
-SELECT id, budget, name
+SELECT id, budget_id, name
 FROM category
-WHERE budget = ?
+WHERE budget_id = ?
 ORDER BY name;
 
 -- name: GetCategoryByName :one
-SELECT id, budget, name
+SELECT id, budget_id, name
 FROM category
-WHERE budget = ? AND name = ?;
+WHERE budget_id = ? AND name = ?;
 
 -- name: CreateCategoryGroup :one
 INSERT INTO category_group (
-  budget,
+  budget_id,
   name
 ) VALUES (
   ?,
@@ -43,30 +43,30 @@ RETURNING id;
 -- name: UpdateCategoryGroup :execrows
 UPDATE category_group
 SET name = ?
-WHERE id = ?;
+WHERE id = ? AND budget_id = ?;
 
 -- name: GetOrCreateCategoryGroup :one
 INSERT INTO category_group (
-  budget,
+  budget_id,
   name
 ) VALUES (
   ?,
   ?
 )
-ON CONFLICT (budget, name) DO UPDATE SET name = excluded.name
+ON CONFLICT (budget_id, name) DO UPDATE SET name = excluded.name
 RETURNING id;
 
 -- name: DeleteCategoryGroup :exec
 DELETE FROM category_group
-WHERE id = ?;
+WHERE id = ? AND budget_id = ?;
 
 -- name: ListCategoryGroups :many
-SELECT id, budget, name
+SELECT id, budget_id, name
 FROM category_group
-WHERE budget = ?
+WHERE budget_id = ?
 ORDER BY name;
 
 -- name: GetCategoryGroupByName :one
-SELECT id, budget, name
+SELECT id, budget_id, name
 FROM category_group
-WHERE budget = ? AND name = ?;
+WHERE budget_id = ? AND name = ?;

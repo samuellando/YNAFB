@@ -21,8 +21,8 @@ func TestListBudgetMonthCategoriesEmpty(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  monthRelative(t, 1),
+		BudgetID: budget.ID,
+		Month:    monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -38,8 +38,8 @@ func TestListBudgetMonthCategoriesNoActivity(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  monthRelative(t, 1),
+		BudgetID: budget.ID,
+		Month:    monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestListBudgetMonthCategoriesNoActivity(t *testing.T) {
 	if rows[0].CategoryName != "testcategory" {
 		t.Error("category name does not match")
 	}
-	if rows[0].CategoryGorupName.Valid {
+	if rows[0].CategoryGroupName.Valid {
 		t.Error("ungrouped category should have an invalid group name")
 	}
 	if rows[0].Allocated != 0 {
@@ -78,8 +78,8 @@ func TestListBudgetMonthCategoriesAllocated(t *testing.T) {
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -106,11 +106,11 @@ func TestListBudgetMonthCategoriesSpent(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
+	transaction := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -138,11 +138,11 @@ func TestListBudgetMonthCategoriesAllocatedAndSpent(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
+	transaction := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -169,13 +169,13 @@ func TestListBudgetMonthCategoriesSpendSummedAcrossTransactions(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
-	first := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, first.ID, category.ID, 1000, 0)
-	second := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 500, 0, "")
-	newCategoryLine(t, queries, ctx, second.ID, category.ID, 500, 0)
+	first := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, first, category, 1000, 0)
+	second := newTrx(t, queries, ctx, account, payee, month, 500, 0, "")
+	newCategoryLine(t, queries, ctx, second, category, 500, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -198,11 +198,11 @@ func TestListBudgetMonthCategoriesCarryForwardAvailable(t *testing.T) {
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 1000, 0)
+	transaction := newTrx(t, queries, ctx, account, payee, jan, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  feb,
+		BudgetID: budget.ID,
+		Month:    feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -231,11 +231,11 @@ func TestListBudgetMonthCategoriesCarryForwardFloorsAtZero(t *testing.T) {
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 1000)
-	transaction := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 5000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction.ID, category.ID, 5000, 0)
+	transaction := newTrx(t, queries, ctx, account, payee, jan, 5000, 0, "")
+	newCategoryLine(t, queries, ctx, transaction, category, 5000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  feb,
+		BudgetID: budget.ID,
+		Month:    feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -259,8 +259,8 @@ func TestListBudgetMonthCategoriesCarryForwardMostRecentPriorMonth(t *testing.T)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 2000)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, mar, 3000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  feb,
+		BudgetID: budget.ID,
+		Month:    feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -283,12 +283,12 @@ func TestListBudgetMonthCategoriesPastMonthCumulativeAvailable(t *testing.T) {
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	janTransaction := newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, janTransaction.ID, category.ID, 1000, 0)
+	janTransaction := newTrx(t, queries, ctx, account, payee, jan, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, janTransaction, category, 1000, 0)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 2000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  feb,
+		BudgetID: budget.ID,
+		Month:    feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -318,29 +318,32 @@ func TestListBudgetMonthCategoriesOrderingAndGroups(t *testing.T) {
 	apple := newCategory(t, queries, ctx, budget.ID, "apple")
 	rent := newCategory(t, queries, ctx, budget.ID, "rent")
 	if _, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
-		Name:          banana.Name,
-		CategoryGroup: sql.NullInt64{Int64: groceries, Valid: true},
-		ID:            banana.ID,
+		Name:            banana.Name,
+		CategoryGroupID: sql.NullInt64{Int64: groceries, Valid: true},
+		ID:              banana.ID,
+		BudgetID:        budget.ID,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
-		Name:          apple.Name,
-		CategoryGroup: sql.NullInt64{Int64: groceries, Valid: true},
-		ID:            apple.ID,
+		Name:            apple.Name,
+		CategoryGroupID: sql.NullInt64{Int64: groceries, Valid: true},
+		ID:              apple.ID,
+		BudgetID:        budget.ID,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
-		Name:          rent.Name,
-		CategoryGroup: sql.NullInt64{Int64: bills, Valid: true},
-		ID:            rent.ID,
+		Name:            rent.Name,
+		CategoryGroupID: sql.NullInt64{Int64: bills, Valid: true},
+		ID:              rent.ID,
+		BudgetID:        budget.ID,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  monthRelative(t, 1),
+		BudgetID: budget.ID,
+		Month:    monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -352,17 +355,17 @@ func TestListBudgetMonthCategoriesOrderingAndGroups(t *testing.T) {
 	for _, r := range rows {
 		byName[r.CategoryName] = r
 	}
-	if r := byName["alpha"]; r.ID != alpha.ID || r.CategoryGorupName.Valid {
-		t.Errorf("alpha should be ungrouped with id %d, got id %d valid %v", alpha.ID, r.ID, r.CategoryGorupName.Valid)
+	if r := byName["alpha"]; r.ID != alpha.ID || r.CategoryGroupName.Valid {
+		t.Errorf("alpha should be ungrouped with id %d, got id %d valid %v", alpha.ID, r.ID, r.CategoryGroupName.Valid)
 	}
-	if r := byName["apple"]; r.ID != apple.ID || !r.CategoryGorupName.Valid || r.CategoryGorupName.String != "groceries" {
-		t.Errorf("apple should be in groceries with id %d, got id %d group %v", apple.ID, r.ID, r.CategoryGorupName)
+	if r := byName["apple"]; r.ID != apple.ID || !r.CategoryGroupName.Valid || r.CategoryGroupName.String != "groceries" {
+		t.Errorf("apple should be in groceries with id %d, got id %d group %v", apple.ID, r.ID, r.CategoryGroupName)
 	}
-	if r := byName["banana"]; r.ID != banana.ID || !r.CategoryGorupName.Valid || r.CategoryGorupName.String != "groceries" {
-		t.Errorf("banana should be in groceries with id %d, got id %d group %v", banana.ID, r.ID, r.CategoryGorupName)
+	if r := byName["banana"]; r.ID != banana.ID || !r.CategoryGroupName.Valid || r.CategoryGroupName.String != "groceries" {
+		t.Errorf("banana should be in groceries with id %d, got id %d group %v", banana.ID, r.ID, r.CategoryGroupName)
 	}
-	if r := byName["rent"]; r.ID != rent.ID || !r.CategoryGorupName.Valid || r.CategoryGorupName.String != "bills" {
-		t.Errorf("rent should be in bills with id %d, got id %d group %v", rent.ID, r.ID, r.CategoryGorupName)
+	if r := byName["rent"]; r.ID != rent.ID || !r.CategoryGroupName.Valid || r.CategoryGroupName.String != "bills" {
+		t.Errorf("rent should be in bills with id %d, got id %d group %v", rent.ID, r.ID, r.CategoryGroupName)
 	}
 	order := []string{}
 	for _, r := range rows {
@@ -385,8 +388,8 @@ func TestListBudgetMonthCategoriesScopedToBudget(t *testing.T) {
 	category1 := newCategory(t, queries, ctx, budget1.ID, "shared")
 	category2 := newCategory(t, queries, ctx, budget2.ID, "shared")
 	rows1, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget1.ID,
-		Month:  monthRelative(t, 1),
+		BudgetID: budget1.ID,
+		Month:    monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -398,8 +401,8 @@ func TestListBudgetMonthCategoriesScopedToBudget(t *testing.T) {
 		t.Error("budget1 returned the wrong category")
 	}
 	rows2, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget2.ID,
-		Month:  monthRelative(t, 1),
+		BudgetID: budget2.ID,
+		Month:    monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -421,13 +424,13 @@ func TestListBudgetMonthCategoriesRefundReducesSpent(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	spend := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend.ID, category.ID, 1000, 0)
-	refund := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 0, 200, "")
-	newCategoryLine(t, queries, ctx, refund.ID, category.ID, 0, 200)
+	spend := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
+	refund := newTrx(t, queries, ctx, account, payee, month, 0, 200, "")
+	newCategoryLine(t, queries, ctx, refund, category, 0, 200)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -455,15 +458,15 @@ func TestListBudgetMonthCategoriesIncomeAndTransferExcludedFromSpent(t *testing.
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := monthRelative(t, 2)
-	spend := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend.ID, category.ID, 1000, 0)
-	income := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 0, 5000, "")
-	newIncomeLine(t, queries, ctx, income.ID, 5000)
-	transfer := newTransaction(t, queries, ctx, account.ID, payee.ID, month, 2000, 0, "")
-	newTransfer(t, queries, ctx, transfer.ID, otherAccount.ID, 2000, 0)
+	spend := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
+	income := newTrx(t, queries, ctx, account, payee, month, 0, 5000, "")
+	newIncomeLine(t, queries, ctx, income, 5000)
+	transfer := newTrx(t, queries, ctx, account, payee, month, 2000, 0, "")
+	newTransfer(t, queries, ctx, transfer, otherAccount, 2000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -491,8 +494,8 @@ func TestListBudgetMonthCategoriesFutureMonthResetsAvailable(t *testing.T) {
 	future := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, past, 5000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  future,
+		BudgetID: budget.ID,
+		Month:    future,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -520,8 +523,8 @@ func TestListBudgetMonthCategoriesNegativeAllocation(t *testing.T) {
 	feb := monthRelative(t, -1)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, -1000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  jan,
+		BudgetID: budget.ID,
+		Month:    jan,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -536,8 +539,8 @@ func TestListBudgetMonthCategoriesNegativeAllocation(t *testing.T) {
 		t.Errorf("expected available -1000, got %d", rows[0].Available)
 	}
 	carried, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  feb,
+		BudgetID: budget.ID,
+		Month:    feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -559,8 +562,8 @@ func TestListBudgetMonthCategoriesSiblingActivityCreatesViewRow(t *testing.T) {
 	month := monthRelative(t, 2)
 	newAllocation(t, queries, ctx, budget.ID, categoryA.ID, month, 5000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		Budget: budget.ID,
-		Month:  month,
+		BudgetID: budget.ID,
+		Month:    month,
 	})
 	if err != nil {
 		t.Fatal(err)

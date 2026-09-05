@@ -9,12 +9,16 @@ import (
 func TestCreateBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget, err := queries.CreateBudget(ctx, "testBudget")
+	login := newLogin(t, queries, ctx, "user")
+	budget, err := queries.CreateBudget(ctx, data.CreateBudgetParams{LoginID: login.ID, Name: "testBudget"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if budget.Name != "testBudget" {
 		t.Error("budget name does not match")
+	}
+	if budget.LoginID != login.ID {
+		t.Error("budget login id does not match")
 	}
 	if budget.ID != 1 {
 		t.Error("ID of the first budget should be 1")
@@ -24,7 +28,8 @@ func TestCreateBudget(t *testing.T) {
 func TestCreateBudgetEmptyName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	_, err := queries.CreateBudget(ctx, "")
+	login := newLogin(t, queries, ctx, "user")
+	_, err := queries.CreateBudget(ctx, data.CreateBudgetParams{LoginID: login.ID, Name: ""})
 	if err == nil {
 		t.Error("Empty budget name should raise an error")
 	}
@@ -33,12 +38,26 @@ func TestCreateBudgetEmptyName(t *testing.T) {
 func TestCreateBudgetDuplicateName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	if _, err := queries.CreateBudget(ctx, "testBudget"); err != nil {
+	login := newLogin(t, queries, ctx, "user")
+	if _, err := queries.CreateBudget(ctx, data.CreateBudgetParams{LoginID: login.ID, Name: "testBudget"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := queries.CreateBudget(ctx, "testBudget")
+	_, err := queries.CreateBudget(ctx, data.CreateBudgetParams{LoginID: login.ID, Name: "testBudget"})
 	if err == nil {
-		t.Error("Duplicate budget name should raise an error")
+		t.Error("Duplicate budget name for the same login should raise an error")
+	}
+}
+
+func TestCreateBudgetSameNameAcrossLogins(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	login1 := newLogin(t, queries, ctx, "user1")
+	login2 := newLogin(t, queries, ctx, "user2")
+	if _, err := queries.CreateBudget(ctx, data.CreateBudgetParams{LoginID: login1.ID, Name: "testBudget"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreateBudget(ctx, data.CreateBudgetParams{LoginID: login2.ID, Name: "testBudget"}); err != nil {
+		t.Error("Duplicate budget names across logins should be allowed")
 	}
 }
 
@@ -56,7 +75,7 @@ func TestUpdateBudget(t *testing.T) {
 	if n != 1 {
 		t.Error("The number of affected rows should be 1")
 	}
-	newNameBudget, err := queries.GetBudgetByName(ctx, "newName")
+	newNameBudget, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{LoginID: budget.LoginID, Name: "newName"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +103,7 @@ func TestDeleteBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	budgets, err := queries.ListBudgets(ctx)
+	budgets, err := queries.ListBudgets(ctx, budget.LoginID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +114,7 @@ func TestDeleteBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	budgets, err = queries.ListBudgets(ctx)
+	budgets, err = queries.ListBudgets(ctx, budget.LoginID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,9 +126,10 @@ func TestDeleteBudget(t *testing.T) {
 func TestListBudgets(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	newBudget(t, queries, ctx, "budgetB")
-	newBudget(t, queries, ctx, "budgetA")
-	budgets, err := queries.ListBudgets(ctx)
+	login := newLogin(t, queries, ctx, "user")
+	newBudgetForLogin(t, queries, ctx, login.ID, "budgetB")
+	newBudgetForLogin(t, queries, ctx, login.ID, "budgetA")
+	budgets, err := queries.ListBudgets(ctx, login.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,11 +144,30 @@ func TestListBudgets(t *testing.T) {
 	}
 }
 
+func TestListBudgetsScopedToLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	login1 := newLogin(t, queries, ctx, "user1")
+	login2 := newLogin(t, queries, ctx, "user2")
+	newBudgetForLogin(t, queries, ctx, login1.ID, "budget1")
+	newBudgetForLogin(t, queries, ctx, login2.ID, "budget2")
+	budgets, err := queries.ListBudgets(ctx, login1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(budgets) != 1 {
+		t.Fatalf("There should be one budget for login1, got %d", len(budgets))
+	}
+	if budgets[0].Name != "budget1" {
+		t.Error("login1 returned the wrong budget")
+	}
+}
+
 func TestGetBudgetByName(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	nameBudget, err := queries.GetBudgetByName(ctx, "testBudget")
+	nameBudget, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{LoginID: budget.LoginID, Name: "testBudget"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +182,8 @@ func TestGetBudgetByName(t *testing.T) {
 func TestGetBudgetByNameDoesNotExist(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	_, err := queries.GetBudgetByName(ctx, "testBudget")
+	login := newLogin(t, queries, ctx, "user")
+	_, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{LoginID: login.ID, Name: "testBudget"})
 	if err == nil {
 		t.Fatal("Getting non existent budget by name should fail")
 	}
@@ -168,9 +208,9 @@ func TestListBudgetActivityMonthsFromTransactions(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 15), 1000, 0, "")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 3, 1), 2000, 0, "")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 31), 500, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 3, 1), 2000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 31), 500, 0, "")
 	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -220,8 +260,8 @@ func TestListBudgetActivityMonthsUnionDedupeOrder(t *testing.T) {
 	jan := mustTime(t, 2026, 1, 1)
 	feb := mustTime(t, 2026, 2, 1)
 	mar := mustTime(t, 2026, 3, 1)
-	newTransaction(t, queries, ctx, account.ID, payee.ID, jan, 1000, 0, "")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, feb, 2000, 0, "")
+	newTrx(t, queries, ctx, account, payee, jan, 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, feb, 2000, 0, "")
 	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 5000)
 	newAllocation(t, queries, ctx, budget.ID, category.ID, mar, 8000)
 	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
@@ -252,8 +292,8 @@ func TestListBudgetActivityMonthsExcludesOtherBudgets(t *testing.T) {
 	otherAccount := newAccount(t, queries, ctx, otherBudget.ID, "otheraccount")
 	otherPayee := newPayee(t, queries, ctx, otherBudget.ID, "otherpayee")
 	otherCategory := newCategory(t, queries, ctx, otherBudget.ID, "othercategory")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTransaction(t, queries, ctx, otherAccount.ID, otherPayee.ID, mustTime(t, 2026, 2, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, otherAccount, otherPayee, mustTime(t, 2026, 2, 1), 1000, 0, "")
 	newAllocation(t, queries, ctx, otherBudget.ID, otherCategory.ID, mustTime(t, 2026, 3, 1), 5000)
 	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
 	if err != nil {
@@ -273,7 +313,7 @@ func TestListBudgetActivityMonthsNormalizesToStartOfMonth(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
 	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTransaction(t, queries, ctx, account.ID, payee.ID, mustTime(t, 2026, 2, 15), 1000, 0, "")
+	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 15), 1000, 0, "")
 	months, err := queries.ListBudgetActivityMonths(ctx, budget.ID)
 	if err != nil {
 		t.Fatal(err)

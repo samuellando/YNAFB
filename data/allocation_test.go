@@ -13,18 +13,18 @@ func TestCreateAllocation(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	month := mustTime(t, 2026, 1, 1)
 	allocation, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
-		Budget:   budget.ID,
-		Category: category.ID,
-		Month:    month,
-		Amount:   5000,
+		BudgetID:   budget.ID,
+		CategoryID: category.ID,
+		Month:      month,
+		Amount:     5000,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allocation.Budget != budget.ID {
+	if allocation.BudgetID != budget.ID {
 		t.Error("budget id does not match")
 	}
-	if allocation.Category != category.ID {
+	if allocation.CategoryID != category.ID {
 		t.Error("category id does not match")
 	}
 	if allocation.Month.Unix() != month.Unix() {
@@ -44,10 +44,10 @@ func TestCreateAllocationNonExistingBudget(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	_, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
-		Budget:   99,
-		Category: category.ID,
-		Month:    mustTime(t, 2026, 1, 1),
-		Amount:   5000,
+		BudgetID:   99,
+		CategoryID: category.ID,
+		Month:      mustTime(t, 2026, 1, 1),
+		Amount:     5000,
 	})
 	if err == nil {
 		t.Error("Non existing budget should raise an error")
@@ -59,10 +59,10 @@ func TestCreateAllocationNonExistingCategory(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	_, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
-		Budget:   budget.ID,
-		Category: 99,
-		Month:    mustTime(t, 2026, 1, 1),
-		Amount:   5000,
+		BudgetID:   budget.ID,
+		CategoryID: 99,
+		Month:      mustTime(t, 2026, 1, 1),
+		Amount:     5000,
 	})
 	if err == nil {
 		t.Error("Non existing category should raise an error")
@@ -108,7 +108,7 @@ func TestDeleteCategoryCascadesAllocations(t *testing.T) {
 	if len(allocations) != 1 {
 		t.Fatal("There should be one allocation before")
 	}
-	err = queries.DeleteCategory(ctx, category.ID)
+	err = queries.DeleteCategory(ctx, data.DeleteCategoryParams{ID: category.ID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,10 +127,10 @@ func TestCreateAllocationDuplicateBudgetCategoryMonth(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
 	params := data.CreateAllocationParams{
-		Budget:   budget.ID,
-		Category: category.ID,
-		Month:    mustTime(t, 2026, 1, 1),
-		Amount:   5000,
+		BudgetID:   budget.ID,
+		CategoryID: category.ID,
+		Month:      mustTime(t, 2026, 1, 1),
+		Amount:     5000,
 	}
 	if _, err := queries.CreateAllocation(ctx, params); err != nil {
 		t.Fatal(err)
@@ -149,10 +149,10 @@ func TestUpdateAllocation(t *testing.T) {
 	month := mustTime(t, 2026, 1, 1)
 	allocation := newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
 	n, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
-		Amount:   8000,
-		Budget:   budget.ID,
-		Category: category.ID,
-		Month:    month,
+		Amount:     8000,
+		BudgetID:   budget.ID,
+		CategoryID: category.ID,
+		Month:      month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -190,9 +190,9 @@ func TestDeleteAllocationByCategoryAndMonth(t *testing.T) {
 		t.Fatal("There should be one allocation before")
 	}
 	err = queries.DeleteAllocationByCategoryAndMonth(ctx, data.DeleteAllocationByCategoryAndMonthParams{
-		Budget:   budget.ID,
-		Category: category.ID,
-		Month:    month,
+		BudgetID:   budget.ID,
+		CategoryID: category.ID,
+		Month:      month,
 	})
 	if err != nil {
 		t.Fatal(err)
