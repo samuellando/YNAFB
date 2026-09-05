@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -2750,79 +2749,8 @@ func printGoals(w io.Writer, goals []data.ListGoalsRow) error {
 	return tw.Flush()
 }
 
-func buildCategoryAllocations(rows []data.ListAllocationsRow) map[int64]map[time.Time]int64 {
-	byCategory := make(map[int64]map[time.Time]int64)
-	for _, r := range rows {
-		if byCategory[r.CategoryID] == nil {
-			byCategory[r.CategoryID] = make(map[time.Time]int64)
-		}
-		byCategory[r.CategoryID][r.Month.Time] = r.Amount
-	}
-	return byCategory
-}
-
-func monthStart(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
-}
-
-func monthsRemaining(from, end time.Time) int {
-	if from.After(end) {
-		return 0
-	}
-	return (end.Year()-from.Year())*12 + int(end.Month()-from.Month()) + 1
-}
-
 func validGoalType(t string) bool {
 	return t == "monthly" || t == "save" || t == "refill"
-}
-
-func goalActiveInMonth(g data.ListGoalsRow, month time.Time) bool {
-	if month.Before(g.Start.Time) {
-		return false
-	}
-	if g.End.Valid && g.End.Time.Before(month) {
-		return false
-	}
-	return true
-}
-
-func goalMonthlyValue(g data.ListGoalsRow, allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, month time.Time) int64 {
-	if !goalActiveInMonth(g, month) {
-		return 0
-	}
-
-	switch stringValue(g.Type) {
-	case "refill":
-		value := g.Amount - categoryAvailableBeforeMonth(allocations, spending, g.CategoryID, month)
-		if value < 0 {
-			value = 0
-		}
-		return value
-	case "save":
-		if !g.End.Valid {
-			return 0
-		}
-
-		var allocated int64
-		for allocMonth, amount := range allocations[g.CategoryID] {
-			if !allocMonth.Before(g.Start.Time) && allocMonth.Before(month) {
-				allocated += amount
-			}
-		}
-
-		months := monthsRemaining(month, g.End.Time)
-		if months <= 0 {
-			return 0
-		}
-
-		value := (g.Amount - allocated) / int64(months)
-		if value < 0 {
-			value = 0
-		}
-		return value
-	}
-
-	return g.Amount
 }
 
 func goalWarning(goal data.ListGoalsValuesRow) string {
@@ -2848,54 +2776,6 @@ func goalWarning(goal data.ListGoalsValuesRow) string {
 		}
 	}
 	return s
-}
-
-func categoryAvailableBeforeMonth(allocations map[int64]map[time.Time]int64, spending map[int64]map[int64]int64, category int64, month time.Time) int64 {
-	target := int64(month.Year())*100 + int64(month.Month())
-
-	type monthly struct {
-		allocated int64
-		spent     int64
-	}
-	perMonth := make(map[int64]*monthly)
-	for allocMonth, amount := range allocations[category] {
-		if key := int64(allocMonth.Year())*100 + int64(allocMonth.Month()); key < target {
-			m := perMonth[key]
-			if m == nil {
-				m = &monthly{}
-				perMonth[key] = m
-			}
-			m.allocated += amount
-		}
-	}
-	for key, net := range spending[category] {
-		if key < target {
-			m := perMonth[key]
-			if m == nil {
-				m = &monthly{}
-				perMonth[key] = m
-			}
-			m.spent += net
-		}
-	}
-
-	keys := make([]int64, 0, len(perMonth))
-	for key := range perMonth {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-
-	var available int64
-	for _, key := range keys {
-		if available < 0 {
-			available = 0
-		}
-		available += perMonth[key].allocated - perMonth[key].spent
-	}
-	if available < 0 {
-		available = 0
-	}
-	return available
 }
 
 func printTransactionsByBudget(w io.Writer, transactions []data.ListTransactionsRow) error {
