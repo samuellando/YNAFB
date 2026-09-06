@@ -14,10 +14,12 @@ import (
 	"samuellando.com/YNAFB/internal/db/types"
 	"samuellando.com/YNAFB/internal/importer"
 	"samuellando.com/YNAFB/internal/importer/testparser"
+	"github.com/pressly/goose/v3"
 )
 
 func init() {
 	importer.Register(testparser.Parser{})
+	goose.SetLogger(goose.NopLogger())
 }
 
 func TestCreateCommands(t *testing.T) {
@@ -147,9 +149,6 @@ func TestUpdateCommands(t *testing.T) {
 			setup: [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}, {"allocation", "create", "2026-08", "Groceries", "25.00"}},
 			args:  []string{"allocation", "update", "2026-08", "Groceries", "30.00"},
 			want:  "updated allocation 2026-08 \"Groceries\"\n",
-			verify: []updateVerify{
-				{args: []string{"allocation", "list"}, contains: "30.00"},
-			},
 		},
 		{
 			name:  "category",
@@ -988,7 +987,6 @@ func TestListCommands(t *testing.T) {
 		{[]string{"account", "list"}, "NAME      BALANCE  RECONCILED BALANCE\nChecking  -25.00   0.00\nSavings   -10.00   0.00\n"},
 		{[]string{"category", "list"}, "NAME\nGroceries\nHousehold\n"},
 		{[]string{"payee", "list"}, "NAME\nCafe\nMarket\n"},
-		{[]string{"allocation", "list"}, "MONTH    CATEGORY   AMOUNT\n2026-08  Groceries  50.00\n2026-08  Household  25.00\n"},
 		{[]string{"goal", "list"}, "TYPE     CATEGORY   START    END  AMOUNT\nmonthly  Groceries  2020-01       1000.00\n"},
 		{[]string{"transaction", "list"}, "ID  DATE        ACCOUNT   PAYEE   OUTFLOW  INFLOW  NOTE\n2   2026-08-29  Savings   Cafe    10.00    0.00    coffee\n1   2026-08-28  Checking  Market  25.00    0.00    shop\n"},
 	}
@@ -1036,7 +1034,6 @@ func TestDeleteCommands(t *testing.T) {
 		{[]string{"transaction", "category", "delete", "1"}, "deleted transaction category 1\n"},
 		{[]string{"payee", "default-category", "delete", "1"}, "deleted payee default-category 1\n"},
 		{[]string{"transaction", "delete", "1"}, "deleted transaction 1\n"},
-		{[]string{"allocation", "delete", "2026-08", "Groceries"}, "deleted allocation 2026-08 \"Groceries\"\n"},
 		{[]string{"goal", "delete", "Groceries"}, "deleted goal for category \"Groceries\"\n"},
 		{[]string{"payee", "delete", "Market"}, "deleted payee \"Market\"\n"},
 		{[]string{"category", "delete", "Groceries"}, "deleted category \"Groceries\"\n"},
@@ -1215,7 +1212,6 @@ func TestCommandArgValidation(t *testing.T) {
 		{[]string{"account", "reconcile"}, "account reconcile requires [account] [date]"},
 		{[]string{"account", "reconcile", "Checking"}, "account reconcile requires [account] [date]"},
 		{[]string{"allocation", "create", "Groceries"}, "allocation create requires [month] [category] [amount]"},
-		{[]string{"allocation", "delete"}, "allocation delete requires [month] [category]"},
 		{[]string{"category", "create"}, "category create requires [name]"},
 		{[]string{"category", "delete"}, "category delete requires [name]"},
 		{[]string{"goal", "create", "monthly"}, "goal create requires [type] [start] [end|null] [category] [amount]"},
@@ -1254,7 +1250,6 @@ func TestUnknownNameResolution(t *testing.T) {
 		{[]string{"category", "delete", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
 		{[]string{"payee", "delete", "Nope"}, `unknown payee "Nope" in budget "Home Budget"`},
 		{[]string{"allocation", "create", "2026-08", "Nope", "100"}, `unknown category "Nope" in budget "Home Budget"`},
-		{[]string{"allocation", "delete", "2026-08", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
 		{[]string{"goal", "delete", "Nope"}, `unknown category "Nope" in budget "Home Budget"`},
 		{[]string{"budget", "delete", "Nope"}, `unknown budget "Nope"`},
 		{[]string{"budget", "show", "Nope"}, `unknown budget "Nope"`},
@@ -1431,7 +1426,6 @@ func TestEmptyLists(t *testing.T) {
 		{[]string{"account", "list"}, "NAME  BALANCE  RECONCILED BALANCE\n"},
 		{[]string{"category", "list"}, "NAME\n"},
 		{[]string{"payee", "list"}, "NAME\n"},
-		{[]string{"allocation", "list"}, "MONTH  CATEGORY  AMOUNT\n"},
 		{[]string{"goal", "list"}, "TYPE  CATEGORY  START  END  AMOUNT\n"},
 		{[]string{"transaction", "list"}, "ID  DATE  ACCOUNT  PAYEE  OUTFLOW  INFLOW  NOTE\n"},
 	}
@@ -2148,33 +2142,12 @@ func TestAllocationMonthBehavior(t *testing.T) {
 		{"allocation", "create", "2026-09", "Groceries", "75.00"},
 	})
 
+	assertRowCount(t, dbPath, "allocation", 2)
+
 	// Same category + month must be rejected (UNIQUE budget+category+month).
 	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "allocation", "create", "2026-08", "Groceries", "60.00")
 
-	stdout, stderr, exitCode := invoke(t, dbPath, "allocation", "list")
-	if exitCode != 0 {
-		t.Fatalf("allocation list failed: stdout=%q stderr=%q", stdout, stderr)
-	}
-	want := "MONTH    CATEGORY   AMOUNT\n2026-08  Groceries  50.00\n2026-09  Groceries  75.00\n"
-	if stdout != want {
-		t.Fatalf("allocation list: got %q want %q", stdout, want)
-	}
-
-	stdout, stderr, exitCode = invoke(t, dbPath, "allocation", "delete", "2026-08", "Groceries")
-	if exitCode != 0 {
-		t.Fatalf("allocation delete failed: stdout=%q stderr=%q", stdout, stderr)
-	}
-	if stdout != "deleted allocation 2026-08 \"Groceries\"\n" {
-		t.Fatalf("unexpected delete stdout: %q", stdout)
-	}
-
-	stdout, stderr, exitCode = invoke(t, dbPath, "allocation", "list")
-	if exitCode != 0 {
-		t.Fatalf("allocation list failed: stdout=%q stderr=%q", stdout, stderr)
-	}
-	if stdout != "MONTH    CATEGORY   AMOUNT\n2026-09  Groceries  75.00\n" {
-		t.Fatalf("expected only September allocation after delete, got %q", stdout)
-	}
+	assertRowCount(t, dbPath, "allocation", 2)
 }
 
 func TestBudgetShowMonths(t *testing.T) {
@@ -2197,14 +2170,21 @@ func TestBudgetShowMonths(t *testing.T) {
 		}
 	}
 
+	// Omitting the month defaults to the current month.
+	current := time.Now().Format("2006-01")
+
 	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget")
 	if exitCode != 0 {
 		t.Fatalf("budget show failed with exit code %d, stdout=%q stderr=%q", exitCode, stdout, stderr)
 	}
 
-	want := "MONTH\n2026-06\n2026-07\n2026-08\n"
-	if stdout != want {
-		t.Fatalf("unexpected stdout: got %q want %q", stdout, want)
+	explicit, expErr, expExit := invoke(t, dbPath, "budget", "show", "Home Budget", current)
+	if expExit != 0 {
+		t.Fatalf("explicit current month budget show failed with exit code %d, stdout=%q stderr=%q", expExit, explicit, expErr)
+	}
+
+	if stdout != explicit {
+		t.Fatalf("no-month budget show (%q) != explicit %q budget show (%q)", stdout, current, explicit)
 	}
 
 	if stderr != "" {
@@ -2288,8 +2268,8 @@ func TestBudgetShowEmpty(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("budget show failed: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "MONTH\n" {
-		t.Fatalf("unexpected stdout: got %q want %q", stdout, "MONTH\n")
+	if stdout != "Ready to assign: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nAvailable: 0.00\nUncategorized: 0.00\n\nNo group:\nCATEGORY  GOAL  ALLOCATED  SPENT  AVAILABLE  WARNING\n" {
+		t.Fatalf("unexpected stdout: got %q want %q", stdout, "Ready to assign: 0.00\nIncome: 0.00\nGoals: 0.00\nAllocated: 0.00\nSpent: 0.00\nAvailable: 0.00\nUncategorized: 0.00\n\nNo group:\nCATEGORY  GOAL  ALLOCATED  SPENT  AVAILABLE  WARNING\n")
 	}
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
@@ -2739,13 +2719,27 @@ func TestBudgetShowMonthsIgnoresGoals(t *testing.T) {
 		{"goal", "create", "monthly", "2026-08", "null", "Groceries", "50.00"},
 	})
 
+	// Omitting the month defaults to the current month; active goals still show.
+	current := time.Now().Format("2006-01")
+
 	stdout, stderr, exitCode := invoke(t, dbPath, "budget", "show", "Home Budget")
 	if exitCode != 0 {
 		t.Fatalf("budget show failed: stdout=%q stderr=%q", stdout, stderr)
 	}
-	if stdout != "MONTH\n" {
-		t.Fatalf("unexpected stdout: got %q want %q", stdout, "MONTH\n")
+
+	explicit, expErr, expExit := invoke(t, dbPath, "budget", "show", "Home Budget", current)
+	if expExit != 0 {
+		t.Fatalf("explicit current month budget show failed with exit code %d, stdout=%q stderr=%q", expExit, explicit, expErr)
 	}
+
+	if stdout != explicit {
+		t.Fatalf("no-month budget show (%q) != explicit %q budget show (%q)", stdout, current, explicit)
+	}
+
+	if !strings.Contains(stdout, "Goals: 50.00") {
+		t.Fatalf("expected active goal in budget show, got %q", stdout)
+	}
+
 	if stderr != "" {
 		t.Fatalf("unexpected stderr: %q", stderr)
 	}

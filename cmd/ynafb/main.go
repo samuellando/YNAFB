@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,10 +14,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
 	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/auth"
 	dbutil "samuellando.com/YNAFB/internal/db"
 	"samuellando.com/YNAFB/internal/db/types"
 	"samuellando.com/YNAFB/internal/importer"
@@ -29,8 +33,9 @@ type loginContext struct {
 }
 
 type budgetContext struct {
-	ID   int64
-	Name string
+	ID      int64
+	LoginID int64
+	Name    string
 }
 
 type categoryTargetArgs struct {
@@ -80,7 +85,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	ctx := context.Background()
 
 	if resource == "login" {
-		if err := executeLogin(ctx, queries, action, remaining[2:], stdout); err != nil {
+		if err := executeLogin(ctx, queries, action, remaining[2:], stderr, stdout); err != nil {
 			return fail(stderr, err)
 		}
 		return 0
@@ -100,7 +105,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 
 func usage(w io.Writer) {
 	fmt.Fprintf(w, "Usage:\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] login create [username]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] login create [username] [password]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] login list\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] login delete [username]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] budget create [name]\n")
@@ -117,10 +122,8 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] account reconcile [account] [date]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] account import [account] [pdf]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] account categorize [account]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] allocation create [month] [category] [amount]\n")
+	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] allocation create [month] [category] [amount]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] allocation update [month] [category] [amount]\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] allocation list\n")
-	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] allocation delete [month] [category]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] category create [name] [--group name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] category update [name] [new_name] [--group name]\n")
 	fmt.Fprintf(w, "  ynafb [--db ./ynafb.db] [--login username] [--budget name] category list\n")
@@ -155,14 +158,36 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, "Omit --login to use the default %q login.\n", defaultLogin)
 }
 
-func executeLogin(ctx context.Context, queries *data.Queries, action string, args []string, stdout io.Writer) error {
+func executeLogin(ctx context.Context, queries *data.Queries, action string, args []string, stderr, stdout io.Writer) error {
 	switch action {
 	case "create":
-		if len(args) != 1 {
-			return fmt.Errorf("login create requires [username]")
+		if len(args) < 1 || len(args) > 2 {
+			return fmt.Errorf("login create requires [username] [password]")
 		}
 
-		result, err := queries.CreateLogin(ctx, data.CreateLoginParams{Username: args[0], Password: "pw"})
+		password := ""
+		if len(args) == 2 {
+			password = args[1]
+		}
+		if password == "" {
+			generated, err := generatePassword()
+			if err != nil {
+				return err
+			}
+			password = generated
+			fmt.Fprintf(stderr, "generated password for %q: %s\n", args[0], generated)
+		}
+
+		if len(password) < 8 {
+			return fmt.Errorf("password must be at least 8 characters")
+		}
+
+		hash, err := auth.HashPassword(password)
+		if err != nil {
+			return err
+		}
+
+		result, err := queries.CreateLogin(ctx, data.CreateLoginParams{Username: args[0], Password: hash})
 		if err != nil {
 			return err
 		}
@@ -220,12 +245,43 @@ func resolveLogin(ctx context.Context, queries *data.Queries, loginName string) 
 		return loginContext{}, fmt.Errorf("unknown login %q", loginName)
 	}
 
-	created, err := queries.CreateLogin(ctx, data.CreateLoginParams{Username: name, Password: "pw"})
+	hash, err := defaultLoginPasswordHash()
+	if err != nil {
+		return loginContext{}, err
+	}
+
+	created, err := queries.CreateLogin(ctx, data.CreateLoginParams{Username: name, Password: hash})
 	if err != nil {
 		return loginContext{}, err
 	}
 
 	return loginContext{ID: created.ID, Username: created.Username}, nil
+}
+
+var (
+	defaultLoginHashOnce sync.Once
+	defaultLoginHash     string
+	defaultLoginHashErr  error
+)
+
+func defaultLoginPasswordHash() (string, error) {
+	defaultLoginHashOnce.Do(func() {
+		password, err := generatePassword()
+		if err != nil {
+			defaultLoginHashErr = err
+			return
+		}
+		defaultLoginHash, defaultLoginHashErr = auth.HashPassword(password)
+	})
+	return defaultLoginHash, defaultLoginHashErr
+}
+
+func generatePassword() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Queries, login loginContext, resource, action, budgetName string, stdin io.Reader, args []string, stdout io.Writer) error {
@@ -258,8 +314,9 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			rows, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
-				Name: args[1],
-				ID:   budget.ID,
+				Name:    args[1],
+				ID:      budget.ID,
+				LoginID: login.ID,
 			})
 			if err != nil {
 				return err
@@ -289,7 +346,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			if err := queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID}); err != nil {
+			if err := queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID, LoginID: login.ID}); err != nil {
 				return err
 			}
 
@@ -308,48 +365,52 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return fmt.Errorf("budget show requires [budget_name] or [budget_name] [month]")
 			}
 
-			budget, err := resolveBudget(ctx, queries, login, positional[0])
+		budget, err := resolveBudget(ctx, queries, login, positional[0])
+		if err != nil {
+			return err
+		}
+
+		month := time.Now()
+		if len(positional) == 2 {
+			month, err = parseMonth("month", positional[1])
 			if err != nil {
 				return err
 			}
-
-			if len(positional) == 1 {
-				allocMonths, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
-				if err != nil {
-					return err
-				}
-				return printBudgetMonths(stdout, allocMonths)
-			}
-
-			month, err := parseMonth("month", positional[1])
+		} else {
+			month, err = parseMonth("month", time.Now().Format("2006-01"))
 			if err != nil {
 				return err
 			}
-			rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-				BudgetID: budget.ID,
-				Month:    types.UnixTime{Time: month},
-			})
-			if err != nil {
-				return err
-			}
+		}
 
-			goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-				BudgetID: budget.ID,
-				Month:    types.UnixTime{Time: month},
-			})
-			if err != nil {
-				return err
-			}
+		rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
+			ID:      budget.ID,
+			LoginID: budget.LoginID,
+			Month:   types.UnixTime{Time: month},
+		})
+		if err != nil {
+			return err
+		}
 
-			var goalsTotal int64 = 0
-			for _, goal := range goals {
-				goalsTotal += goal.AmountForMonth
-			}
+		goals, err := queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
+			ID:      budget.ID,
+			LoginID: budget.LoginID,
+			Month:   types.UnixTime{Time: month},
+		})
+		if err != nil {
+			return err
+		}
 
-			summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{
-				BudgetID: budget.ID,
-				Month:    types.UnixTime{Time: month},
-			})
+		var goalsTotal int64 = 0
+		for _, goal := range goals {
+			goalsTotal += goal.AmountForMonth
+		}
+
+		summary, err := queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{
+			ID:      budget.ID,
+			LoginID: budget.LoginID,
+			Month:   types.UnixTime{Time: month},
+		})
 			if err != nil {
 				return err
 			}
@@ -380,6 +441,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			result, err := queries.CreateAccount(ctx, data.CreateAccountParams{
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 				Name:     args[0],
 			})
 			if err != nil {
@@ -408,6 +470,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				Name:     args[1],
 				ID:       accountID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			})
 			if err != nil {
 				return err
@@ -425,7 +488,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+			accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID, LoginID: budget.LoginID})
 			if err != nil {
 				return err
 			}
@@ -450,6 +513,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err := queries.DeleteAccount(ctx, data.DeleteAccountParams{
 				ID:       accountID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			}); err != nil {
 				return err
 			}
@@ -473,8 +537,9 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{
-				BudgetID:  budget.ID,
-				AccountID: accountID,
+				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
+				ID:       accountID,
 			})
 			if err != nil {
 				return err
@@ -485,8 +550,9 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			transactions, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
-				BudgetID:  budget.ID,
-				AccountID: accountID,
+				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
+				ID:       accountID,
 			})
 			if err != nil {
 				return err
@@ -583,6 +649,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			result, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
 				BudgetID:   budget.ID,
+				LoginID:    budget.LoginID,
 				CategoryID: category,
 				Month:      types.UnixTime{Time: month},
 				Amount:     amount,
@@ -622,6 +689,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			rows, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
 				Amount:     amount,
 				BudgetID:   budget.ID,
+				LoginID:    budget.LoginID,
 				CategoryID: category,
 				Month:      types.UnixTime{Time: month},
 			})
@@ -633,50 +701,6 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			fmt.Fprintf(stdout, "updated allocation %s %q\n", month.Format("2006-01"), args[1])
-			return nil
-
-		case "list":
-			budget, err := resolveBudget(ctx, queries, login, budgetName)
-			if err != nil {
-				return err
-			}
-
-			allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
-			if err != nil {
-				return err
-			}
-
-			return printAllocations(stdout, allocations)
-
-		case "delete":
-			if len(args) != 2 {
-				return fmt.Errorf("allocation delete requires [month] [category]")
-			}
-
-			budget, err := resolveBudget(ctx, queries, login, budgetName)
-			if err != nil {
-				return err
-			}
-
-			month, err := parseMonth("month", args[0])
-			if err != nil {
-				return err
-			}
-
-			category, err := resolveCategoryID(ctx, queries, budget, args[1])
-			if err != nil {
-				return err
-			}
-
-			if err := queries.DeleteAllocationByCategoryAndMonth(ctx, data.DeleteAllocationByCategoryAndMonthParams{
-				BudgetID:   budget.ID,
-				CategoryID: category,
-				Month:      types.UnixTime{Time: month},
-			}); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(stdout, "deleted allocation %s %q\n", month.Format("2006-01"), args[1])
 			return nil
 
 		default:
@@ -730,6 +754,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			result, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
 				BudgetID:        budget.ID,
+				LoginID:         budget.LoginID,
 				Name:            name,
 				CategoryGroupID: categoryGroup,
 			})
@@ -796,6 +821,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				CategoryGroupID: categoryGroup,
 				ID:              categoryID,
 				BudgetID:        budget.ID,
+				LoginID:         budget.LoginID,
 			})
 			if err != nil {
 				return err
@@ -813,7 +839,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			categories, err := queries.ListCategories(ctx, data.ListCategoriesParams{BudgetID: budget.ID})
+			categories, err := queries.ListCategories(ctx, data.ListCategoriesParams{BudgetID: budget.ID, LoginID: budget.LoginID})
 			if err != nil {
 				return err
 			}
@@ -838,6 +864,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err := queries.DeleteCategory(ctx, data.DeleteCategoryParams{
 				ID:       categoryID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			}); err != nil {
 				return err
 			}
@@ -863,6 +890,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			result, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 				Name:     args[0],
 			})
 			if err != nil {
@@ -891,6 +919,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				Name:     args[1],
 				ID:       groupID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			})
 			if err != nil {
 				return err
@@ -908,7 +937,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			groups, err := queries.ListCategoryGroups(ctx, data.ListCategoryGroupsParams{BudgetID: budget.ID})
+			groups, err := queries.ListCategoryGroups(ctx, data.ListCategoryGroupsParams{BudgetID: budget.ID, LoginID: budget.LoginID})
 			if err != nil {
 				return err
 			}
@@ -933,6 +962,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err := queries.DeleteCategoryGroup(ctx, data.DeleteCategoryGroupParams{
 				ID:       groupID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			}); err != nil {
 				return err
 			}
@@ -991,6 +1021,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			result, err := queries.CreateGoal(ctx, data.CreateGoalParams{
 				BudgetID:   budget.ID,
+				LoginID:    budget.LoginID,
 				Type:       goalType,
 				StartDate:  types.UnixTime{Time: start},
 				EndDate:    types.NullUnixTime{Time: end.Time, Valid: end.Valid},
@@ -1053,6 +1084,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				EndDate:    types.NullUnixTime{Time: end.Time, Valid: end.Valid},
 				Amount:     amount,
 				BudgetID:   budget.ID,
+				LoginID:    budget.LoginID,
 				CategoryID: category,
 			})
 			if err != nil {
@@ -1071,7 +1103,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			goals, err := queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID})
+			goals, err := queries.ListGoals(ctx, data.ListGoalsParams{BudgetID: budget.ID, LoginID: budget.LoginID})
 			if err != nil {
 				return err
 			}
@@ -1095,6 +1127,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			goal, err := queries.GetGoalByCategory(ctx, data.GetGoalByCategoryParams{
 				BudgetID:   budget.ID,
+				LoginID:    budget.LoginID,
 				CategoryID: categoryID,
 			})
 			if err != nil {
@@ -1107,6 +1140,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err := queries.DeleteGoal(ctx, data.DeleteGoalParams{
 				ID:       goal.ID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			}); err != nil {
 				return err
 			}
@@ -1132,6 +1166,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			result, err := queries.CreatePayee(ctx, data.CreatePayeeParams{
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 				Name:     args[0],
 			})
 			if err != nil {
@@ -1160,6 +1195,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				Name:     args[1],
 				ID:       payeeID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			})
 			if err != nil {
 				return err
@@ -1177,7 +1213,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			payees, err := queries.ListPayees(ctx, data.ListPayeesParams{BudgetID: budget.ID})
+			payees, err := queries.ListPayees(ctx, data.ListPayeesParams{BudgetID: budget.ID, LoginID: budget.LoginID})
 			if err != nil {
 				return err
 			}
@@ -1202,6 +1238,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err := queries.DeletePayee(ctx, data.DeletePayeeParams{
 				ID:       payeeID,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			}); err != nil {
 				return err
 			}
@@ -1249,6 +1286,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 				result, err := queries.CreatePayeeDefaultLine(ctx, data.CreatePayeeDefaultLineParams{
 					BudgetID:      budget.ID,
+					LoginID:       budget.LoginID,
 					PayeeID:       payee,
 					DestAccountID: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
 					CategoryID:    target.category,
@@ -1305,6 +1343,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					Percent:       percent,
 					ID:            id,
 					BudgetID:      budget.ID,
+					LoginID:       budget.LoginID,
 				})
 				if err != nil {
 					return err
@@ -1334,6 +1373,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				if err := queries.DeletePayeeDefaultLine(ctx, data.DeletePayeeDefaultLineParams{
 					ID:       id,
 					BudgetID: budget.ID,
+					LoginID:  budget.LoginID,
 				}); err != nil {
 					return err
 				}
@@ -1388,6 +1428,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 			result, err := queries.CreateTrx(ctx, data.CreateTrxParams{
 				BudgetID:     budget.ID,
+				LoginID:      budget.LoginID,
 				Date:         types.UnixTime{Time: date},
 				AccountID:    account,
 				PayeeID:      payee,
@@ -1451,6 +1492,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				Note:         args[6],
 				ID:           id,
 				BudgetID:     budget.ID,
+				LoginID:      budget.LoginID,
 			})
 			if err != nil {
 				return err
@@ -1468,7 +1510,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID})
+			transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{BudgetID: budget.ID, LoginID: budget.LoginID})
 			if err != nil {
 				return err
 			}
@@ -1493,6 +1535,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			if err := queries.DeleteTrx(ctx, data.DeleteTrxParams{
 				ID:       id,
 				BudgetID: budget.ID,
+				LoginID:  budget.LoginID,
 			}); err != nil {
 				return err
 			}
@@ -1545,6 +1588,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 
 				result, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
 					BudgetID:      budget.ID,
+					LoginID:       budget.LoginID,
 					TrxID:         transactionID,
 					DestAccountID: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
 					CategoryID:    target.category,
@@ -1608,6 +1652,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					Inflow:        inflow,
 					ID:            id,
 					BudgetID:      budget.ID,
+					LoginID:       budget.LoginID,
 				})
 				if err != nil {
 					return err
@@ -1637,6 +1682,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				if err := queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{
 					ID:       id,
 					BudgetID: budget.ID,
+					LoginID:  budget.LoginID,
 				}); err != nil {
 					return err
 				}
@@ -1771,7 +1817,7 @@ func resolveBudget(ctx context.Context, queries *data.Queries, login loginContex
 			return budgetContext{}, err
 		}
 
-		return budgetContext{ID: budget.ID, Name: stringValue(budget.Name)}, nil
+		return budgetContext{ID: budget.ID, LoginID: login.ID, Name: stringValue(budget.Name)}, nil
 	}
 
 	budgets, err := queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: login.ID})
@@ -1783,7 +1829,7 @@ func resolveBudget(ctx context.Context, queries *data.Queries, login loginContex
 	case 0:
 		return budgetContext{}, fmt.Errorf("no budgets exist; create one with `ynafb budget create [name]`")
 	case 1:
-		return budgetContext{ID: budgets[0].ID, Name: stringValue(budgets[0].Name)}, nil
+		return budgetContext{ID: budgets[0].ID, LoginID: login.ID, Name: stringValue(budgets[0].Name)}, nil
 	default:
 		return budgetContext{}, fmt.Errorf("multiple budgets exist; pass --budget [name]")
 	}
@@ -1791,6 +1837,7 @@ func resolveBudget(ctx context.Context, queries *data.Queries, login loginContex
 
 func resolveAccountID(ctx context.Context, queries *data.Queries, budget budgetContext, accountName string) (int64, error) {
 	account, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
+		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
 		Name:     accountName,
 	})
@@ -1807,6 +1854,7 @@ func resolveAccountID(ctx context.Context, queries *data.Queries, budget budgetC
 
 func resolveCategoryID(ctx context.Context, queries *data.Queries, budget budgetContext, categoryName string) (int64, error) {
 	category, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
+		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
 		Name:     categoryName,
 	})
@@ -1823,6 +1871,7 @@ func resolveCategoryID(ctx context.Context, queries *data.Queries, budget budget
 
 func resolveCategoryGroupID(ctx context.Context, queries *data.Queries, budget budgetContext, groupName string) (int64, error) {
 	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
+		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
 		Name:     groupName,
 	})
@@ -1839,6 +1888,7 @@ func resolveCategoryGroupID(ctx context.Context, queries *data.Queries, budget b
 
 func resolvePayeeID(ctx context.Context, queries *data.Queries, budget budgetContext, payeeName string) (int64, error) {
 	payee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
+		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
 		Name:     payeeName,
 	})
@@ -1855,6 +1905,7 @@ func resolvePayeeID(ctx context.Context, queries *data.Queries, budget budgetCon
 
 func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, budget budgetContext, payeeName string) (int64, error) {
 	payee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
+		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
 		Name:     payeeName,
 	})
@@ -1868,6 +1919,7 @@ func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, budget b
 
 	created, createErr := queries.CreatePayee(ctx, data.CreatePayeeParams{
 		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
 		Name:     payeeName,
 	})
 	if createErr != nil {
@@ -1908,6 +1960,7 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 
 		_, err = txQueries.CreateTrx(ctx, data.CreateTrxParams{
 			BudgetID:     budget.ID,
+			LoginID:      budget.LoginID,
 			Date:         types.UnixTime{Time: entry.TransDate},
 			AccountID:    accountID,
 			PayeeID:      payeeID,
@@ -1930,9 +1983,10 @@ func importAccountTransactions(ctx context.Context, db *sql.DB, queries *data.Qu
 
 func reconcileAccount(ctx context.Context, queries *data.Queries, budget budgetContext, accountID int64, accountName string, date time.Time, stdin io.Reader, stdout io.Writer) error {
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: accountID,
-		Date:      types.UnixTime{Time: date},
+		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
+		ID:       accountID,
+		Date:     types.UnixTime{Time: date},
 	})
 	if err != nil {
 		return err
@@ -1964,9 +2018,10 @@ func reconcileAccount(ctx context.Context, queries *data.Queries, budget budgetC
 	}
 
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: accountID,
-		Date:      types.UnixTime{Time: date},
+		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
+		ID:       accountID,
+		Date:     types.UnixTime{Time: date},
 	})
 	if err != nil {
 		return err
@@ -2001,8 +2056,9 @@ type categorizeRow struct {
 
 func categorizeAccount(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, accountID int64, accountName string, stdin io.Reader, stdout io.Writer) error {
 	transactions, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: accountID,
+		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
+		ID:       accountID,
 	})
 	if err != nil {
 		return err
@@ -2077,7 +2133,7 @@ func categorizeAccount(ctx context.Context, db *sql.DB, queries *data.Queries, b
 					}
 					continue
 				}
-				if err := replaceTransactionCategories(ctx, db, queries, budget.ID, tx.ID, working); err != nil {
+				if err := replaceTransactionCategories(ctx, db, queries, budget, tx.ID, working); err != nil {
 					return err
 				}
 				categorized++
@@ -2195,6 +2251,7 @@ func prefillFromDefaults(ctx context.Context, queries *data.Queries, budget budg
 	defaults, err := queries.ListPayeeDefaultLinesByPayee(ctx, data.ListPayeeDefaultLinesByPayeeParams{
 		PayeeID:  payeeID,
 		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
 	})
 	if err != nil || len(defaults) == 0 {
 		return nil, false
@@ -2361,6 +2418,7 @@ func categorizeAdd(ctx context.Context, queries *data.Queries, budget budgetCont
 
 func resolveOrCreateCategoryID(ctx context.Context, queries *data.Queries, budget budgetContext, name string, reader *bufio.Reader, stdout io.Writer) (int64, error) {
 	category, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
+		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
 		Name:     name,
 	})
@@ -2385,6 +2443,7 @@ func resolveOrCreateCategoryID(ctx context.Context, queries *data.Queries, budge
 
 	created, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
 		BudgetID:        budget.ID,
+		LoginID:         budget.LoginID,
 		Name:            name,
 		CategoryGroupID: sql.NullInt64{},
 	})
@@ -2397,14 +2456,27 @@ func resolveOrCreateCategoryID(ctx context.Context, queries *data.Queries, budge
 }
 
 func resolveOrCreateCategoryGroup(ctx context.Context, queries *data.Queries, budget budgetContext, name string) (int64, error) {
-	id, err := queries.GetOrCreateCategoryGroup(ctx, data.GetOrCreateCategoryGroupParams{
+	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
+		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
+		Name:     name,
+	})
+	if err == nil {
+		return group.ID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+
+	created, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
+		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
 		Name:     name,
 	})
 	if err != nil {
 		return 0, err
 	}
-	return id, nil
+	return created, nil
 }
 
 func categorizeDelete(reader *bufio.Reader, stdout io.Writer, working *[]categorizeRow) error {
@@ -2459,6 +2531,7 @@ func categorizeSaveDefault(ctx context.Context, db *sql.DB, queries *data.Querie
 	defaults, err := queries.ListPayeeDefaultLinesByPayee(ctx, data.ListPayeeDefaultLinesByPayeeParams{
 		PayeeID:  payeeID,
 		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
 	})
 	if err != nil {
 		return err
@@ -2478,7 +2551,7 @@ func categorizeSaveDefault(ctx context.Context, db *sql.DB, queries *data.Querie
 		return nil
 	}
 
-	if err := replacePayeeDefaults(ctx, db, queries, budget.ID, payeeID, working, percents); err != nil {
+	if err := replacePayeeDefaults(ctx, db, queries, budget, payeeID, working, percents); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "→ saved default for %q\n", tx.PayeeName)
@@ -2581,7 +2654,7 @@ func defaultsMatch(tx categorizeTransaction, defaults []data.ListPayeeDefaultLin
 	return true
 }
 
-func replaceTransactionCategories(ctx context.Context, db *sql.DB, queries *data.Queries, budgetID int64, transactionID int64, working []categorizeRow) error {
+func replaceTransactionCategories(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, transactionID int64, working []categorizeRow) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -2591,13 +2664,15 @@ func replaceTransactionCategories(ctx context.Context, db *sql.DB, queries *data
 	txQueries := queries.WithTx(tx)
 	if err := txQueries.DeleteTrxLinesByTrx(ctx, data.DeleteTrxLinesByTrxParams{
 		TrxID:    transactionID,
-		BudgetID: budgetID,
+		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
 	}); err != nil {
 		return err
 	}
 	for _, row := range working {
 		if _, err := txQueries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-			BudgetID:      budgetID,
+			BudgetID:      budget.ID,
+			LoginID:       budget.LoginID,
 			TrxID:         transactionID,
 			DestAccountID: categorizeOtherAccount(row),
 			CategoryID:    categorizeCategory(row),
@@ -2611,7 +2686,7 @@ func replaceTransactionCategories(ctx context.Context, db *sql.DB, queries *data
 	return tx.Commit()
 }
 
-func replacePayeeDefaults(ctx context.Context, db *sql.DB, queries *data.Queries, budgetID int64, payeeID int64, working []categorizeRow, percents map[string]int64) error {
+func replacePayeeDefaults(ctx context.Context, db *sql.DB, queries *data.Queries, budget budgetContext, payeeID int64, working []categorizeRow, percents map[string]int64) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -2621,13 +2696,15 @@ func replacePayeeDefaults(ctx context.Context, db *sql.DB, queries *data.Queries
 	txQueries := queries.WithTx(tx)
 	if err := txQueries.DeletePayeeDefaultLinesByPayee(ctx, data.DeletePayeeDefaultLinesByPayeeParams{
 		PayeeID:  payeeID,
-		BudgetID: budgetID,
+		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
 	}); err != nil {
 		return err
 	}
 	for _, row := range working {
 		if _, err := txQueries.CreatePayeeDefaultLine(ctx, data.CreatePayeeDefaultLineParams{
-			BudgetID:      budgetID,
+			BudgetID:      budget.ID,
+			LoginID:       budget.LoginID,
 			PayeeID:       payeeID,
 			DestAccountID: categorizeOtherAccount(row),
 			CategoryID:    categorizeCategory(row),
@@ -2752,19 +2829,6 @@ func printLogins(w io.Writer, logins []data.Login) error {
 	}
 	for _, l := range logins {
 		if _, err := fmt.Fprintf(tw, "%s\n", l.Username); err != nil {
-			return err
-		}
-	}
-	return tw.Flush()
-}
-
-func printBudgetMonths(w io.Writer, months []types.UnixTime) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "MONTH"); err != nil {
-		return err
-	}
-	for _, m := range months {
-		if _, err := fmt.Fprintf(tw, "%s\n", m.Time.Format("2006-01")); err != nil {
 			return err
 		}
 	}
@@ -2900,19 +2964,6 @@ func printAccountBalances(w io.Writer, accounts []data.ListAccountsBalancesRow) 
 	}
 	for _, a := range accounts {
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", stringValue(a.Name), formatCents(a.Balance), formatCents(a.ReconciledBalance)); err != nil {
-			return err
-		}
-	}
-	return tw.Flush()
-}
-
-func printAllocations(w io.Writer, allocations []data.ListAllocationsRow) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "MONTH\tCATEGORY\tAMOUNT"); err != nil {
-		return err
-	}
-	for _, a := range allocations {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", a.Month.Format("2006-01"), stringValue(a.CategoryName), formatCents(a.Amount)); err != nil {
 			return err
 		}
 	}
