@@ -1,33 +1,55 @@
 -- name: CreatePayeeDefaultLine :one
-INSERT INTO payee_default_line (
-  budget_id,
-  payee_id,
-  dest_account_id,
-  category_id,
-  income,
-  percent
-) VALUES (
-  ?,
-  ?,
-  ?,
-  ?,
-  ?,
-  ?
-)
-RETURNING *;
+INSERT INTO
+  payee_default_line (budget_id, payee_id, dest_account_id, category_id, income, percent)
+SELECT
+  b.id, ?, ?, ?, ?, ?
+FROM
+  budget AS b
+WHERE
+  b.id = @budget_id AND b.login_id = @login_id
+RETURNING
+  *;
 
 -- name: UpdatePayeeDefaultLine :execrows
 UPDATE payee_default_line
-SET payee_id = ?, dest_account_id = ?, category_id = ?, income = ?, percent = ?
-WHERE id = ? AND budget_id = ?;
+SET
+  payee_id = ?, dest_account_id = ?, category_id = ?, income = ?, percent = ?
+WHERE
+  payee_default_line.id = @id
+  AND payee_default_line.budget_id IN (
+    SELECT
+      b.id
+    FROM
+      budget AS b
+    WHERE
+      b.id = @budget_id AND b.login_id = @login_id
+  );
 
 -- name: DeletePayeeDefaultLine :exec
 DELETE FROM payee_default_line
-WHERE id = ? AND budget_id = ?;
+WHERE
+  payee_default_line.id = @id
+  AND payee_default_line.budget_id IN (
+    SELECT
+      b.id
+    FROM
+      budget AS b
+    WHERE
+      b.id = @budget_id AND b.login_id = @login_id
+  );
 
 -- name: DeletePayeeDefaultLinesByPayee :exec
 DELETE FROM payee_default_line
-WHERE payee_id = ? AND budget_id = ?;
+WHERE
+  payee_default_line.payee_id = @payee_id
+  AND payee_default_line.budget_id IN (
+    SELECT
+      b.id
+    FROM
+      budget AS b
+    WHERE
+      b.id = @budget_id AND b.login_id = @login_id
+  );
 
 -- name: ListPayeeDefaultLinesByPayee :many
 SELECT
@@ -43,5 +65,6 @@ SELECT
 FROM payee_default_line AS pdl
 LEFT JOIN account AS ao ON ao.id = pdl.dest_account_id
 LEFT JOIN category AS c ON c.id = pdl.category_id
-WHERE pdl.payee_id = @payee_id AND pdl.budget_id = @budget_id
+JOIN budget AS b ON pdl.budget_id = b.id
+WHERE b.login_id = @login_id AND pdl.payee_id = @payee_id AND pdl.budget_id = @budget_id
 ORDER BY pdl.id;

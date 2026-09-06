@@ -10,45 +10,47 @@ RETURNING *;
 
 -- name: UpdateBudget :execrows
 UPDATE budget
-SET name = ?
-WHERE id = ?;
+SET
+  name = ?
+WHERE
+  budget.login_id = @login_id AND budget.id = @id;
 
 -- name: DeleteBudget :exec
 DELETE FROM budget
-WHERE id = ?;
+WHERE
+  budget.login_id = @login_id AND budget.id = @id;
 
 -- name: ListBudgets :many
-SELECT id, login_id, name
-FROM budget
-WHERE login_id = ?
-ORDER BY id;
+SELECT
+  budget.id,
+  budget.login_id,
+  budget.name
+FROM
+  budget
+WHERE
+  budget.login_id = @login_id
+ORDER BY
+  budget.id;
 
 -- name: GetBudgetByName :one
-SELECT id, login_id, name
-FROM budget
-WHERE login_id = ? AND name = ?;
-
--- name: ListBudgetActivityMonths :many
-SELECT DISTINCT
-  CAST(unixepoch(date(t.date, 'unixepoch', 'start of month')) AS UNIX_EPOCH_INTEGER) as month
-FROM trx as t
-WHERE t.budget_id = @budget_id
-UNION
-SELECT DISTINCT
-  CAST(unixepoch(date(a.month, 'unixepoch', 'start of month')) AS UNIX_EPOCH_INTEGER) as month
-FROM allocation as a
-WHERE a.budget_id = @budget_id
-ORDER BY month;
+SELECT
+  budget.id,
+  budget.login_id,
+  budget.name
+FROM
+  budget
+WHERE
+  budget.login_id = @login_id AND budget.name = ?;
 
 -- name: ListBudgetMonthCategories :many
-SELECT 
+SELECT
   c.id,
   c.id AS category_id,
   c.budget_id,
   c.name AS category_name,
   cg.name AS category_group_name,
-  COALESCE(allocated, 0) AS allocated,
-  COALESCE(spent, 0) AS spent,
+  COALESCE(bmc.allocated, 0) AS allocated,
+  COALESCE(bmc.spent, 0) AS spent,
   CAST(CASE
     WHEN bmc.month IS NULL AND CAST(@month AS UNIX_EPOCH_INTEGER) < unixepoch() THEN COALESCE((
       SELECT MAX(prior.available, 0)
@@ -62,7 +64,8 @@ SELECT
 FROM category AS c
 LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
 LEFT JOIN budget_month_categories AS bmc ON bmc.category_id = c.id AND bmc.month = @month AND bmc.budget_id = c.budget_id
-WHERE c.budget_id = @budget_id 
+JOIN budget AS b ON c.budget_id = b.id
+WHERE b.login_id = @login_id AND c.budget_id = @id
 ORDER BY cg.name ASC NULLS FIRST, c.name;
 
 -- name: GetBudgetMonthSummary :one
@@ -70,7 +73,7 @@ SELECT
   COALESCE(bms.ready_to_assign, (
     SELECT prev.ready_to_assign
     FROM budget_month_summary AS prev
-    WHERE prev.budget_id = @budget_id AND prev.month < @month
+    WHERE prev.budget_id = @id AND prev.month < @month
     ORDER BY prev.month desc
     LIMIT 1
   ) , 0) AS ready_to_assign,
@@ -80,10 +83,12 @@ SELECT
   COALESCE(bms.available, (
     SELECT prev.available
     FROM budget_month_summary AS prev
-    WHERE prev.budget_id = @budget_id AND prev.month < @month
+    WHERE prev.budget_id = @id AND prev.month < @month
     ORDER BY prev.month desc
     LIMIT 1
   ) , 0) AS available,
   COALESCE(bms.uncategorized, 0) AS uncategorized
 FROM (SELECT @month AS month) AS requested
-LEFT JOIN budget_month_summary AS bms ON bms.month = requested.month AND bms.budget_id = @budget_id;
+LEFT JOIN budget_month_summary AS bms ON bms.month = requested.month AND bms.budget_id = @id
+JOIN budget AS b ON b.id = @id
+WHERE b.login_id = @login_id;

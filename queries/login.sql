@@ -9,20 +9,29 @@ INSERT INTO login (
 RETURNING *;
 
 -- name: GetLoginByUsername :one
-SELECT *
-FROM login
-WHERE username = ?;
+SELECT
+  login.*
+FROM
+  login
+WHERE
+  login.username = ?;
 
 -- name: ListLogins :many
-SELECT *
-FROM login
-ORDER BY id;
+SELECT
+  login.*
+FROM
+  login
+ORDER BY
+  login.id;
 
 -- name: UpdateLoginPassword :execrows
 UPDATE login
-SET password = ?
-WHERE id = ?;
+SET
+  password = ?
+WHERE
+  login.id = @id;
 
 -- name: DeleteLogin :exec
 DELETE FROM login
-WHERE id = ?;
+WHERE
+  login.id = @id;
