@@ -62,9 +62,9 @@ SELECT
     ELSE COALESCE(bmc.available, 0)
   END AS INTEGER) AS available
 FROM category AS c
+JOIN budget AS b ON c.budget_id = b.id
 LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
 LEFT JOIN budget_month_categories AS bmc ON bmc.category_id = c.id AND bmc.month = @month AND bmc.budget_id = c.budget_id
-JOIN budget AS b ON c.budget_id = b.id
 WHERE b.login_id = @login_id AND c.budget_id = @id
 ORDER BY cg.name ASC NULLS FIRST, c.name;
 

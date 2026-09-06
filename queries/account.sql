@@ -140,6 +140,7 @@ SELECT
   p.name AS payee_name
 FROM
   account_trx AS at
+  JOIN budget AS b ON at.budget_id = b.id
   LEFT JOIN trx_line AS tc ON (
     at.trx_id = tc.trx_id
     AND at.source_account_id IS NULL
@@ -149,7 +150,6 @@ FROM
   LEFT JOIN account AS oa ON tc.dest_account_id = oa.id
   LEFT JOIN category AS c ON tc.category_id = c.id
   LEFT JOIN payee AS p ON at.payee_id = p.id
-  JOIN budget AS b ON a.budget_id = b.id
 WHERE
   b.login_id = @login_id
   AND at.budget_id = @budget_id

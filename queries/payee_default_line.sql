@@ -63,8 +63,8 @@ SELECT
   pdl.income,
   pdl.percent
 FROM payee_default_line AS pdl
+JOIN budget AS b ON pdl.budget_id = b.id
 LEFT JOIN account AS ao ON ao.id = pdl.dest_account_id
 LEFT JOIN category AS c ON c.id = pdl.category_id
-JOIN budget AS b ON pdl.budget_id = b.id
 WHERE b.login_id = @login_id AND pdl.payee_id = @payee_id AND pdl.budget_id = @budget_id
 ORDER BY pdl.id;
