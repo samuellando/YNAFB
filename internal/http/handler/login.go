@@ -1,11 +1,14 @@
 package handler
 
 import (
-	"net/http"
-	"io"
 	"encoding/json"
-	"samuellando.com/YNAFB/data"
+	"io"
 	"log"
+	"net/http"
+	"strconv"
+
+	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/auth"
 )
 
 type Login struct {
@@ -26,17 +29,68 @@ func (b Login) CreateLogin(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Query the db
-	budget, err := b.Queires.CreateLogin(req.Context(), params)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if len(params.Password) < 8 {
+		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
 	}
-	// Send response
-	res, err := json.Marshal(budget)
+	params.Password, err = auth.HashPassword(params.Password)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write(res)
+	// Query the db
+	_, err = b.Queires.CreateLogin(req.Context(), params)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func (b Login) Authenticate(w http.ResponseWriter, req *http.Request) {
+	log.Println("authentication")
+	// Parse the input
+	input := data.CreateLoginParams{}
+	d, err := io.ReadAll(req.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = json.Unmarshal(d, &input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Query the db
+	login, err := b.Queires.GetLoginByUsername(req.Context(), data.GetLoginByUsernameParams{
+		Username: input.Username,
+	})
+	if err != nil {
+		//dummy
+		auth.CheckPassword("dummy", "dummy")
+		http.Error(w, "Denied", http.StatusUnauthorized)
+		return
+	}
+	// Check the password hash
+	if !auth.CheckPassword(input.Password, login.Password) {
+		http.Error(w, "Denied", http.StatusUnauthorized)
+		return
+	}
+	// Send a JWT token
+	token, err := auth.GenerateJWT(strconv.Itoa(int(login.ID)))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.SetJWTCookie(w, token)
+}
+
+func (b Login) Deauthenticate(w http.ResponseWriter, req *http.Request) {
+	log.Println("deauthentication")
+	cookie, err := auth.GetJWTCookie(req)
+	if err != nil {
+		return
+	}
+	auth.DevalidateJWT(cookie.Value)
+	cookie.MaxAge = -1
+	http.SetCookie(w, cookie)
 }
