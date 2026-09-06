@@ -10,13 +10,14 @@ func TestCreateAllocation(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := mustTime(t, 2026, 1, 1)
 	allocation, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
 		BudgetID:   budget.ID,
 		CategoryID: category.ID,
 		Month:      month,
 		Amount:     5000,
+		LoginID:    budget.LoginID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -42,12 +43,13 @@ func TestCreateAllocationNonExistingBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	_, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
 		BudgetID:   99,
 		CategoryID: category.ID,
 		Month:      mustTime(t, 2026, 1, 1),
 		Amount:     5000,
+		LoginID:    budget.LoginID,
 	})
 	if err == nil {
 		t.Error("Non existing budget should raise an error")
@@ -63,6 +65,7 @@ func TestCreateAllocationNonExistingCategory(t *testing.T) {
 		CategoryID: 99,
 		Month:      mustTime(t, 2026, 1, 1),
 		Amount:     5000,
+		LoginID:    budget.LoginID,
 	})
 	if err == nil {
 		t.Error("Non existing category should raise an error")
@@ -73,20 +76,19 @@ func TestDeleteBudgetCascadesAllocations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	newAllocation(t, queries, ctx, budget.ID, category.ID, mustTime(t, 2026, 1, 1), 5000)
-	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
-	if err != nil {
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, mustTime(t, 2026, 1, 1), 5000)
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM allocation`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if len(allocations) != 1 {
+	if count != 1 {
 		t.Fatal("There should be one allocation before")
 	}
-	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
+	err := queries.DeleteBudget(ctx, data.DeleteBudgetParams{LoginID: budget.LoginID, ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM allocation`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
@@ -99,20 +101,19 @@ func TestDeleteCategoryCascadesAllocations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	newAllocation(t, queries, ctx, budget.ID, category.ID, mustTime(t, 2026, 1, 1), 5000)
-	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
-	if err != nil {
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, mustTime(t, 2026, 1, 1), 5000)
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM allocation`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if len(allocations) != 1 {
+	if count != 1 {
 		t.Fatal("There should be one allocation before")
 	}
-	err = queries.DeleteCategory(ctx, data.DeleteCategoryParams{ID: category.ID, BudgetID: budget.ID})
+	err := queries.DeleteCategory(ctx, data.DeleteCategoryParams{ID: category.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM allocation`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
@@ -125,12 +126,13 @@ func TestCreateAllocationDuplicateBudgetCategoryMonth(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	params := data.CreateAllocationParams{
 		BudgetID:   budget.ID,
 		CategoryID: category.ID,
 		Month:      mustTime(t, 2026, 1, 1),
 		Amount:     5000,
+		LoginID:    budget.LoginID,
 	}
 	if _, err := queries.CreateAllocation(ctx, params); err != nil {
 		t.Fatal(err)
@@ -145,14 +147,15 @@ func TestUpdateAllocation(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := mustTime(t, 2026, 1, 1)
-	allocation := newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
+	allocation := newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, month, 5000)
 	n, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
 		Amount:     8000,
 		BudgetID:   budget.ID,
 		CategoryID: category.ID,
 		Month:      month,
+		LoginID:    budget.LoginID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -160,84 +163,57 @@ func TestUpdateAllocation(t *testing.T) {
 	if n != 1 {
 		t.Error("The number of affected rows should be 1")
 	}
-	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
-	if err != nil {
+	var amount int64
+	var id int64
+	if err := db.QueryRow(`SELECT id, amount FROM allocation WHERE id = ?`, allocation.ID).Scan(&id, &amount); err != nil {
 		t.Fatal(err)
 	}
-	if len(allocations) != 1 {
-		t.Fatal("There should be one allocation")
-	}
-	if allocations[0].ID != allocation.ID {
+	if id != allocation.ID {
 		t.Error("ID changed on update")
 	}
-	if allocations[0].Amount != 8000 {
+	if amount != 8000 {
 		t.Error("allocation amount was not updated")
 	}
 }
 
-func TestDeleteAllocationByCategoryAndMonth(t *testing.T) {
+func TestScopingAllocationCreateScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	month := mustTime(t, 2026, 1, 1)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+
+	_, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
+		BudgetID:   budgetB.ID,
+		CategoryID: categoryB.ID,
+		Month:      mustTime(t, 2026, 1, 1),
+		Amount:     100,
+		LoginID:    budgetA.LoginID,
+	})
+	if err == nil {
+		t.Fatal("expected creating an allocation for another login's budget to fail")
 	}
-	if len(allocations) != 1 {
-		t.Fatal("There should be one allocation before")
-	}
-	err = queries.DeleteAllocationByCategoryAndMonth(ctx, data.DeleteAllocationByCategoryAndMonthParams{
-		BudgetID:   budget.ID,
-		CategoryID: category.ID,
-		Month:      month,
+}
+
+func TestScopingUpdateAllocationScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+	newAllocation(t, queries, ctx, budgetB.LoginID, budgetB.ID, categoryB.ID, mustTime(t, 2026, 1, 1), 100)
+
+	n, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
+		Amount:     500,
+		CategoryID: categoryB.ID,
+		Month:      mustTime(t, 2026, 1, 1),
+		BudgetID:   budgetB.ID,
+		LoginID:    budgetA.LoginID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	allocations, err = queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(allocations) != 0 {
-		t.Fatal("There should be no allocation after")
-	}
-}
-
-func TestListAllocations(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	jan := mustTime(t, 2026, 1, 1)
-	feb := mustTime(t, 2026, 2, 1)
-	allocation := newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 8000)
-	allocations, err := queries.ListAllocations(ctx, data.ListAllocationsParams{BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(allocations) != 2 {
-		t.Fatal("There should be two allocations")
-	}
-	if allocations[0].ID != allocation.ID {
-		t.Error("First allocation should be the January one (ordered by month)")
-	}
-	if allocations[0].Month.Unix() != jan.Unix() {
-		t.Error("first allocation month does not match")
-	}
-	if allocations[0].CategoryID != category.ID {
-		t.Error("first allocation category id does not match")
-	}
-	if allocations[0].CategoryName != "testcategory" {
-		t.Error("first allocation category name does not match")
-	}
-	if allocations[0].Amount != 5000 {
-		t.Error("first allocation amount does not match")
-	}
-	if allocations[1].Amount != 8000 {
-		t.Error("second allocation amount does not match")
+	if n != 0 {
+		t.Fatalf("expected 0 rows updated across logins, got %d", n)
 	}
 }

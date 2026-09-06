@@ -12,7 +12,7 @@ func TestListAccountsBalancesEmpty(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,8 +25,8 @@ func TestListAccountsBalancesNoTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,9 +51,9 @@ func TestListAccountsBalancesMultipleAccounts(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	newAccount(t, queries, ctx, budget.ID, "account1")
-	newAccount(t, queries, ctx, budget.ID, "account2")
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	newAccount(t, queries, ctx, budget, "account1")
+	newAccount(t, queries, ctx, budget, "account2")
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,9 +80,9 @@ func TestListAccountsBalancesScopedToBudget(t *testing.T) {
 	defer teardown(db)
 	budget1 := newBudget(t, queries, ctx, "testBudget1")
 	budget2 := newBudget(t, queries, ctx, "testBudget2")
-	account1 := newAccount(t, queries, ctx, budget1.ID, "same")
-	account2 := newAccount(t, queries, ctx, budget2.ID, "same")
-	balances1, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget1.ID})
+	account1 := newAccount(t, queries, ctx, budget1, "same")
+	account2 := newAccount(t, queries, ctx, budget2, "same")
+	balances1, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget1.LoginID, BudgetID: budget1.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestListAccountsBalancesScopedToBudget(t *testing.T) {
 	if balances1[0].ID != account1.ID {
 		t.Error("budget1 returned the wrong account")
 	}
-	balances2, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget2.ID})
+	balances2, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget2.LoginID, BudgetID: budget2.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,12 +108,12 @@ func TestListAccountsBalancesCategorySpend(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 1000, 0)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,11 +132,11 @@ func TestListAccountsBalancesIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, transaction, 5000)
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, budget, transaction, 5000)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,12 +155,12 @@ func TestListAccountsBalancesTransferOutSourcePrimary(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, transaction, target, 3000, 0)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,12 +183,12 @@ func TestListAccountsBalancesTransferInMirrored(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
-	newTransfer(t, queries, ctx, transaction, source, 0, 500)
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, budget, transaction, source, 0, 500)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,14 +211,14 @@ func TestListAccountsBalancesSplitTransfer(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target1 := newAccount(t, queries, ctx, budget.ID, "target1")
-	target2 := newAccount(t, queries, ctx, budget.ID, "target2")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction, target1, 1000, 0)
-	newTransfer(t, queries, ctx, transaction, target2, 2000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	source := newAccount(t, queries, ctx, budget, "source")
+	target1 := newAccount(t, queries, ctx, budget, "target1")
+	target2 := newAccount(t, queries, ctx, budget, "target2")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, transaction, target1, 1000, 0)
+	newTransfer(t, queries, ctx, budget, transaction, target2, 2000, 0)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,17 +244,17 @@ func TestListAccountsBalancesMixed(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	spend := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
-	income := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 2), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, income, 5000)
-	transfer := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 3), 2000, 0, "")
-	newTransfer(t, queries, ctx, transfer, otherAccount, 2000, 0)
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	spend := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, spend, category, 1000, 0)
+	income := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 2), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, budget, income, 5000)
+	transfer := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 3), 2000, 0, "")
+	newTransfer(t, queries, ctx, budget, transfer, otherAccount, 2000, 0)
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,21 +277,22 @@ func TestListAccountsBalancesReconciledAndUnreconciled(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	reconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, reconciled, category, 1000, 0)
-	unreconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
-	newCategoryLine(t, queries, ctx, unreconciled, category, 2000, 0)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	reconciled := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, reconciled, category, 1000, 0)
+	unreconciled := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, unreconciled, category, 2000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,19 +311,20 @@ func TestListAccountsBalancesTransferReconciledPerAccount(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, transaction, target, 3000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: target.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       target.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{BudgetID: budget.ID})
+	balances, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,8 +347,8 @@ func TestGetAccountBalancesNoTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,12 +370,12 @@ func TestGetAccountBalancesCategorySpend(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
-	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 1000, 0)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,11 +391,11 @@ func TestGetAccountBalancesIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, transaction, 5000)
-	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, budget, transaction, 5000)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,12 +411,12 @@ func TestGetAccountBalancesTransferTarget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
-	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: target.ID})
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, transaction, target, 3000, 0)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: target.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,12 +429,12 @@ func TestGetAccountBalancesTransferSource(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
-	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: source.ID})
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, transaction, target, 3000, 0)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: source.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,12 +447,12 @@ func TestGetAccountBalancesMirroredTransfer(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
-	newTransfer(t, queries, ctx, transaction, source, 0, 500)
-	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: target.ID})
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, budget, transaction, source, 0, 500)
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: target.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,21 +465,22 @@ func TestGetAccountBalancesReconciled(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	reconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, reconciled, category, 1000, 0)
-	unreconciled := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
-	newCategoryLine(t, queries, ctx, unreconciled, category, 2000, 0)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	reconciled := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, reconciled, category, 1000, 0)
+	unreconciled := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, unreconciled, category, 2000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: account.ID})
+	balances, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: account.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +496,7 @@ func TestGetAccountBalancesNonExistent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	_, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{BudgetID: budget.ID, AccountID: 99})
+	_, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID, ID: 99})
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected sql.ErrNoRows, got %v", err)
 	}
@@ -503,11 +506,12 @@ func TestGetAccountBalanceAsOfNoTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 15),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 15),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -521,13 +525,14 @@ func TestGetAccountBalanceAsOfBeforeFirstTransaction(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -541,13 +546,14 @@ func TestGetAccountBalanceAsOfInclusiveOfDate(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 15),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 15),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -561,15 +567,16 @@ func TestGetAccountBalanceAsOfCategorySpend(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 1000, 0)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -583,14 +590,15 @@ func TestGetAccountBalanceAsOfIncome(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, transaction, 5000)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, budget, transaction, 5000)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -604,15 +612,16 @@ func TestGetAccountBalanceAsOfTransferSourcePrimary(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, transaction, target, 3000, 0)
 	sourceBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: source.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       source.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -621,9 +630,10 @@ func TestGetAccountBalanceAsOfTransferSourcePrimary(t *testing.T) {
 		t.Errorf("expected source balance -3000, got %d", sourceBalance)
 	}
 	targetBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: target.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       target.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -637,15 +647,16 @@ func TestGetAccountBalanceAsOfTransferMirrored(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
-	newTransfer(t, queries, ctx, transaction, source, 0, 500)
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "")
+	newTransfer(t, queries, ctx, budget, transaction, source, 0, 500)
 	targetBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: target.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       target.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -654,9 +665,10 @@ func TestGetAccountBalanceAsOfTransferMirrored(t *testing.T) {
 		t.Errorf("expected target balance 500, got %d", targetBalance)
 	}
 	sourceBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: source.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       source.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -670,14 +682,15 @@ func TestGetAccountBalanceAsOfExcludesLaterTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -686,9 +699,10 @@ func TestGetAccountBalanceAsOfExcludesLaterTransactions(t *testing.T) {
 		t.Errorf("expected balance -1000, got %d", balance)
 	}
 	fullBalance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 28),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 28),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -702,15 +716,16 @@ func TestGetAccountBalanceAsOfExcludesTransfersAfterDate(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "source")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 2, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, transaction, target, 3000, 0)
+	source := newAccount(t, queries, ctx, budget, "source")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 2, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, transaction, target, 3000, 0)
 	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: target.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       target.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -724,20 +739,21 @@ func TestGetAccountBalanceAsOfCombined(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	spend := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
-	income := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 2), 0, 5000, "")
-	newIncomeLine(t, queries, ctx, income, 5000)
-	incoming := newTrx(t, queries, ctx, otherAccount, payee, mustTime(t, 2026, 1, 3), 2000, 0, "")
-	newTransfer(t, queries, ctx, incoming, account, 2000, 0)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	spend := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, spend, category, 1000, 0)
+	income := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 2), 0, 5000, "")
+	newIncomeLine(t, queries, ctx, budget, income, 5000)
+	incoming := newTrx(t, queries, ctx, budget, otherAccount, payee, mustTime(t, 2026, 1, 3), 2000, 0, "")
+	newTransfer(t, queries, ctx, budget, incoming, account, 2000, 0)
 	before, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -746,14 +762,36 @@ func TestGetAccountBalanceAsOfCombined(t *testing.T) {
 		t.Errorf("expected balance -1000 as of Jan 1, got %d", before)
 	}
 	after, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if after != 6000 {
 		t.Errorf("expected balance 6000 as of Jan 31, got %d", after)
+	}
+}
+
+func TestScopingListAccountsBalancesScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	newAccount(t, queries, ctx, budgetA, "accountA")
+	newAccount(t, queries, ctx, budgetB, "accountB")
+
+	// Querying budgetB's id under budgetA's login must return nothing.
+	rows, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{
+		LoginID:  budgetA.LoginID,
+		BudgetID: budgetB.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected 0 accounts for another login's budget, got %d", len(rows))
 	}
 }

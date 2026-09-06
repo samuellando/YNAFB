@@ -1,6 +1,7 @@
 package data_test
 
 import (
+	"database/sql"
 	"testing"
 
 	"samuellando.com/YNAFB/data"
@@ -66,8 +67,9 @@ func TestUpdateBudget(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	n, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
-		Name: "newName",
-		ID:   budget.ID,
+		Name:    "newName",
+		LoginID: budget.LoginID,
+		ID:      budget.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,8 +90,9 @@ func TestUpdateBudgetNonexistent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	n, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
-		Name: "newName",
-		ID:   1,
+		Name:    "newName",
+		LoginID: 1,
+		ID:      1,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +113,7 @@ func TestDeleteBudget(t *testing.T) {
 	if len(budgets) != 1 {
 		t.Fatal("There should be one budget before")
 	}
-	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{ID: budget.ID})
+	err = queries.DeleteBudget(ctx, data.DeleteBudgetParams{LoginID: budget.LoginID, ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,139 +192,58 @@ func TestGetBudgetByNameDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestListBudgetActivityMonthsEmpty(t *testing.T) {
+func TestScopingGetBudgetByNameScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(months) != 0 {
-		t.Fatal("A budget with no transactions or allocations should have no activity months")
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+
+	_, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{
+		LoginID: budgetA.LoginID,
+		Name:    budgetB.Name,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows for another login's budget, got %v", err)
 	}
 }
 
-func TestListBudgetActivityMonthsFromTransactions(t *testing.T) {
+func TestScopingUpdateBudgetScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 15), 1000, 0, "")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 3, 1), 2000, 0, "")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 31), 500, 0, "")
-	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+
+	n, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
+		Name:    "hacked",
+		LoginID: budgetA.LoginID,
+		ID:      budgetB.ID,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(months) != 2 {
-		t.Fatalf("There should be two distinct months, got %d", len(months))
-	}
-	if months[0].Unix() != mustTime(t, 2026, 1, 1).Unix() {
-		t.Error("first month should be January")
-	}
-	if months[1].Unix() != mustTime(t, 2026, 3, 1).Unix() {
-		t.Error("second month should be March")
+	if n != 0 {
+		t.Fatalf("expected 0 rows updated across logins, got %d", n)
 	}
 }
 
-func TestListBudgetActivityMonthsFromAllocations(t *testing.T) {
+func TestScopingDeleteBudgetScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	jan := mustTime(t, 2026, 1, 1)
-	feb := mustTime(t, 2026, 2, 1)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 8000)
-	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(months) != 2 {
-		t.Fatalf("There should be two months, got %d", len(months))
-	}
-	if months[0].Unix() != jan.Unix() {
-		t.Error("first month should be January")
-	}
-	if months[1].Unix() != feb.Unix() {
-		t.Error("second month should be February")
-	}
-}
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
 
-func TestListBudgetActivityMonthsUnionDedupeOrder(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	jan := mustTime(t, 2026, 1, 1)
-	feb := mustTime(t, 2026, 2, 1)
-	mar := mustTime(t, 2026, 3, 1)
-	newTrx(t, queries, ctx, account, payee, jan, 1000, 0, "")
-	newTrx(t, queries, ctx, account, payee, feb, 2000, 0, "")
-	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 5000)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, mar, 8000)
-	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
+	err := queries.DeleteBudget(ctx, data.DeleteBudgetParams{
+		LoginID: budgetA.LoginID,
+		ID:      budgetB.ID,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(months) != 3 {
-		t.Fatalf("There should be three distinct months, got %d", len(months))
-	}
-	if months[0].Unix() != jan.Unix() {
-		t.Error("first month should be January")
-	}
-	if months[1].Unix() != feb.Unix() {
-		t.Error("second month should be February")
-	}
-	if months[2].Unix() != mar.Unix() {
-		t.Error("third month should be March")
-	}
-}
-
-func TestListBudgetActivityMonthsExcludesOtherBudgets(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	otherBudget := newBudget(t, queries, ctx, "otherBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	otherAccount := newAccount(t, queries, ctx, otherBudget.ID, "otheraccount")
-	otherPayee := newPayee(t, queries, ctx, otherBudget.ID, "otherpayee")
-	otherCategory := newCategory(t, queries, ctx, otherBudget.ID, "othercategory")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTrx(t, queries, ctx, otherAccount, otherPayee, mustTime(t, 2026, 2, 1), 1000, 0, "")
-	newAllocation(t, queries, ctx, otherBudget.ID, otherCategory.ID, mustTime(t, 2026, 3, 1), 5000)
-	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
+	budgets, err := queries.ListBudgets(ctx, data.ListBudgetsParams{LoginID: budgetB.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(months) != 1 {
-		t.Fatalf("There should be one month for this budget, got %d", len(months))
-	}
-	if months[0].Unix() != mustTime(t, 2026, 1, 1).Unix() {
-		t.Error("month should be January")
-	}
-}
-
-func TestListBudgetActivityMonthsNormalizesToStartOfMonth(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 15), 1000, 0, "")
-	months, err := queries.ListBudgetActivityMonths(ctx, data.ListBudgetActivityMonthsParams{BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(months) != 1 {
-		t.Fatalf("There should be one month, got %d", len(months))
-	}
-	if months[0].Unix() != mustTime(t, 2026, 2, 1).Unix() {
-		t.Error("A mid-month transaction should be normalized to the start of its month")
+	if len(budgets) != 1 {
+		t.Fatalf("expected budgetB to survive a cross-login delete, got %d budgets", len(budgets))
 	}
 }

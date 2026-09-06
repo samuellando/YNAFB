@@ -21,8 +21,8 @@ func TestListBudgetMonthCategoriesEmpty(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    monthRelative(t, 1),
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -36,10 +36,10 @@ func TestListBudgetMonthCategoriesNoActivity(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    monthRelative(t, 1),
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -74,12 +74,12 @@ func TestListBudgetMonthCategoriesAllocated(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := monthRelative(t, 2)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, month, 5000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    month,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -102,15 +102,15 @@ func TestListBudgetMonthCategoriesSpent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := monthRelative(t, 2)
-	transaction := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
+	transaction := newTrx(t, queries, ctx, budget, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 1000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    month,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -133,16 +133,16 @@ func TestListBudgetMonthCategoriesAllocatedAndSpent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := monthRelative(t, 2)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	transaction := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, month, 5000)
+	transaction := newTrx(t, queries, ctx, budget, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 1000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    month,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -165,17 +165,17 @@ func TestListBudgetMonthCategoriesSpendSummedAcrossTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := monthRelative(t, 2)
-	first := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, first, category, 1000, 0)
-	second := newTrx(t, queries, ctx, account, payee, month, 500, 0, "")
-	newCategoryLine(t, queries, ctx, second, category, 500, 0)
+	first := newTrx(t, queries, ctx, budget, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, first, category, 1000, 0)
+	second := newTrx(t, queries, ctx, budget, account, payee, month, 500, 0, "")
+	newCategoryLine(t, queries, ctx, budget, second, category, 500, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    month,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -192,17 +192,17 @@ func TestListBudgetMonthCategoriesCarryForwardAvailable(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	transaction := newTrx(t, queries, ctx, account, payee, jan, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction, category, 1000, 0)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, jan, 5000)
+	transaction := newTrx(t, queries, ctx, budget, account, payee, jan, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 1000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    feb,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -225,17 +225,17 @@ func TestListBudgetMonthCategoriesCarryForwardFloorsAtZero(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 1000)
-	transaction := newTrx(t, queries, ctx, account, payee, jan, 5000, 0, "")
-	newCategoryLine(t, queries, ctx, transaction, category, 5000, 0)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, jan, 1000)
+	transaction := newTrx(t, queries, ctx, budget, account, payee, jan, 5000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 5000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    feb,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -252,15 +252,15 @@ func TestListBudgetMonthCategoriesCarryForwardMostRecentPriorMonth(t *testing.T)
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	jan := monthRelative(t, -3)
 	feb := monthRelative(t, -2)
 	mar := monthRelative(t, -1)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 2000)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, mar, 3000)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, jan, 2000)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, mar, 3000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    feb,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -277,18 +277,18 @@ func TestListBudgetMonthCategoriesPastMonthCumulativeAvailable(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, 5000)
-	janTransaction := newTrx(t, queries, ctx, account, payee, jan, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, janTransaction, category, 1000, 0)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, feb, 2000)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, jan, 5000)
+	janTransaction := newTrx(t, queries, ctx, budget, account, payee, jan, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, janTransaction, category, 1000, 0)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, feb, 2000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    feb,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -311,17 +311,18 @@ func TestListBudgetMonthCategoriesOrderingAndGroups(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	alpha := newCategory(t, queries, ctx, budget.ID, "alpha")
-	groceries := newCategoryGroup(t, queries, ctx, budget.ID, "groceries")
-	bills := newCategoryGroup(t, queries, ctx, budget.ID, "bills")
-	banana := newCategory(t, queries, ctx, budget.ID, "banana")
-	apple := newCategory(t, queries, ctx, budget.ID, "apple")
-	rent := newCategory(t, queries, ctx, budget.ID, "rent")
+	alpha := newCategory(t, queries, ctx, budget, "alpha")
+	groceries := newCategoryGroup(t, queries, ctx, budget, "groceries")
+	bills := newCategoryGroup(t, queries, ctx, budget, "bills")
+	banana := newCategory(t, queries, ctx, budget, "banana")
+	apple := newCategory(t, queries, ctx, budget, "apple")
+	rent := newCategory(t, queries, ctx, budget, "rent")
 	if _, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
 		Name:            banana.Name,
 		CategoryGroupID: sql.NullInt64{Int64: groceries, Valid: true},
 		ID:              banana.ID,
 		BudgetID:        budget.ID,
+		LoginID:         budget.LoginID,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -330,6 +331,7 @@ func TestListBudgetMonthCategoriesOrderingAndGroups(t *testing.T) {
 		CategoryGroupID: sql.NullInt64{Int64: groceries, Valid: true},
 		ID:              apple.ID,
 		BudgetID:        budget.ID,
+		LoginID:         budget.LoginID,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -338,12 +340,13 @@ func TestListBudgetMonthCategoriesOrderingAndGroups(t *testing.T) {
 		CategoryGroupID: sql.NullInt64{Int64: bills, Valid: true},
 		ID:              rent.ID,
 		BudgetID:        budget.ID,
+		LoginID:         budget.LoginID,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    monthRelative(t, 1),
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -385,11 +388,11 @@ func TestListBudgetMonthCategoriesScopedToBudget(t *testing.T) {
 	defer teardown(db)
 	budget1 := newBudget(t, queries, ctx, "testBudget1")
 	budget2 := newBudget(t, queries, ctx, "testBudget2")
-	category1 := newCategory(t, queries, ctx, budget1.ID, "shared")
-	category2 := newCategory(t, queries, ctx, budget2.ID, "shared")
+	category1 := newCategory(t, queries, ctx, budget1, "shared")
+	category2 := newCategory(t, queries, ctx, budget2, "shared")
 	rows1, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget1.ID,
-		Month:    monthRelative(t, 1),
+		LoginID: budget1.LoginID, ID: budget1.ID,
+		Month: monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -401,8 +404,8 @@ func TestListBudgetMonthCategoriesScopedToBudget(t *testing.T) {
 		t.Error("budget1 returned the wrong category")
 	}
 	rows2, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget2.ID,
-		Month:    monthRelative(t, 1),
+		LoginID: budget2.LoginID, ID: budget2.ID,
+		Month: monthRelative(t, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -419,18 +422,18 @@ func TestListBudgetMonthCategoriesRefundReducesSpent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := monthRelative(t, 2)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, month, 5000)
-	spend := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
-	refund := newTrx(t, queries, ctx, account, payee, month, 0, 200, "")
-	newCategoryLine(t, queries, ctx, refund, category, 0, 200)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, month, 5000)
+	spend := newTrx(t, queries, ctx, budget, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, spend, category, 1000, 0)
+	refund := newTrx(t, queries, ctx, budget, account, payee, month, 0, 200, "")
+	newCategoryLine(t, queries, ctx, budget, refund, category, 0, 200)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    month,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -453,20 +456,20 @@ func TestListBudgetMonthCategoriesIncomeAndTransferExcludedFromSpent(t *testing.
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := monthRelative(t, 2)
-	spend := newTrx(t, queries, ctx, account, payee, month, 1000, 0, "")
-	newCategoryLine(t, queries, ctx, spend, category, 1000, 0)
-	income := newTrx(t, queries, ctx, account, payee, month, 0, 5000, "")
-	newIncomeLine(t, queries, ctx, income, 5000)
-	transfer := newTrx(t, queries, ctx, account, payee, month, 2000, 0, "")
-	newTransfer(t, queries, ctx, transfer, otherAccount, 2000, 0)
+	spend := newTrx(t, queries, ctx, budget, account, payee, month, 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, spend, category, 1000, 0)
+	income := newTrx(t, queries, ctx, budget, account, payee, month, 0, 5000, "")
+	newIncomeLine(t, queries, ctx, budget, income, 5000)
+	transfer := newTrx(t, queries, ctx, budget, account, payee, month, 2000, 0, "")
+	newTransfer(t, queries, ctx, budget, transfer, otherAccount, 2000, 0)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    month,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -489,13 +492,13 @@ func TestListBudgetMonthCategoriesFutureMonthResetsAvailable(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	past := monthRelative(t, -2)
 	future := monthRelative(t, 2)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, past, 5000)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, past, 5000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    future,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: future,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -518,13 +521,13 @@ func TestListBudgetMonthCategoriesNegativeAllocation(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
 	jan := monthRelative(t, -2)
 	feb := monthRelative(t, -1)
-	newAllocation(t, queries, ctx, budget.ID, category.ID, jan, -1000)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, jan, -1000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    jan,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: jan,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -539,8 +542,8 @@ func TestListBudgetMonthCategoriesNegativeAllocation(t *testing.T) {
 		t.Errorf("expected available -1000, got %d", rows[0].Available)
 	}
 	carried, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    feb,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: feb,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -557,13 +560,13 @@ func TestListBudgetMonthCategoriesSiblingActivityCreatesViewRow(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	categoryA := newCategory(t, queries, ctx, budget.ID, "categoryA")
-	categoryB := newCategory(t, queries, ctx, budget.ID, "categoryB")
+	categoryA := newCategory(t, queries, ctx, budget, "categoryA")
+	categoryB := newCategory(t, queries, ctx, budget, "categoryB")
 	month := monthRelative(t, 2)
-	newAllocation(t, queries, ctx, budget.ID, categoryA.ID, month, 5000)
+	newAllocation(t, queries, ctx, budget.LoginID, budget.ID, categoryA.ID, month, 5000)
 	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		BudgetID: budget.ID,
-		Month:    month,
+		LoginID: budget.LoginID, ID: budget.ID,
+		Month: month,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -580,5 +583,25 @@ func TestListBudgetMonthCategoriesSiblingActivityCreatesViewRow(t *testing.T) {
 	}
 	if r := byName["categoryB"]; r.ID != categoryB.ID || r.Allocated != 0 || r.Spent != 0 || r.Available != 0 {
 		t.Errorf("expected categoryB zeroed with id %d, got id %d allocated %d spent %d available %d", categoryB.ID, r.ID, r.Allocated, r.Spent, r.Available)
+	}
+}
+
+func TestScopingBudgetMonthCategoriesScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	newCategory(t, queries, ctx, budgetB, "catB")
+
+	rows, err := queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
+		LoginID: budgetA.LoginID,
+		ID:      budgetB.ID,
+		Month:   monthRelative(t, 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected 0 month categories for another login's budget, got %d", len(rows))
 	}
 }

@@ -9,6 +9,7 @@ import (
 )
 
 type transactionContext struct {
+	budget       data.Budget
 	transaction  data.Trx
 	category     data.Category
 	account      data.Account
@@ -18,12 +19,13 @@ type transactionContext struct {
 func createTransactionContext(t *testing.T, queries *data.Queries, ctx context.Context) transactionContext {
 	t.Helper()
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	category := newCategory(t, queries, ctx, budget.ID, "testcategory")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	return transactionContext{
+		budget:       budget,
 		transaction:  transaction,
 		category:     category,
 		account:      account,
@@ -36,13 +38,14 @@ func TestCreateTrxLineCategory(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	txCategory, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		BudgetID:   tc.transaction.BudgetID,
-		TrxID:      tc.transaction.ID,
+		LoginID:       tc.budget.LoginID,
+		BudgetID:      tc.transaction.BudgetID,
+		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
-		CategoryID: sql.NullInt64{Int64: tc.category.ID, Valid: true},
-		Income:     false,
-		Outflow:    1000,
-		Inflow:     0,
+		CategoryID:    sql.NullInt64{Int64: tc.category.ID, Valid: true},
+		Income:        false,
+		Outflow:       1000,
+		Inflow:        0,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +78,7 @@ func TestCreateTrxLineDestAccount(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	txCategory, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
@@ -102,13 +106,14 @@ func TestCreateTrxLineIncome(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	txCategory, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		BudgetID:   tc.transaction.BudgetID,
-		TrxID:      tc.transaction.ID,
+		LoginID:       tc.budget.LoginID,
+		BudgetID:      tc.transaction.BudgetID,
+		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
-		CategoryID: sql.NullInt64{},
-		Income:     true,
-		Outflow:    0,
-		Inflow:     5000,
+		CategoryID:    sql.NullInt64{},
+		Income:        true,
+		Outflow:       0,
+		Inflow:        5000,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -129,13 +134,14 @@ func TestCreateTrxLineIncomeInvalidOutflow(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		BudgetID:   tc.transaction.BudgetID,
-		TrxID:      tc.transaction.ID,
+		LoginID:       tc.budget.LoginID,
+		BudgetID:      tc.transaction.BudgetID,
+		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
-		CategoryID: sql.NullInt64{},
-		Income:     true,
-		Outflow:    1000,
-		Inflow:     0,
+		CategoryID:    sql.NullInt64{},
+		Income:        true,
+		Outflow:       1000,
+		Inflow:        0,
 	})
 	if err == nil {
 		t.Error("Income with a non zero outflow should be rejected")
@@ -147,13 +153,14 @@ func TestCreateTrxLineIncomeZeroInflow(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		BudgetID:   tc.transaction.BudgetID,
-		TrxID:      tc.transaction.ID,
+		LoginID:       tc.budget.LoginID,
+		BudgetID:      tc.transaction.BudgetID,
+		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
-		CategoryID: sql.NullInt64{},
-		Income:     true,
-		Outflow:    0,
-		Inflow:     0,
+		CategoryID:    sql.NullInt64{},
+		Income:        true,
+		Outflow:       0,
+		Inflow:        0,
 	})
 	if err == nil {
 		t.Error("Income with a zero inflow should be rejected")
@@ -164,7 +171,7 @@ func TestUpdateTrxLineIncomeViolation(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newCategoryLine(t, queries, ctx, tc.transaction, tc.category, 1000, 0)
+	txCategory := newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
 	_, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
@@ -173,6 +180,7 @@ func TestUpdateTrxLineIncomeViolation(t *testing.T) {
 		Outflow:       1000,
 		Inflow:        0,
 		ID:            txCategory.ID,
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 	})
 	if err == nil {
@@ -185,6 +193,7 @@ func TestCreateTrxLineXorViolation(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
@@ -197,6 +206,7 @@ func TestCreateTrxLineXorViolation(t *testing.T) {
 		t.Error("Setting both dest_account and category should raise an error")
 	}
 	_, err = queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
@@ -215,6 +225,7 @@ func TestCreateTrxLineBothInflowAndOutflowRejected(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
@@ -233,6 +244,7 @@ func TestCreateTrxLineNegativeOutflowRejected(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
@@ -251,6 +263,7 @@ func TestCreateTrxLineNegativeInflowRejected(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
@@ -269,6 +282,7 @@ func TestCreateTrxLineNonExistingTrx(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         99,
 		DestAccountID: sql.NullInt64{},
@@ -287,6 +301,7 @@ func TestCreateTrxLineNonExistingDestAccount(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{Int64: 99, Valid: true},
@@ -305,6 +320,7 @@ func TestCreateTrxLineNonExistingCategory(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
@@ -322,8 +338,8 @@ func TestDeleteTrxCascadesTrxLines(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newCategoryLine(t, queries, ctx, tc.transaction, tc.category, 1000, 0)
-	err := queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: tc.transaction.ID, BudgetID: tc.transaction.BudgetID})
+	txCategory := newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
+	err := queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: tc.transaction.ID, BudgetID: tc.transaction.BudgetID, LoginID: tc.budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,8 +356,8 @@ func TestDeleteAccountCascadesTrxLines(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	newTransfer(t, queries, ctx, tc.transaction, tc.otherAccount, 0, 1000)
-	err := queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: tc.otherAccount.ID, BudgetID: tc.otherAccount.BudgetID})
+	newTransfer(t, queries, ctx, tc.budget, tc.transaction, tc.otherAccount, 0, 1000)
+	err := queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: tc.otherAccount.ID, BudgetID: tc.otherAccount.BudgetID, LoginID: tc.budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,8 +374,8 @@ func TestDeleteCategoryCascadesTrxLines(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	newCategoryLine(t, queries, ctx, tc.transaction, tc.category, 1000, 0)
-	err := queries.DeleteCategory(ctx, data.DeleteCategoryParams{ID: tc.category.ID, BudgetID: tc.category.BudgetID})
+	newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
+	err := queries.DeleteCategory(ctx, data.DeleteCategoryParams{ID: tc.category.ID, BudgetID: tc.category.BudgetID, LoginID: tc.budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +392,7 @@ func TestUpdateTrxLineBothInflowAndOutflowRejected(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newCategoryLine(t, queries, ctx, tc.transaction, tc.category, 1000, 0)
+	txCategory := newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
 	_, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{},
@@ -385,6 +401,7 @@ func TestUpdateTrxLineBothInflowAndOutflowRejected(t *testing.T) {
 		Outflow:       1000,
 		Inflow:        500,
 		ID:            txCategory.ID,
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 	})
 	if err == nil {
@@ -396,7 +413,7 @@ func TestUpdateTrxLine(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newCategoryLine(t, queries, ctx, tc.transaction, tc.category, 1000, 0)
+	txCategory := newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
 	n, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
@@ -405,6 +422,7 @@ func TestUpdateTrxLine(t *testing.T) {
 		Outflow:       0,
 		Inflow:        1000,
 		ID:            txCategory.ID,
+		LoginID:       tc.budget.LoginID,
 		BudgetID:      tc.transaction.BudgetID,
 	})
 	if err != nil {
@@ -426,8 +444,8 @@ func TestDeleteTrxLine(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
-	txCategory := newCategoryLine(t, queries, ctx, tc.transaction, tc.category, 1000, 0)
-	err := queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{ID: txCategory.ID, BudgetID: tc.transaction.BudgetID})
+	txCategory := newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
+	err := queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{ID: txCategory.ID, BudgetID: tc.transaction.BudgetID, LoginID: tc.budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +463,7 @@ func TestDeleteTrxLinesByTrx(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	for i := 0; i < 2; i++ {
-		newCategoryLine(t, queries, ctx, tc.transaction, tc.category, 1000, 0)
+		newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
 	}
 	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM trx_line WHERE trx_id = ?`, tc.transaction.ID).Scan(&count); err != nil {
@@ -454,7 +472,7 @@ func TestDeleteTrxLinesByTrx(t *testing.T) {
 	if count != 2 {
 		t.Fatal("There should be two transaction lines before")
 	}
-	err := queries.DeleteTrxLinesByTrx(ctx, data.DeleteTrxLinesByTrxParams{TrxID: tc.transaction.ID, BudgetID: tc.transaction.BudgetID})
+	err := queries.DeleteTrxLinesByTrx(ctx, data.DeleteTrxLinesByTrxParams{TrxID: tc.transaction.ID, BudgetID: tc.transaction.BudgetID, LoginID: tc.budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,5 +481,116 @@ func TestDeleteTrxLinesByTrx(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatal("There should be no transaction line after")
+	}
+}
+
+func TestScopingCreateTrxLineScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+	trxB := newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
+
+	_, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
+		TrxID:         trxB.ID,
+		DestAccountID: sql.NullInt64{},
+		CategoryID:    sql.NullInt64{Int64: categoryB.ID, Valid: true},
+		Income:        false,
+		Outflow:       1000,
+		Inflow:        0,
+		BudgetID:      budgetB.ID,
+		LoginID:       budgetA.LoginID,
+	})
+	if err == nil {
+		t.Fatal("expected creating a trx line for another login's budget to fail")
+	}
+}
+
+func TestScopingDeleteTrxLineScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+	trxB := newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	lineB := newCategoryLine(t, queries, ctx, budgetB, trxB, categoryB, 1000, 0)
+
+	err := queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{
+		ID:       lineB.ID,
+		BudgetID: budgetB.ID,
+		LoginID:  budgetA.LoginID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx_line WHERE id = ?`, lineB.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected lineB to survive a cross-login delete, got %d rows", count)
+	}
+}
+
+func TestScopingDeleteTrxLinesByTrxScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+	trxB := newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newCategoryLine(t, queries, ctx, budgetB, trxB, categoryB, 1000, 0)
+
+	err := queries.DeleteTrxLinesByTrx(ctx, data.DeleteTrxLinesByTrxParams{
+		TrxID:    trxB.ID,
+		BudgetID: budgetB.ID,
+		LoginID:  budgetA.LoginID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx_line WHERE trx_id = ?`, trxB.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected the trx lines to survive a cross-login delete, got %d rows", count)
+	}
+}
+
+func TestScopingUpdateTrxLineScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+	trxB := newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	lineB := newCategoryLine(t, queries, ctx, budgetB, trxB, categoryB, 1000, 0)
+
+	n, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
+		TrxID:         trxB.ID,
+		DestAccountID: sql.NullInt64{},
+		CategoryID:    sql.NullInt64{Int64: categoryB.ID, Valid: true},
+		Income:        false,
+		Outflow:       2000,
+		Inflow:        0,
+		ID:            lineB.ID,
+		BudgetID:      budgetB.ID,
+		LoginID:       budgetA.LoginID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 rows updated across logins, got %d", n)
 	}
 }

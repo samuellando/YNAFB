@@ -57,46 +57,47 @@ func newBudgetForLogin(t *testing.T, queries *data.Queries, ctx context.Context,
 	return b
 }
 
-func newAccount(t *testing.T, queries *data.Queries, ctx context.Context, budget int64, name string) data.Account {
+func newAccount(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, name string) data.Account {
 	t.Helper()
-	a, err := queries.CreateAccount(ctx, data.CreateAccountParams{BudgetID: budget, Name: name})
+	a, err := queries.CreateAccount(ctx, data.CreateAccountParams{BudgetID: budget.ID, LoginID: budget.LoginID, Name: name})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return a
 }
 
-func newPayee(t *testing.T, queries *data.Queries, ctx context.Context, budget int64, name string) data.Payee {
+func newPayee(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, name string) data.Payee {
 	t.Helper()
-	p, err := queries.CreatePayee(ctx, data.CreatePayeeParams{BudgetID: budget, Name: name})
+	p, err := queries.CreatePayee(ctx, data.CreatePayeeParams{BudgetID: budget.ID, LoginID: budget.LoginID, Name: name})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return p
 }
 
-func newCategory(t *testing.T, queries *data.Queries, ctx context.Context, budget int64, name string) data.Category {
+func newCategory(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, name string) data.Category {
 	t.Helper()
-	c, err := queries.CreateCategory(ctx, data.CreateCategoryParams{BudgetID: budget, Name: name})
+	c, err := queries.CreateCategory(ctx, data.CreateCategoryParams{BudgetID: budget.ID, LoginID: budget.LoginID, Name: name})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return c
 }
 
-func newCategoryGroup(t *testing.T, queries *data.Queries, ctx context.Context, budget int64, name string) int64 {
+func newCategoryGroup(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, name string) int64 {
 	t.Helper()
-	id, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{BudgetID: budget, Name: name})
+	id, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{BudgetID: budget.ID, LoginID: budget.LoginID, Name: name})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return id
 }
 
-func newGoal(t *testing.T, queries *data.Queries, ctx context.Context, budget, category int64, goalType string, start types.UnixTime, end types.NullUnixTime, amount int64) data.Goal {
+func newGoal(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, category int64, goalType string, start types.UnixTime, end types.NullUnixTime, amount int64) data.Goal {
 	t.Helper()
 	g, err := queries.CreateGoal(ctx, data.CreateGoalParams{
-		BudgetID:   budget,
+		BudgetID:   budget.ID,
+		LoginID:    budget.LoginID,
 		Type:       goalType,
 		StartDate:  start,
 		EndDate:    end,
@@ -109,13 +110,14 @@ func newGoal(t *testing.T, queries *data.Queries, ctx context.Context, budget, c
 	return g
 }
 
-func newAllocation(t *testing.T, queries *data.Queries, ctx context.Context, budget, category int64, month types.UnixTime, amount int64) data.Allocation {
+func newAllocation(t *testing.T, queries *data.Queries, ctx context.Context, loginID, budget, category int64, month types.UnixTime, amount int64) data.Allocation {
 	t.Helper()
 	a, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
 		BudgetID:   budget,
 		CategoryID: category,
 		Month:      month,
 		Amount:     amount,
+		LoginID:    loginID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -123,10 +125,11 @@ func newAllocation(t *testing.T, queries *data.Queries, ctx context.Context, bud
 	return a
 }
 
-func newTrx(t *testing.T, queries *data.Queries, ctx context.Context, account data.Account, payee data.Payee, date types.UnixTime, out, in int64, note string) data.Trx {
+func newTrx(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, account data.Account, payee data.Payee, date types.UnixTime, out, in int64, note string) data.Trx {
 	t.Helper()
 	tx, err := queries.CreateTrx(ctx, data.CreateTrxParams{
-		BudgetID:     account.BudgetID,
+		BudgetID:     budget.ID,
+		LoginID:      budget.LoginID,
 		AccountID:    account.ID,
 		PayeeID:      payee.ID,
 		Date:         date,
@@ -140,10 +143,11 @@ func newTrx(t *testing.T, queries *data.Queries, ctx context.Context, account da
 	return tx
 }
 
-func newCategoryLine(t *testing.T, queries *data.Queries, ctx context.Context, tx data.Trx, category data.Category, out, in int64) data.TrxLine {
+func newCategoryLine(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, tx data.Trx, category data.Category, out, in int64) data.TrxLine {
 	t.Helper()
 	tc, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		BudgetID:   tx.BudgetID,
+		BudgetID:   budget.ID,
+		LoginID:    budget.LoginID,
 		TrxID:      tx.ID,
 		CategoryID: sql.NullInt64{Int64: category.ID, Valid: true},
 		Outflow:    out,
@@ -155,10 +159,11 @@ func newCategoryLine(t *testing.T, queries *data.Queries, ctx context.Context, t
 	return tc
 }
 
-func newTransfer(t *testing.T, queries *data.Queries, ctx context.Context, tx data.Trx, otherAccount data.Account, out, in int64) data.TrxLine {
+func newTransfer(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, tx data.Trx, otherAccount data.Account, out, in int64) data.TrxLine {
 	t.Helper()
 	tc, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		BudgetID:      tx.BudgetID,
+		BudgetID:      budget.ID,
+		LoginID:       budget.LoginID,
 		TrxID:         tx.ID,
 		DestAccountID: sql.NullInt64{Int64: otherAccount.ID, Valid: true},
 		Outflow:       out,
@@ -170,10 +175,11 @@ func newTransfer(t *testing.T, queries *data.Queries, ctx context.Context, tx da
 	return tc
 }
 
-func newIncomeLine(t *testing.T, queries *data.Queries, ctx context.Context, tx data.Trx, in int64) data.TrxLine {
+func newIncomeLine(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, tx data.Trx, in int64) data.TrxLine {
 	t.Helper()
 	tc, err := queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		BudgetID: tx.BudgetID,
+		BudgetID: budget.ID,
+		LoginID:  budget.LoginID,
 		TrxID:    tx.ID,
 		Income:   true,
 		Inflow:   in,
@@ -184,10 +190,11 @@ func newIncomeLine(t *testing.T, queries *data.Queries, ctx context.Context, tx 
 	return tc
 }
 
-func newCategoryDefault(t *testing.T, queries *data.Queries, ctx context.Context, payee data.Payee, category data.Category, percent int64) data.PayeeDefaultLine {
+func newCategoryDefault(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, payee data.Payee, category data.Category, percent int64) data.PayeeDefaultLine {
 	t.Helper()
 	pdl, err := queries.CreatePayeeDefaultLine(ctx, data.CreatePayeeDefaultLineParams{
-		BudgetID:   payee.BudgetID,
+		BudgetID:   budget.ID,
+		LoginID:    budget.LoginID,
 		PayeeID:    payee.ID,
 		CategoryID: sql.NullInt64{Int64: category.ID, Valid: true},
 		Percent:    percent,
@@ -198,10 +205,11 @@ func newCategoryDefault(t *testing.T, queries *data.Queries, ctx context.Context
 	return pdl
 }
 
-func newTransferDefault(t *testing.T, queries *data.Queries, ctx context.Context, payee data.Payee, otherAccount data.Account, percent int64) data.PayeeDefaultLine {
+func newTransferDefault(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, payee data.Payee, otherAccount data.Account, percent int64) data.PayeeDefaultLine {
 	t.Helper()
 	pdl, err := queries.CreatePayeeDefaultLine(ctx, data.CreatePayeeDefaultLineParams{
-		BudgetID:      payee.BudgetID,
+		BudgetID:      budget.ID,
+		LoginID:       budget.LoginID,
 		PayeeID:       payee.ID,
 		DestAccountID: sql.NullInt64{Int64: otherAccount.ID, Valid: true},
 		Percent:       percent,
@@ -212,11 +220,17 @@ func newTransferDefault(t *testing.T, queries *data.Queries, ctx context.Context
 	return pdl
 }
 
-func listAccountTransactions(t *testing.T, queries *data.Queries, ctx context.Context, budgetID, accountID int64) []data.ListAccountTransactionsRow {
+func listAccountTransactions(t *testing.T, queries *data.Queries, ctx context.Context, loginID, budgetID, accountID int64) []data.ListAccountTransactionsRow {
 	t.Helper()
-	rows, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{BudgetID: budgetID, AccountID: accountID})
+	rows, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{LoginID: loginID, BudgetID: budgetID, ID: accountID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return rows
+}
+
+func newLoginBudget(t *testing.T, queries *data.Queries, ctx context.Context, username string) (int64, data.Budget) {
+	t.Helper()
+	login := newLogin(t, queries, ctx, username)
+	return login.ID, newBudgetForLogin(t, queries, ctx, login.ID, username)
 }

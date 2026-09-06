@@ -11,9 +11,9 @@ func TestListAccountTransactionsEmpty(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 0 {
 		t.Fatalf("expected no transactions, got %d", len(rows))
 	}
@@ -24,7 +24,7 @@ func TestListAccountTransactionsNonexistentAccount(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, 99)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, 99)
 	if len(rows) != 0 {
 		t.Fatalf("expected no transactions for nonexistent account, got %d", len(rows))
 	}
@@ -36,11 +36,11 @@ func TestListAccountTransactionsScopedToBudget(t *testing.T) {
 
 	budget1 := newBudget(t, queries, ctx, "budget1")
 	budget2 := newBudget(t, queries, ctx, "budget2")
-	account := newAccount(t, queries, ctx, budget1.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget1.ID, "Cafe")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1234, 0, "")
+	account := newAccount(t, queries, ctx, budget1, "Checking")
+	payee := newPayee(t, queries, ctx, budget1, "Cafe")
+	newTrx(t, queries, ctx, budget1, account, payee, mustTime(t, 2026, 1, 1), 1234, 0, "")
 
-	rows := listAccountTransactions(t, queries, ctx, budget2.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget2.LoginID, budget2.ID, account.ID)
 	if len(rows) != 0 {
 		t.Fatalf("expected no rows for an account queried under the wrong budget, got %d", len(rows))
 	}
@@ -51,11 +51,11 @@ func TestListAccountTransactionsUncategorizedOutflow(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Cafe")
-	tx := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1234, 0, "coffee")
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Cafe")
+	tx := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1234, 0, "coffee")
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 1 {
 		t.Fatalf("expected one row, got %d", len(rows))
 	}
@@ -97,11 +97,11 @@ func TestListAccountTransactionsUncategorizedInflow(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Employer")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Employer")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "")
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 1 {
 		t.Fatalf("expected one row, got %d", len(rows))
 	}
@@ -118,11 +118,11 @@ func TestListAccountTransactionsEmptyNote(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Cafe")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Cafe")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 1 {
 		t.Fatalf("expected one row, got %d", len(rows))
 	}
@@ -136,13 +136,13 @@ func TestListAccountTransactionsSingleCategorySpend(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Cafe")
-	category := newCategory(t, queries, ctx, budget.ID, "Groceries")
-	tx := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1234, 0, "coffee")
-	tc := newCategoryLine(t, queries, ctx, tx, category, 1234, 0)
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Cafe")
+	category := newCategory(t, queries, ctx, budget, "Groceries")
+	tx := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1234, 0, "coffee")
+	tc := newCategoryLine(t, queries, ctx, budget, tx, category, 1234, 0)
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 1 {
 		t.Fatalf("expected one row, got %d", len(rows))
 	}
@@ -178,12 +178,12 @@ func TestListAccountTransactionsIncome(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Employer")
-	tx := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "payday")
-	tc := newIncomeLine(t, queries, ctx, tx, 5000)
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Employer")
+	tx := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 0, 5000, "payday")
+	tc := newIncomeLine(t, queries, ctx, budget, tx, 5000)
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 1 {
 		t.Fatalf("expected one row, got %d", len(rows))
 	}
@@ -213,15 +213,15 @@ func TestListAccountTransactionsSplitCategories(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Market")
-	cat1 := newCategory(t, queries, ctx, budget.ID, "Groceries")
-	cat2 := newCategory(t, queries, ctx, budget.ID, "Household")
-	tx := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 3000, 0, "weekly shop")
-	newCategoryLine(t, queries, ctx, tx, cat1, 1000, 0)
-	newCategoryLine(t, queries, ctx, tx, cat2, 2000, 0)
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Market")
+	cat1 := newCategory(t, queries, ctx, budget, "Groceries")
+	cat2 := newCategory(t, queries, ctx, budget, "Household")
+	tx := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 3000, 0, "weekly shop")
+	newCategoryLine(t, queries, ctx, budget, tx, cat1, 1000, 0)
+	newCategoryLine(t, queries, ctx, budget, tx, cat2, 2000, 0)
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 2 {
 		t.Fatalf("expected two rows, got %d", len(rows))
 	}
@@ -252,13 +252,13 @@ func TestListAccountTransactionsMismatchedCategory(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Online Shop")
-	category := newCategory(t, queries, ctx, budget.ID, "Groceries")
-	tx := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 4200, 0, "import mismatch")
-	newCategoryLine(t, queries, ctx, tx, category, 4000, 0)
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Online Shop")
+	category := newCategory(t, queries, ctx, budget, "Groceries")
+	tx := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 4200, 0, "import mismatch")
+	newCategoryLine(t, queries, ctx, budget, tx, category, 4000, 0)
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 1 {
 		t.Fatalf("expected one row, got %d", len(rows))
 	}
@@ -275,13 +275,13 @@ func TestListAccountTransactionsTransferOut(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "Checking")
-	target := newAccount(t, queries, ctx, budget.ID, "Savings")
-	payee := newPayee(t, queries, ctx, budget.ID, "Bank")
-	tx := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "move money")
-	tc := newTransfer(t, queries, ctx, tx, target, 3000, 0)
+	source := newAccount(t, queries, ctx, budget, "Checking")
+	target := newAccount(t, queries, ctx, budget, "Savings")
+	payee := newPayee(t, queries, ctx, budget, "Bank")
+	tx := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "move money")
+	tc := newTransfer(t, queries, ctx, budget, tx, target, 3000, 0)
 
-	sourceRows := listAccountTransactions(t, queries, ctx, budget.ID, source.ID)
+	sourceRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, source.ID)
 	if len(sourceRows) != 1 {
 		t.Fatalf("expected one source row, got %d", len(sourceRows))
 	}
@@ -308,7 +308,7 @@ func TestListAccountTransactionsTransferOut(t *testing.T) {
 		t.Errorf("unexpected source totals: out %d in %d", s.Outflow, s.Inflow)
 	}
 
-	targetRows := listAccountTransactions(t, queries, ctx, budget.ID, target.ID)
+	targetRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, target.ID)
 	if len(targetRows) != 1 {
 		t.Fatalf("expected one target row, got %d", len(targetRows))
 	}
@@ -350,13 +350,13 @@ func TestListAccountTransactionsTransferIn(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "Checking")
-	target := newAccount(t, queries, ctx, budget.ID, "Savings")
-	payee := newPayee(t, queries, ctx, budget.ID, "Bank")
-	tx := newTrx(t, queries, ctx, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "moved in")
-	newTransfer(t, queries, ctx, tx, source, 0, 500)
+	source := newAccount(t, queries, ctx, budget, "Checking")
+	target := newAccount(t, queries, ctx, budget, "Savings")
+	payee := newPayee(t, queries, ctx, budget, "Bank")
+	tx := newTrx(t, queries, ctx, budget, target, payee, mustTime(t, 2026, 1, 1), 0, 500, "moved in")
+	newTransfer(t, queries, ctx, budget, tx, source, 0, 500)
 
-	targetRows := listAccountTransactions(t, queries, ctx, budget.ID, target.ID)
+	targetRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, target.ID)
 	if len(targetRows) != 1 {
 		t.Fatalf("expected one target row, got %d", len(targetRows))
 	}
@@ -370,7 +370,7 @@ func TestListAccountTransactionsTransferIn(t *testing.T) {
 		t.Errorf("unexpected target totals: out %d in %d", targetRows[0].Outflow, targetRows[0].Inflow)
 	}
 
-	sourceRows := listAccountTransactions(t, queries, ctx, budget.ID, source.ID)
+	sourceRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, source.ID)
 	if len(sourceRows) != 1 {
 		t.Fatalf("expected one source row, got %d", len(sourceRows))
 	}
@@ -387,15 +387,15 @@ func TestListAccountTransactionsSplitTransfer(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "Checking")
-	target := newAccount(t, queries, ctx, budget.ID, "Savings")
-	payee := newPayee(t, queries, ctx, budget.ID, "superC")
-	category := newCategory(t, queries, ctx, budget.ID, "Groceries")
-	tx := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newCategoryLine(t, queries, ctx, tx, category, 1000, 0)
-	newTransfer(t, queries, ctx, tx, target, 2000, 0)
+	source := newAccount(t, queries, ctx, budget, "Checking")
+	target := newAccount(t, queries, ctx, budget, "Savings")
+	payee := newPayee(t, queries, ctx, budget, "superC")
+	category := newCategory(t, queries, ctx, budget, "Groceries")
+	tx := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newCategoryLine(t, queries, ctx, budget, tx, category, 1000, 0)
+	newTransfer(t, queries, ctx, budget, tx, target, 2000, 0)
 
-	sourceRows := listAccountTransactions(t, queries, ctx, budget.ID, source.ID)
+	sourceRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, source.ID)
 	if len(sourceRows) != 2 {
 		t.Fatalf("expected two source rows, got %d", len(sourceRows))
 	}
@@ -406,7 +406,7 @@ func TestListAccountTransactionsSplitTransfer(t *testing.T) {
 		t.Errorf("expected second line to be the transfer, got %+v %+v", sourceRows[1].DestAccountID, sourceRows[1].LineOutflow)
 	}
 
-	targetRows := listAccountTransactions(t, queries, ctx, budget.ID, target.ID)
+	targetRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, target.ID)
 	if len(targetRows) != 1 {
 		t.Fatalf("expected one target row, got %d", len(targetRows))
 	}
@@ -420,20 +420,21 @@ func TestListAccountTransactionsReconciled(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Cafe")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Cafe")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "")
 
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 1, 31),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 1, 31),
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 2 {
 		t.Fatalf("expected two rows, got %d", len(rows))
 	}
@@ -454,38 +455,40 @@ func TestListAccountTransactionsReconciledPerAccount(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	source := newAccount(t, queries, ctx, budget.ID, "Checking")
-	target := newAccount(t, queries, ctx, budget.ID, "Savings")
-	payee := newPayee(t, queries, ctx, budget.ID, "Bank")
-	tx := newTrx(t, queries, ctx, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
-	newTransfer(t, queries, ctx, tx, target, 3000, 0)
+	source := newAccount(t, queries, ctx, budget, "Checking")
+	target := newAccount(t, queries, ctx, budget, "Savings")
+	payee := newPayee(t, queries, ctx, budget, "Bank")
+	tx := newTrx(t, queries, ctx, budget, source, payee, mustTime(t, 2026, 1, 1), 3000, 0, "")
+	newTransfer(t, queries, ctx, budget, tx, target, 3000, 0)
 
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: target.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       target.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	sourceRows := listAccountTransactions(t, queries, ctx, budget.ID, source.ID)
+	sourceRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, source.ID)
 	if sourceRows[0].Reconciled {
 		t.Error("reconciling the target should not reconcile the source's view")
 	}
-	targetRows := listAccountTransactions(t, queries, ctx, budget.ID, target.ID)
+	targetRows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, target.ID)
 	if !targetRows[0].Reconciled {
 		t.Error("expected the mirror row to be reconciled in the target")
 	}
 
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: source.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       source.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	sourceRows = listAccountTransactions(t, queries, ctx, budget.ID, source.ID)
+	sourceRows = listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, source.ID)
 	if !sourceRows[0].Reconciled {
 		t.Error("expected the source's native row to be reconciled after reconciling the source")
 	}
@@ -496,17 +499,17 @@ func TestListAccountTransactionsScopedToAccount(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account1 := newAccount(t, queries, ctx, budget.ID, "Checking")
-	account2 := newAccount(t, queries, ctx, budget.ID, "Savings")
-	payee := newPayee(t, queries, ctx, budget.ID, "Cafe")
-	tx1 := newTrx(t, queries, ctx, account1, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	tx2 := newTrx(t, queries, ctx, account2, payee, mustTime(t, 2026, 1, 2), 2000, 0, "")
+	account1 := newAccount(t, queries, ctx, budget, "Checking")
+	account2 := newAccount(t, queries, ctx, budget, "Savings")
+	payee := newPayee(t, queries, ctx, budget, "Cafe")
+	tx1 := newTrx(t, queries, ctx, budget, account1, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	tx2 := newTrx(t, queries, ctx, budget, account2, payee, mustTime(t, 2026, 1, 2), 2000, 0, "")
 
-	rows1 := listAccountTransactions(t, queries, ctx, budget.ID, account1.ID)
+	rows1 := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account1.ID)
 	if len(rows1) != 1 || rows1[0].TrxID != tx1.ID {
 		t.Errorf("account1 should only contain its own transaction, got %+v", rows1)
 	}
-	rows2 := listAccountTransactions(t, queries, ctx, budget.ID, account2.ID)
+	rows2 := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account2.ID)
 	if len(rows2) != 1 || rows2[0].TrxID != tx2.ID {
 		t.Errorf("account2 should only contain its own transaction, got %+v", rows2)
 	}
@@ -517,13 +520,13 @@ func TestListAccountTransactionsOrdering(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Cafe")
-	t1 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 3), 1000, 0, "")
-	t2 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 2000, 0, "")
-	t3 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 2), 3000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Cafe")
+	t1 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 3), 1000, 0, "")
+	t2 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 2000, 0, "")
+	t3 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 2), 3000, 0, "")
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 3 {
 		t.Fatalf("expected three rows, got %d", len(rows))
 	}
@@ -540,13 +543,13 @@ func TestListAccountTransactionsSameDateOrdersByPayeeName(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	zeta := newPayee(t, queries, ctx, budget.ID, "Zeta")
-	alpha := newPayee(t, queries, ctx, budget.ID, "Alpha")
-	t1 := newTrx(t, queries, ctx, account, zeta, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	t2 := newTrx(t, queries, ctx, account, alpha, mustTime(t, 2026, 1, 1), 2000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	zeta := newPayee(t, queries, ctx, budget, "Zeta")
+	alpha := newPayee(t, queries, ctx, budget, "Alpha")
+	t1 := newTrx(t, queries, ctx, budget, account, zeta, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	t2 := newTrx(t, queries, ctx, budget, account, alpha, mustTime(t, 2026, 1, 1), 2000, 0, "")
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 2 {
 		t.Fatalf("expected two rows, got %d", len(rows))
 	}
@@ -563,12 +566,12 @@ func TestListAccountTransactionsSameDateSamePayeeOrderByTrxID(t *testing.T) {
 	defer teardown(db)
 
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "Checking")
-	payee := newPayee(t, queries, ctx, budget.ID, "Cafe")
-	t1 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	t2 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 2000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "Checking")
+	payee := newPayee(t, queries, ctx, budget, "Cafe")
+	t1 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	t2 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 2000, 0, "")
 
-	rows := listAccountTransactions(t, queries, ctx, budget.ID, account.ID)
+	rows := listAccountTransactions(t, queries, ctx, budget.LoginID, budget.ID, account.ID)
 	if len(rows) != 2 {
 		t.Fatalf("expected two rows, got %d", len(rows))
 	}

@@ -10,14 +10,15 @@ func TestReconcileAccountTransactions(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	tx1 := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 3, 1), 2000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	tx1 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 3, 1), 2000, 0, "")
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -44,15 +45,16 @@ func TestReconcileAccountTransactionsReconcilesTransferLine(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	otherAccount := newAccount(t, queries, ctx, budget.ID, "otheraccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	tx := newTrx(t, queries, ctx, otherAccount, payee, mustTime(t, 2026, 1, 15), 3000, 0, "")
-	line := newTransfer(t, queries, ctx, tx, account, 3000, 0)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	tx := newTrx(t, queries, ctx, budget, otherAccount, payee, mustTime(t, 2026, 1, 15), 3000, 0, "")
+	line := newTransfer(t, queries, ctx, budget, tx, account, 3000, 0)
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -79,16 +81,17 @@ func TestReconcileAccountTransactionsOwnedAndTransferred(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transferOut := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 2), 2000, 0, "")
-	newTransfer(t, queries, ctx, transferOut, target, 2000, 0)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	transferOut := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 2), 2000, 0, "")
+	newTransfer(t, queries, ctx, budget, transferOut, target, 2000, 0)
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -97,9 +100,10 @@ func TestReconcileAccountTransactionsOwnedAndTransferred(t *testing.T) {
 		t.Fatalf("Expected 2 owned transactions reconciled, got %d", n)
 	}
 	n, err = queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: target.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       target.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -113,13 +117,14 @@ func TestReconcileAccountTransactionsIdempotent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	params := data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	}
 	n, err := queries.ReconcileAccountTransactions(ctx, params)
 	if err != nil {
@@ -148,11 +153,12 @@ func TestReconcileAccountTransactionsEmpty(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -174,13 +180,14 @@ func TestReconcileAccountTransactionsScopedToBudget(t *testing.T) {
 	defer teardown(db)
 	budget1 := newBudget(t, queries, ctx, "budget1")
 	budget2 := newBudget(t, queries, ctx, "budget2")
-	account1 := newAccount(t, queries, ctx, budget1.ID, "account1")
-	payee1 := newPayee(t, queries, ctx, budget1.ID, "payee1")
-	newTrx(t, queries, ctx, account1, payee1, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	account1 := newAccount(t, queries, ctx, budget1, "account1")
+	payee1 := newPayee(t, queries, ctx, budget1, "payee1")
+	newTrx(t, queries, ctx, budget1, account1, payee1, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget2.ID,
-		AccountID: account1.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget2.ID,
+		ID:       account1.ID,
+		LoginID:  budget1.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -194,17 +201,18 @@ func TestDeleteAccountCascadesReconciliations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: account.ID, BudgetID: budget.ID})
+	err := queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: account.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,17 +229,18 @@ func TestDeleteTrxCascadesReconciliations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	transaction := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: account.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: transaction.ID, BudgetID: budget.ID})
+	err := queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: transaction.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,19 +257,20 @@ func TestDeleteTrxLineCascadesReconciliations(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget.ID, "testaccount")
-	target := newAccount(t, queries, ctx, budget.ID, "target")
-	payee := newPayee(t, queries, ctx, budget.ID, "testpayee")
-	tx := newTrx(t, queries, ctx, account, payee, mustTime(t, 2026, 1, 1), 2000, 0, "")
-	line := newTransfer(t, queries, ctx, tx, target, 2000, 0)
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	target := newAccount(t, queries, ctx, budget, "target")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	tx := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 2000, 0, "")
+	line := newTransfer(t, queries, ctx, budget, tx, target, 2000, 0)
 	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID:  budget.ID,
-		AccountID: target.ID,
-		Date:      mustTime(t, 2026, 2, 1),
+		BudgetID: budget.ID,
+		ID:       target.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	err := queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{ID: line.ID, BudgetID: budget.ID})
+	err := queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{ID: line.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,5 +280,28 @@ func TestDeleteTrxLineCascadesReconciliations(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatal("Deleting a transaction line should cascade delete its reconciliations")
+	}
+}
+
+func TestScopingReconcileAccountTransactionsScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+	newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
+
+	n, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID: budgetB.ID,
+		ID:       accountB.ID,
+		LoginID:  budgetA.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("expected 0 reconciled transactions across logins, got %d", n)
 	}
 }
