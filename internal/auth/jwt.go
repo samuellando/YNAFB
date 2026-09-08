@@ -117,7 +117,18 @@ func SetJWTCookie(w http.ResponseWriter, token string) {
 		Value:    token,
 		Secure: true,
 		HttpOnly: true,
+		Path: "/",
 		SameSite: http.SameSiteStrictMode,
+	}
+	http.SetCookie(w, cookie)
+}
+
+func UnsetJWTCookie(w http.ResponseWriter) {
+	cookie := &http.Cookie{
+		Name:     "jwt",
+		Value:    "",
+		MaxAge: -1,
+		Path: "/",
 	}
 	http.SetCookie(w, cookie)
 }

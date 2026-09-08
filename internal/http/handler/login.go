@@ -12,8 +12,21 @@ import (
 )
 
 type Login struct {
-	Queires *data.Queries
+	*http.ServeMux
+	queries *data.Queries
 }
+
+func CreateLoginHandler(queries *data.Queries) http.Handler {
+	l := Login{
+		queries: queries,
+		ServeMux: http.NewServeMux(),
+	}
+	l.HandleFunc("POST /signup", l.CreateLogin) 
+	l.HandleFunc("POST /authenticate", l.Authenticate) 
+	l.HandleFunc("POST /deauthenticate", l.Deauthenticate) 
+	return l
+}
+
 
 func (b Login) CreateLogin(w http.ResponseWriter, req *http.Request) {
 	log.Println("Create login")
@@ -39,7 +52,7 @@ func (b Login) CreateLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	// Query the db
-	_, err = b.Queires.CreateLogin(req.Context(), params)
+	_, err = b.queries.CreateLogin(req.Context(), params)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -61,7 +74,7 @@ func (b Login) Authenticate(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	// Query the db
-	login, err := b.Queires.GetLoginByUsername(req.Context(), data.GetLoginByUsernameParams{
+	login, err := b.queries.GetLoginByUsername(req.Context(), data.GetLoginByUsernameParams{
 		Username: input.Username,
 	})
 	if err != nil {
@@ -91,6 +104,5 @@ func (b Login) Deauthenticate(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	auth.DevalidateJWT(cookie.Value)
-	cookie.MaxAge = -1
-	http.SetCookie(w, cookie)
+	auth.UnsetJWTCookie(w)
 }

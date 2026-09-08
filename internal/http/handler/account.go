@@ -17,8 +17,24 @@ import (
 )
 
 type Account struct {
-	Queries *data.Queries
+	*http.ServeMux
+	queries *data.Queries
 	DB      *sql.DB
+}
+
+func CreateAccountHandler(queries *data.Queries, db *sql.DB) http.Handler {
+	a := Account{
+		queries:  queries,
+		ServeMux: http.NewServeMux(),
+		DB:       db,
+	}
+	a.HandleFunc("GET /budget/{budget}/account", a.ListAccounts)
+	a.HandleFunc("POST /budget/{budget}/account", a.CreateAccount)
+	a.HandleFunc("POST /budget/{budget}/account/{id}/import", a.Import)
+	a.HandleFunc("GET /budget/{budget}/account/{id}", a.GetAccount)
+	a.HandleFunc("PUT /budget/{budget}/account/{id}", a.UpdateAccount)
+	a.HandleFunc("DELETE /budget/{budget}/account/{id}", a.DeleteAccount)
+	return a
 }
 
 type GetAccountResponce struct {
@@ -61,8 +77,14 @@ func (b Account) CreateAccount(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	params.BudgetID = int64(budgetID)
+	params.LoginID, err = getLoginID(req)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Query the db
-	budget, err := b.Queries.CreateAccount(req.Context(), params)
+	budget, err := b.queries.CreateAccount(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -103,9 +125,15 @@ func (b Account) UpdateAccount(w http.ResponseWriter, req *http.Request) {
 	}
 	params.ID = id
 	params.BudgetID = budgetID
+	params.LoginID, err = getLoginID(req)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Query the db
-	n, err := b.Queries.UpdateAccount(req.Context(), params)
+	n, err := b.queries.UpdateAccount(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -132,8 +160,14 @@ func (b Account) DeleteAccount(w http.ResponseWriter, req *http.Request) {
 	}
 	params.ID = id
 	params.BudgetID = budgetID
+	params.LoginID, err = getLoginID(req)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Query the db
-	err = b.Queries.DeleteAccount(req.Context(), params)
+	err = b.queries.DeleteAccount(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -152,8 +186,14 @@ func (b Account) ListAccounts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	params.BudgetID = int64(budgetID)
+	params.LoginID, err = getLoginID(req)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Query the db
-	accounts, err := b.Queries.ListAccountsBalances(req.Context(), params)
+	accounts, err := b.queries.ListAccountsBalances(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -178,10 +218,17 @@ func (b Account) GetAccount(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	loginID, err := getLoginID(req)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Query the db
-	summary, err := b.Queries.GetAccountBalances(req.Context(), data.GetAccountBalancesParams{
-		BudgetID:  budgetID,
-		AccountID: id,
+	summary, err := b.queries.GetAccountBalances(req.Context(), data.GetAccountBalancesParams{
+		BudgetID: budgetID,
+		LoginID:  loginID,
+		ID:       id,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Println(err, budgetID, id)
@@ -193,9 +240,10 @@ func (b Account) GetAccount(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	transactions, err := b.Queries.ListAccountTransactions(req.Context(), data.ListAccountTransactionsParams{
-		BudgetID:  budgetID,
-		AccountID: id,
+	transactions, err := b.queries.ListAccountTransactions(req.Context(), data.ListAccountTransactionsParams{
+		BudgetID: budgetID,
+		LoginID:  loginID,
+		ID:       id,
 	})
 	if err != nil {
 		log.Println(err)
@@ -224,6 +272,12 @@ func (b Account) Import(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	loginID, err := getLoginID(req)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	file, _, err := req.FormFile("statement")
 	defer file.Close()
 	if err != nil {
@@ -247,14 +301,14 @@ func (b Account) Import(w http.ResponseWriter, req *http.Request) {
 	}
 	defer tx.Rollback()
 
-	txQueries := b.Queries.WithTx(tx)
+	txQueries := b.queries.WithTx(tx)
 	for _, entry := range stmt.Entries {
 		payeeName := strings.TrimSpace(entry.Payee)
 		if payeeName == "" {
 			payeeName = "unknown"
 		}
 
-		payeeID, err := resolveOrCreatePayeeID(req.Context(), txQueries, budgetID, payeeName)
+		payeeID, err := resolveOrCreatePayeeID(req.Context(), txQueries, loginID, budgetID, payeeName)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -262,6 +316,7 @@ func (b Account) Import(w http.ResponseWriter, req *http.Request) {
 		}
 
 		_, err = txQueries.CreateTrx(req.Context(), data.CreateTrxParams{
+			LoginID:      loginID,
 			BudgetID:     budgetID,
 			Date:         types.UnixTime{Time: entry.TransDate},
 			AccountID:    id,
@@ -285,9 +340,10 @@ func (b Account) Import(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(strconv.Itoa(len(stmt.Entries))))
 }
 
-func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, budgetID int64, payeeName string) (int64, error) {
+func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, loginID, budgetID int64, payeeName string) (int64, error) {
 	payee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
 		BudgetID: budgetID,
+		LoginID:  loginID,
 		Name:     payeeName,
 	})
 	if err == nil {
@@ -300,6 +356,7 @@ func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, budgetID
 
 	created, createErr := queries.CreatePayee(ctx, data.CreatePayeeParams{
 		BudgetID: budgetID,
+		LoginID:  loginID,
 		Name:     payeeName,
 	})
 	if createErr != nil {

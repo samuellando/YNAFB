@@ -11,6 +11,7 @@ import (
 )
 
 func main() {
+	m := http.NewServeMux()
 	db, err := dbutil.Open("./ynafb.db")
 	if err != nil {
 		panic(err)
@@ -18,25 +19,21 @@ func main() {
 	defer db.Close()
 
 	queries := data.New(db)
-	budgetHandler := handler.Budget{Queires: queries}
-	loginHandler := handler.Login{Queires: queries}
-	accountHandler := handler.Account{Queries: queries, DB: db}
-	http.HandleFunc("POST /signup", middleware.Logger(loginHandler.CreateLogin)) 
-	http.HandleFunc("POST /authenticate", middleware.Logger(loginHandler.Authenticate)) 
-	http.HandleFunc("POST /deauthenticate", middleware.Logger(loginHandler.Deauthenticate)) 
-	// Budget endpoints
-	http.HandleFunc("POST /budget", middleware.Logger(middleware.Authenticator(budgetHandler.CreateBudget))) 
-	http.HandleFunc("GET /budget", middleware.Logger(middleware.Authenticator(budgetHandler.ListBudgets))) 
-	http.HandleFunc("PUT /budget/{id}", middleware.Logger(middleware.Authenticator(budgetHandler.UpdateBudget))) 
-	http.HandleFunc("GET /budget/{id}", middleware.Logger(middleware.Authenticator(budgetHandler.GetBudgetMonth))) 
-	http.HandleFunc("GET /budget/{id}/{month}", middleware.Logger(middleware.Authenticator(budgetHandler.GetBudgetMonth))) 
-	http.HandleFunc("DELETE /budget/{id}", middleware.Logger(middleware.Authenticator(budgetHandler.DeleteBudget)) )
-	// Account endpoints
-	http.HandleFunc("GET /budget/{budget}/account", middleware.Logger(middleware.Authenticator(accountHandler.ListAccounts))) 
-	http.HandleFunc("POST /budget/{budget}/account", middleware.Logger(middleware.Authenticator(accountHandler.CreateAccount))) 
-	http.HandleFunc("POST /budget/{budget}/account/{id}/import", middleware.Logger(middleware.Authenticator(accountHandler.Import))) 
-	http.HandleFunc("GET /budget/{budget}/account/{id}", middleware.Logger(middleware.Authenticator(accountHandler.GetAccount)) )
-	http.HandleFunc("PUT /budget/{budget}/account/{id}", middleware.Logger(middleware.Authenticator(accountHandler.UpdateAccount))) 
-	http.HandleFunc("DELETE /budget/{budget}/account/{id}", middleware.Logger(middleware.Authenticator(accountHandler.DeleteAccount))) 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	loginHandler := handler.CreateLoginHandler(queries)
+	// Authenticated handlers
+	budgetHandler := middleware.Authenticator(handler.CreateBudgetHandler(queries))
+	accountHandler := middleware.Authenticator(handler.CreateAccountHandler(queries, db))
+	// Login endpoints
+	m.Handle("/auth/", http.StripPrefix("/auth", loginHandler))
+	// API endpoints
+	// Budget Routes
+	m.Handle("/api/v1/budget", http.StripPrefix("/api/v1", budgetHandler))
+	m.Handle("/api/v1/budget/{budget}", http.StripPrefix("/api/v1", budgetHandler))
+	m.Handle("/api/v1/budget/{budget}/{month}", http.StripPrefix("/api/v1", budgetHandler))
+	// Account Routes
+	m.Handle("/api/v1/budget/{budget}/account", http.StripPrefix("/api/v1", accountHandler))
+	m.Handle("/api/v1/budget/{budget}/account/{account}", http.StripPrefix("/api/v1", accountHandler))
+	m.Handle("/api/v1/budget/{budget}/account/{account}/import", http.StripPrefix("/api/v1", accountHandler))
+
+	log.Fatal(http.ListenAndServe(":8080", middleware.Logger(m)))
 }

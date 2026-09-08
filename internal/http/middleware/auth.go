@@ -8,8 +8,8 @@ import (
 	"samuellando.com/YNAFB/internal/auth"
 )
 
-func Authenticator(h http.HandlerFunc) http.HandlerFunc {
-	fn := func(w http.ResponseWriter, req *http.Request) {
+func Authenticator(h http.Handler) http.Handler {
+	fn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// call the original http.Handler we're wrapping
 		cookie, err := auth.GetJWTCookie(req)
 		if err != nil {
@@ -32,7 +32,7 @@ func Authenticator(h http.HandlerFunc) http.HandlerFunc {
 		// Set the new token
 		auth.SetJWTCookie(w, newToken)
 		// Call the handler
-		h(w, req)
-	}
+		h.ServeHTTP(w, req)
+	})
 	return fn
 }

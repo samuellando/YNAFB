@@ -14,7 +14,22 @@ import (
 )
 
 type Budget struct {
-	Queires *data.Queries
+	*http.ServeMux
+	queries *data.Queries
+}
+
+func CreateBudgetHandler(queries *data.Queries) http.Handler {
+	b := Budget{
+		queries: queries,
+		ServeMux: http.NewServeMux(),
+	}
+	b.HandleFunc("POST /budget", b.CreateBudget) 
+	b.HandleFunc("GET /budget", b.ListBudgets) 
+	b.HandleFunc("PUT /budget/{id}", b.UpdateBudget) 
+	b.HandleFunc("GET /budget/{id}", b.GetBudgetMonth) 
+	b.HandleFunc("GET /budget/{id}/{month}", b.GetBudgetMonth) 
+	b.HandleFunc("DELETE /budget/{id}", b.DeleteBudget)
+	return b
 }
 
 type GetBudgetMonthResponse struct {
@@ -40,8 +55,15 @@ func (b Budget) CreateBudget(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Use the loginID from the context
+	params.LoginID, err = getLoginID(req) 
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Query the db
-	budget, err := b.Queires.CreateBudget(req.Context(), params)
+	budget, err := b.queries.CreateBudget(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -81,9 +103,16 @@ func (b Budget) UpdateBudget(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	params.ID = int64(id)
+	// Use the loginID from the context
+	params.LoginID, err = getLoginID(req) 
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Query the db
-	n, err := b.Queires.UpdateBudget(req.Context(), params)
+	n, err := b.queries.UpdateBudget(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -107,8 +136,15 @@ func (b Budget) DeleteBudget(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	params := data.DeleteBudgetParams{ID: int64(id)}
+	// Use the loginID from the context
+	params.LoginID, err = getLoginID(req) 
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// Query the db
-	err = b.Queires.DeleteBudget(req.Context(), params)
+	err = b.queries.DeleteBudget(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -119,18 +155,18 @@ func (b Budget) DeleteBudget(w http.ResponseWriter, req *http.Request) {
 func (b Budget) ListBudgets(w http.ResponseWriter, req *http.Request) {
 	log.Println("List budgets")
 	// Parse the input
-	// TODO derive from JWT
-	id, err := strconv.Atoi(req.FormValue("login_id"))
+	// Use the loginID from the context
+	id, err := getLoginID(req) 
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	params := data.ListBudgetsParams{
-		LoginID: int64(id),
+		LoginID: id,
 	}
-	budgets, err := b.Queires.ListBudgets(req.Context(), params)
+	budgets, err := b.queries.ListBudgets(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -165,32 +201,41 @@ func (b Budget) GetBudgetMonth(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	loginID, err := getLoginID(req) 
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	params := data.GetBudgetMonthSummaryParams{
-		BudgetID: int64(id),
+		ID: int64(id),
 		Month:    types.UnixTime{Time: monthTime},
+		LoginID: loginID,
 	}
-	sumamry, err := b.Queires.GetBudgetMonthSummary(req.Context(), params)
+	sumamry, err := b.queries.GetBudgetMonthSummary(req.Context(), params)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	catParams := data.ListBudgetMonthCategoriesParams{
-		BudgetID: int64(id),
+		ID: int64(id),
 		Month:    types.UnixTime{Time: monthTime},
+		LoginID: loginID,
 	}
-	categories, err := b.Queires.ListBudgetMonthCategories(req.Context(), catParams)
+	categories, err := b.queries.ListBudgetMonthCategories(req.Context(), catParams)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	goalsParams := data.ListGoalsValuesParams{
-		BudgetID: int64(id),
+		ID: int64(id),
 		Month:    types.UnixTime{Time: monthTime},
+		LoginID: loginID,
 	}
-	goals, err := b.Queires.ListGoalsValues(req.Context(), goalsParams)
+	goals, err := b.queries.ListGoalsValues(req.Context(), goalsParams)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
