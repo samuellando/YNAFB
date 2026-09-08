@@ -12,7 +12,7 @@ WHERE
 RETURNING
   *;
 
--- name: UpdateAccount :execrows
+-- name: UpdateAccount :one
 UPDATE account
 SET
   name = ?
@@ -26,7 +26,8 @@ WHERE
     WHERE
       b.login_id = @login_id
       AND b.id = @budget_id
-  );
+  )
+RETURNING *;
 
 -- name: DeleteAccount :exec
 DELETE FROM account

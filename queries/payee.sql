@@ -10,7 +10,7 @@ WHERE
 RETURNING
   *;
 
--- name: UpdatePayee :execrows
+-- name: UpdatePayee :one
 UPDATE payee
 SET
   name = ?
@@ -23,7 +23,8 @@ WHERE
       budget AS b
     WHERE
       b.id = @budget_id AND b.login_id = @login_id
-  );
+  )
+RETURNING *;
 
 -- name: DeletePayee :exec
 DELETE FROM payee

@@ -414,7 +414,7 @@ func TestUpdateTrxLine(t *testing.T) {
 	defer teardown(db)
 	tc := createTransactionContext(t, queries, ctx)
 	txCategory := newCategoryLine(t, queries, ctx, tc.budget, tc.transaction, tc.category, 1000, 0)
-	n, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
+	updated, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 		TrxID:         tc.transaction.ID,
 		DestAccountID: sql.NullInt64{Int64: tc.otherAccount.ID, Valid: true},
 		CategoryID:    sql.NullInt64{},
@@ -428,8 +428,11 @@ func TestUpdateTrxLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != txCategory.ID {
+		t.Error("ID changed on update")
+	}
+	if !updated.DestAccountID.Valid || updated.DestAccountID.Int64 != tc.otherAccount.ID {
+		t.Error("transaction line was not updated to a transfer")
 	}
 	var destAccount sql.NullInt64
 	if err := db.QueryRow(`SELECT dest_account_id FROM trx_line WHERE id = ?`, txCategory.ID).Scan(&destAccount); err != nil {
@@ -576,7 +579,7 @@ func TestScopingUpdateTrxLineScopedByLogin(t *testing.T) {
 	trxB := newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
 	lineB := newCategoryLine(t, queries, ctx, budgetB, trxB, categoryB, 1000, 0)
 
-	n, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
+	_, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 		TrxID:         trxB.ID,
 		DestAccountID: sql.NullInt64{},
 		CategoryID:    sql.NullInt64{Int64: categoryB.ID, Valid: true},
@@ -587,10 +590,7 @@ func TestScopingUpdateTrxLineScopedByLogin(t *testing.T) {
 		BudgetID:      budgetB.ID,
 		LoginID:       budgetA.LoginID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }

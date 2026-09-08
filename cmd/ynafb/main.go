@@ -313,16 +313,16 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			rows, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
+			_, err = queries.UpdateBudget(ctx, data.UpdateBudgetParams{
 				Name:    args[1],
 				ID:      budget.ID,
 				LoginID: login.ID,
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("unknown budget %q", args[0])
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("unknown budget %q", args[0])
 			}
 
 			fmt.Fprintf(stdout, "updated budget %q\n", args[1])
@@ -466,17 +466,17 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			rows, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
+			_, err = queries.UpdateAccount(ctx, data.UpdateAccountParams{
 				Name:     args[1],
 				ID:       accountID,
 				BudgetID: budget.ID,
 				LoginID:  budget.LoginID,
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("unknown account %q", args[0])
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("unknown account %q", args[0])
 			}
 
 			fmt.Fprintf(stdout, "updated account %q\n", args[1])
@@ -686,18 +686,18 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			rows, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
+			_, err = queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
 				Amount:     amount,
 				BudgetID:   budget.ID,
 				LoginID:    budget.LoginID,
 				CategoryID: category,
 				Month:      types.UnixTime{Time: month},
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("no allocation for %s %q in budget %q", month.Format("2006-01"), args[1], budget.Name)
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("no allocation for %s %q in budget %q", month.Format("2006-01"), args[1], budget.Name)
 			}
 
 			fmt.Fprintf(stdout, "updated allocation %s %q\n", month.Format("2006-01"), args[1])
@@ -816,18 +816,18 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				categoryGroup = sql.NullInt64{Int64: groupID, Valid: true}
 			}
 
-			rows, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
+			_, err = queries.UpdateCategory(ctx, data.UpdateCategoryParams{
 				Name:            newName,
 				CategoryGroupID: categoryGroup,
 				ID:              categoryID,
 				BudgetID:        budget.ID,
 				LoginID:         budget.LoginID,
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("unknown category %q", name)
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("unknown category %q", name)
 			}
 
 			fmt.Fprintf(stdout, "updated category %q\n", newName)
@@ -915,17 +915,17 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			rows, err := queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
+			_, err = queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
 				Name:     args[1],
 				ID:       groupID,
 				BudgetID: budget.ID,
 				LoginID:  budget.LoginID,
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("unknown group %q", args[0])
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("unknown group %q", args[0])
 			}
 
 			fmt.Fprintf(stdout, "updated group %q\n", args[1])
@@ -1078,7 +1078,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			rows, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
+			_, err = queries.UpdateGoal(ctx, data.UpdateGoalParams{
 				Type:       goalType,
 				StartDate:  types.UnixTime{Time: start},
 				EndDate:    types.NullUnixTime{Time: end.Time, Valid: end.Valid},
@@ -1087,11 +1087,11 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				LoginID:    budget.LoginID,
 				CategoryID: category,
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("no goal for category %q in budget %q", args[0], budget.Name)
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("no goal for category %q in budget %q", args[0], budget.Name)
 			}
 
 			fmt.Fprintf(stdout, "updated goal for category %q\n", args[0])
@@ -1191,17 +1191,17 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			rows, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
+			_, err = queries.UpdatePayee(ctx, data.UpdatePayeeParams{
 				Name:     args[1],
 				ID:       payeeID,
 				BudgetID: budget.ID,
 				LoginID:  budget.LoginID,
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("unknown payee %q", args[0])
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("unknown payee %q", args[0])
 			}
 
 			fmt.Fprintf(stdout, "updated payee %q\n", args[1])
@@ -1335,7 +1335,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					return err
 				}
 
-				rows, err := queries.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
+				_, err = queries.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
 					PayeeID:       payee,
 					DestAccountID: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
 					CategoryID:    target.category,
@@ -1345,11 +1345,11 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					BudgetID:      budget.ID,
 					LoginID:       budget.LoginID,
 				})
+				if errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("unknown payee default-category %d", id)
+				}
 				if err != nil {
 					return err
-				}
-				if rows != 1 {
-					return fmt.Errorf("unknown payee default-category %d", id)
 				}
 
 				fmt.Fprintf(stdout, "updated payee default-category %d\n", id)
@@ -1483,7 +1483,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return fmt.Errorf("parse total_in: %w", err)
 			}
 
-			rows, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
+			_, err = queries.UpdateTrx(ctx, data.UpdateTrxParams{
 				Date:         types.UnixTime{Time: date},
 				AccountID:    account,
 				PayeeID:      payee,
@@ -1494,11 +1494,11 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				BudgetID:     budget.ID,
 				LoginID:      budget.LoginID,
 			})
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("unknown transaction %d", id)
+			}
 			if err != nil {
 				return err
-			}
-			if rows != 1 {
-				return fmt.Errorf("unknown transaction %d", id)
 			}
 
 			fmt.Fprintf(stdout, "updated transaction %d\n", id)
@@ -1643,7 +1643,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					return err
 				}
 
-				rows, err := queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
+				_, err = queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 					TrxID:         transactionID,
 					DestAccountID: sql.NullInt64{Int64: target.otherAccount, Valid: target.otherAccount != 0},
 					CategoryID:    target.category,
@@ -1654,11 +1654,11 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 					BudgetID:      budget.ID,
 					LoginID:       budget.LoginID,
 				})
+				if errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("unknown transaction category %d", id)
+				}
 				if err != nil {
 					return err
-				}
-				if rows != 1 {
-					return fmt.Errorf("unknown transaction category %d", id)
 				}
 
 				fmt.Fprintf(stdout, "updated transaction category %d\n", id)

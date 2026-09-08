@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -112,15 +113,14 @@ func (b Budget) UpdateBudget(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Query the db
-	n, err := b.queries.UpdateBudget(req.Context(), params)
-	if err != nil {
+	_, err = b.queries.UpdateBudget(req.Context(), params)
+	if errors.Is(err, sql.ErrNoRows) {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Nothing to update", http.StatusBadRequest)
 		return
 	}
-	if n == 0 {
-		err := errors.New("Nothing to update")
-		log.Println()
+	if err != nil {
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

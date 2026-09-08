@@ -346,7 +346,7 @@ func TestUpdatePayeeDefaultLine(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget, "testcategory")
 	account := newAccount(t, queries, ctx, budget, "testaccount")
 	defaultLine := newCategoryDefault(t, queries, ctx, budget, payee, category, 100)
-	n, err := queries.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
+	updated, err := queries.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
 		PayeeID:       payee.ID,
 		DestAccountID: sql.NullInt64{Int64: account.ID, Valid: true},
 		CategoryID:    sql.NullInt64{},
@@ -359,8 +359,14 @@ func TestUpdatePayeeDefaultLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != defaultLine.ID {
+		t.Error("ID changed on update")
+	}
+	if !updated.DestAccountID.Valid || updated.DestAccountID.Int64 != account.ID {
+		t.Error("payee default line was not updated to a transfer")
+	}
+	if updated.Percent != 50 {
+		t.Error("payee default line percent was not updated")
 	}
 	var destAccount sql.NullInt64
 	var percent int64
@@ -606,7 +612,7 @@ func TestScopingUpdatePayeeDefaultLineScopedByLogin(t *testing.T) {
 	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
 	lineB := newCategoryDefault(t, queries, ctx, budgetB, payeeB, categoryB, 100)
 
-	n, err := queries.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
+	_, err := queries.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
 		PayeeID:       payeeB.ID,
 		DestAccountID: sql.NullInt64{},
 		CategoryID:    sql.NullInt64{Int64: categoryB.ID, Valid: true},
@@ -616,10 +622,7 @@ func TestScopingUpdatePayeeDefaultLineScopedByLogin(t *testing.T) {
 		BudgetID:      budgetB.ID,
 		LoginID:       budgetA.LoginID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }

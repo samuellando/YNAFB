@@ -200,7 +200,7 @@ func TestUpdateCategory(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	groupID := newCategoryGroup(t, queries, ctx, budget, "testgroup")
 	category := newCategory(t, queries, ctx, budget, "testcategory")
-	n, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
+	updated, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
 		LoginID:         budget.LoginID,
 		Name:            "newName",
 		CategoryGroupID: sql.NullInt64{Int64: groupID, Valid: true},
@@ -210,8 +210,14 @@ func TestUpdateCategory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != category.ID {
+		t.Error("ID changed on update")
+	}
+	if updated.Name != "newName" {
+		t.Error("category name was not updated")
+	}
+	if !updated.CategoryGroupID.Valid || updated.CategoryGroupID.Int64 != groupID {
+		t.Error("category group was not updated")
 	}
 	newNameCategory, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
 		LoginID:  budget.LoginID,
@@ -422,7 +428,7 @@ func TestUpdateCategoryGroup(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	groupID := newCategoryGroup(t, queries, ctx, budget, "testgroup")
-	n, err := queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
+	updated, err := queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
 		LoginID:  budget.LoginID,
 		Name:     "newName",
 		ID:       groupID,
@@ -431,8 +437,11 @@ func TestUpdateCategoryGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != groupID {
+		t.Error("ID changed on update")
+	}
+	if updated.Name != "newName" {
+		t.Error("category group name was not updated")
 	}
 	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
 		LoginID:  budget.LoginID,
@@ -619,18 +628,15 @@ func TestScopingUpdateCategoryScopedByLogin(t *testing.T) {
 	budgetB := newBudget(t, queries, ctx, "budgetB")
 	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
 
-	n, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
+	_, err := queries.UpdateCategory(ctx, data.UpdateCategoryParams{
 		Name:            "hacked",
 		CategoryGroupID: sql.NullInt64{},
 		ID:              categoryB.ID,
 		BudgetID:        budgetB.ID,
 		LoginID:         budgetA.LoginID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }
 
@@ -698,16 +704,13 @@ func TestScopingUpdateCategoryGroupScopedByLogin(t *testing.T) {
 	budgetB := newBudget(t, queries, ctx, "budgetB")
 	groupB := newCategoryGroup(t, queries, ctx, budgetB, "groupB")
 
-	n, err := queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
+	_, err := queries.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
 		Name:     "hacked",
 		ID:       groupB,
 		BudgetID: budgetB.ID,
 		LoginID:  budgetA.LoginID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }

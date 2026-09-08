@@ -91,7 +91,7 @@ func TestUpdatePayee(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	payee := newPayee(t, queries, ctx, budget, "testpayee")
-	n, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
+	updated, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
 		LoginID:  budget.LoginID,
 		Name:     "newName",
 		ID:       payee.ID,
@@ -100,8 +100,11 @@ func TestUpdatePayee(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != payee.ID {
+		t.Error("ID changed on update")
+	}
+	if updated.Name != "newName" {
+		t.Error("payee name was not updated")
 	}
 	newNamePayee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
 		LoginID:  budget.LoginID,
@@ -310,16 +313,13 @@ func TestScopingUpdatePayeeScopedByLogin(t *testing.T) {
 	budgetB := newBudget(t, queries, ctx, "budgetB")
 	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
 
-	n, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
+	_, err := queries.UpdatePayee(ctx, data.UpdatePayeeParams{
 		Name:     "hacked",
 		ID:       payeeB.ID,
 		BudgetID: budgetB.ID,
 		LoginID:  budgetA.LoginID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }

@@ -10,7 +10,7 @@ WHERE
 RETURNING
   *;
 
--- name: UpdateTrxLine :execrows
+-- name: UpdateTrxLine :one
 UPDATE trx_line
 SET
   trx_id = ?, dest_account_id = ?, category_id = ?, income = ?, outflow = ?, inflow = ?
@@ -23,7 +23,8 @@ WHERE
       budget AS b
     WHERE
       b.id = @budget_id AND b.login_id = @login_id
-  );
+  )
+RETURNING *;
 
 -- name: DeleteTrxLine :exec
 DELETE FROM trx_line

@@ -8,12 +8,13 @@ INSERT INTO budget (
 )
 RETURNING *;
 
--- name: UpdateBudget :execrows
+-- name: UpdateBudget :one
 UPDATE budget
 SET
   name = ?
 WHERE
-  budget.login_id = @login_id AND budget.id = @id;
+  budget.login_id = @login_id AND budget.id = @id
+RETURNING *;
 
 -- name: DeleteBudget :exec
 DELETE FROM budget

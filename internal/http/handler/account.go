@@ -133,15 +133,14 @@ func (b Account) UpdateAccount(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Query the db
-	n, err := b.queries.UpdateAccount(req.Context(), params)
-	if err != nil {
+	_, err = b.queries.UpdateAccount(req.Context(), params)
+	if errors.Is(err, sql.ErrNoRows) {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Nothing to update", http.StatusBadRequest)
 		return
 	}
-	if n == 0 {
-		err := errors.New("Nothing to update")
-		log.Println()
+	if err != nil {
+		log.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

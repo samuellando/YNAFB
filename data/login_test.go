@@ -97,12 +97,15 @@ func TestUpdateLoginPassword(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	login := newLogin(t, queries, ctx, "alice")
-	n, err := queries.UpdateLoginPassword(ctx, data.UpdateLoginPasswordParams{Password: "newpw", ID: login.ID})
+	updated, err := queries.UpdateLoginPassword(ctx, data.UpdateLoginPasswordParams{Password: "newpw", ID: login.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != login.ID {
+		t.Error("ID changed on update")
+	}
+	if updated.Password != "newpw" {
+		t.Error("login password was not updated")
 	}
 	got, err := queries.GetLoginByUsername(ctx, data.GetLoginByUsernameParams{Username: "alice"})
 	if err != nil {

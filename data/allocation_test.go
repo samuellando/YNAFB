@@ -1,6 +1,7 @@
 package data_test
 
 import (
+	"database/sql"
 	"testing"
 
 	"samuellando.com/YNAFB/data"
@@ -150,7 +151,7 @@ func TestUpdateAllocation(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget, "testcategory")
 	month := mustTime(t, 2026, 1, 1)
 	allocation := newAllocation(t, queries, ctx, budget.LoginID, budget.ID, category.ID, month, 5000)
-	n, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
+	updated, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
 		Amount:     8000,
 		BudgetID:   budget.ID,
 		CategoryID: category.ID,
@@ -160,18 +161,10 @@ func TestUpdateAllocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
-	}
-	var amount int64
-	var id int64
-	if err := db.QueryRow(`SELECT id, amount FROM allocation WHERE id = ?`, allocation.ID).Scan(&id, &amount); err != nil {
-		t.Fatal(err)
-	}
-	if id != allocation.ID {
+	if updated.ID != allocation.ID {
 		t.Error("ID changed on update")
 	}
-	if amount != 8000 {
+	if updated.Amount != 8000 {
 		t.Error("allocation amount was not updated")
 	}
 }
@@ -203,17 +196,14 @@ func TestScopingUpdateAllocationScopedByLogin(t *testing.T) {
 	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
 	newAllocation(t, queries, ctx, budgetB.LoginID, budgetB.ID, categoryB.ID, mustTime(t, 2026, 1, 1), 100)
 
-	n, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
+	_, err := queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
 		Amount:     500,
 		CategoryID: categoryB.ID,
 		Month:      mustTime(t, 2026, 1, 1),
 		BudgetID:   budgetB.ID,
 		LoginID:    budgetA.LoginID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }

@@ -10,7 +10,7 @@ WHERE
 RETURNING
   *;
 
--- name: UpdateTrx :execrows
+-- name: UpdateTrx :one
 UPDATE trx
 SET
   date = ?, account_id = ?, payee_id = ?, total_outflow = ?, total_inflow = ?, note = ?
@@ -23,7 +23,8 @@ WHERE
       budget AS b
     WHERE
       b.id = @budget_id AND b.login_id = @login_id
-  );
+  )
+RETURNING *;
 
 -- name: DeleteTrx :exec
 DELETE FROM trx

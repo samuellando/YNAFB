@@ -24,12 +24,13 @@ FROM
 ORDER BY
   login.id;
 
--- name: UpdateLoginPassword :execrows
+-- name: UpdateLoginPassword :one
 UPDATE login
 SET
   password = ?
 WHERE
-  login.id = @id;
+  login.id = @id
+RETURNING *;
 
 -- name: DeleteLogin :exec
 DELETE FROM login

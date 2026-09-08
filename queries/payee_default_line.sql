@@ -10,7 +10,7 @@ WHERE
 RETURNING
   *;
 
--- name: UpdatePayeeDefaultLine :execrows
+-- name: UpdatePayeeDefaultLine :one
 UPDATE payee_default_line
 SET
   payee_id = ?, dest_account_id = ?, category_id = ?, income = ?, percent = ?
@@ -23,7 +23,8 @@ WHERE
       budget AS b
     WHERE
       b.id = @budget_id AND b.login_id = @login_id
-  );
+  )
+RETURNING *;
 
 -- name: DeletePayeeDefaultLine :exec
 DELETE FROM payee_default_line

@@ -8,7 +8,7 @@ SELECT
 RETURNING
   *;
 
--- name: UpdateAllocation :execrows
+-- name: UpdateAllocation :one
 UPDATE allocation
 SET
   amount = ?
@@ -23,4 +23,5 @@ WHERE
     WHERE
       b.id = @budget_id
       AND b.login_id = @login_id
-  );
+  )
+RETURNING *;

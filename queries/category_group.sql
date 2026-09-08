@@ -10,7 +10,7 @@ WHERE
 RETURNING
   id;
 
--- name: UpdateCategoryGroup :execrows
+-- name: UpdateCategoryGroup :one
 UPDATE category_group
 SET
   name = ?
@@ -23,7 +23,8 @@ WHERE
       budget AS b
     WHERE
       b.id = @budget_id AND b.login_id = @login_id
-  );
+  )
+RETURNING *;
 
 -- name: DeleteCategoryGroup :exec
 DELETE FROM category_group

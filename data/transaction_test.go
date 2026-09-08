@@ -1,6 +1,7 @@
 package data_test
 
 import (
+	"database/sql"
 	"testing"
 
 	"samuellando.com/YNAFB/data"
@@ -251,7 +252,7 @@ func TestUpdateTrx(t *testing.T) {
 	payee := newPayee(t, queries, ctx, budget, "testpayee")
 	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "testnote")
 	date := mustTime(t, 2026, 2, 1)
-	n, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
+	updated, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
 		LoginID:      budget.LoginID,
 		Date:         date,
 		AccountID:    account.ID,
@@ -265,8 +266,17 @@ func TestUpdateTrx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != transaction.ID {
+		t.Error("ID changed on update")
+	}
+	if updated.Date.Unix() != date.Unix() {
+		t.Error("transaction date was not updated")
+	}
+	if updated.TotalOutflow != 2000 {
+		t.Error("transaction total outflow was not updated")
+	}
+	if updated.Note != "newnote" {
+		t.Error("transaction note was not updated")
 	}
 	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
@@ -450,7 +460,7 @@ func TestScopingUpdateTrxScopedByLogin(t *testing.T) {
 	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
 	trxB := newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
 
-	n, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
+	_, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
 		Date:         mustTime(t, 2026, 2, 1),
 		AccountID:    accountB.ID,
 		PayeeID:      payeeB.ID,
@@ -461,10 +471,7 @@ func TestScopingUpdateTrxScopedByLogin(t *testing.T) {
 		BudgetID:     budgetB.ID,
 		LoginID:      budgetA.LoginID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }

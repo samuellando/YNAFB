@@ -179,7 +179,7 @@ func TestUpdateAccount(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget, "testaccount")
-	n, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
+	updated, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
 		LoginID:  budget.LoginID,
 		Name:     "newName",
 		ID:       account.ID,
@@ -188,8 +188,11 @@ func TestUpdateAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != account.ID {
+		t.Error("ID changed on update")
+	}
+	if updated.Name != "newName" {
+		t.Error("account name was not updated")
 	}
 	newNameAccount, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
 		LoginID:  budget.LoginID,
@@ -210,17 +213,14 @@ func TestUpdateAccountWrongBudgetAffectsNothing(t *testing.T) {
 	budget := newBudget(t, queries, ctx, "testBudget")
 	otherBudget := newBudget(t, queries, ctx, "otherBudget")
 	account := newAccount(t, queries, ctx, budget, "testaccount")
-	n, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
+	_, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
 		LoginID:  otherBudget.LoginID,
 		Name:     "newName",
 		ID:       account.ID,
 		BudgetID: otherBudget.ID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Error("Updating an account with a mismatched budget should affect 0 rows")
+	if err != sql.ErrNoRows {
+		t.Fatalf("Updating an account with a mismatched budget should return sql.ErrNoRows, got %v", err)
 	}
 }
 
@@ -267,17 +267,14 @@ func TestScopingUpdateAccountScopedByLogin(t *testing.T) {
 	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
 
 	// Attempting to update budgetB's account using budgetA's login must be a no-op.
-	n, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
+	_, err := queries.UpdateAccount(ctx, data.UpdateAccountParams{
 		Name:     "hacked",
 		ID:       accountB.ID,
 		LoginID:  budgetA.LoginID,
 		BudgetID: budgetB.ID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }
 

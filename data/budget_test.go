@@ -66,7 +66,7 @@ func TestUpdateBudget(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	n, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
+	updated, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
 		Name:    "newName",
 		LoginID: budget.LoginID,
 		ID:      budget.ID,
@@ -74,8 +74,11 @@ func TestUpdateBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
+	if updated.ID != budget.ID {
+		t.Error("ID changed on update")
+	}
+	if updated.Name != "newName" {
+		t.Error("budget name was not updated")
 	}
 	newNameBudget, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{LoginID: budget.LoginID, Name: "newName"})
 	if err != nil {
@@ -89,16 +92,13 @@ func TestUpdateBudget(t *testing.T) {
 func TestUpdateBudgetNonexistent(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
-	n, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
+	_, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
 		Name:    "newName",
 		LoginID: 1,
 		ID:      1,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Error("Updating a non existent budget should affect 0 rows")
+	if err != sql.ErrNoRows {
+		t.Fatalf("Updating a non existent budget should return sql.ErrNoRows, got %v", err)
 	}
 }
 
@@ -213,16 +213,13 @@ func TestScopingUpdateBudgetScopedByLogin(t *testing.T) {
 	budgetA := newBudget(t, queries, ctx, "budgetA")
 	budgetB := newBudget(t, queries, ctx, "budgetB")
 
-	n, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
+	_, err := queries.UpdateBudget(ctx, data.UpdateBudgetParams{
 		Name:    "hacked",
 		LoginID: budgetA.LoginID,
 		ID:      budgetB.ID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }
 

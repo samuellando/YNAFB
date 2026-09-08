@@ -7,7 +7,7 @@ WHERE b.id = @budget_id AND b.login_id = @login_id
 RETURNING
   *;
 
--- name: UpdateCategory :execrows
+-- name: UpdateCategory :one
 UPDATE category
 SET
   name = ?,
@@ -18,7 +18,8 @@ WHERE
     SELECT b.id
     FROM budget AS b
     WHERE b.id = @budget_id AND b.login_id = @login_id
-);
+)
+RETURNING *;
 
 -- name: DeleteCategory :exec
 DELETE FROM category

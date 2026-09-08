@@ -283,23 +283,12 @@ func TestUpdateGoal(t *testing.T) {
 	category := newCategory(t, queries, ctx, budget, "testcategory")
 	goal := newGoal(t, queries, ctx, budget, category.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 5000)
 	start := mustTime(t, 2026, 3, 1)
-	n, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
+	updated, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
 		LoginID:    budget.LoginID,
 		Type:       "refill",
 		StartDate:  start,
 		EndDate:    types.NullUnixTime{},
 		Amount:     8000,
-		BudgetID:   budget.ID,
-		CategoryID: category.ID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Error("The number of affected rows should be 1")
-	}
-	updated, err := queries.GetGoalByCategory(ctx, data.GetGoalByCategoryParams{
-		LoginID:    budget.LoginID,
 		BudgetID:   budget.ID,
 		CategoryID: category.ID,
 	})
@@ -512,7 +501,7 @@ func TestScopingUpdateGoalScopedByLogin(t *testing.T) {
 	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
 	newGoal(t, queries, ctx, budgetB, categoryB.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 1000)
 
-	n, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
+	_, err := queries.UpdateGoal(ctx, data.UpdateGoalParams{
 		Type:       "monthly",
 		StartDate:  mustTime(t, 2026, 1, 1),
 		EndDate:    types.NullUnixTime{},
@@ -521,10 +510,7 @@ func TestScopingUpdateGoalScopedByLogin(t *testing.T) {
 		LoginID:    budgetA.LoginID,
 		CategoryID: categoryB.ID,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("expected 0 rows updated across logins, got %d", n)
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
 	}
 }

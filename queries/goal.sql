@@ -10,7 +10,7 @@ WHERE
 RETURNING
   *;
 
--- name: UpdateGoal :execrows
+-- name: UpdateGoal :one
 UPDATE goal
 SET
   type = ?, start_date = ?, end_date = ?, amount = ?
@@ -23,7 +23,8 @@ WHERE
     WHERE
       b.id = @budget_id AND b.login_id = @login_id
   )
-  AND goal.category_id = @category_id;
+  AND goal.category_id = @category_id
+RETURNING *;
 
 -- name: DeleteGoal :exec
 DELETE FROM goal
