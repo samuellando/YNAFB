@@ -276,6 +276,253 @@ paths:
               schema:
                 type: integer
 
+  /budget/{budgetId}/category:
+    get:
+      summary: Get the list of categories in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The list of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/category"
+    post:
+      summary: Create a new category in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The name of the new category
+                categoryGroupId:
+                  type: integer
+                  description: The id of the category group this category belongs to (if any)
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/category"
+
+  /budget/{budgetId}/category/{id}:
+    put:
+      summary: Update a category
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the category id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The new category name
+                categoryGroupId:
+                  type: integer
+                  description: The id of the category group this category belongs to (if any)
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/category"
+    delete:
+      summary: Delete a category
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the category id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
+  /budget/{budgetId}/category/{id}/allocation/{month}:
+    put:
+      summary: Set the allocation amount for a category in a given month
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the category id
+        required: true
+        schema:
+          type: string
+      - name: month
+        in: path
+        description: the month to allocate for (YYYY-MM)
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+              properties:
+                amount:
+                  type: integer
+                  description: The amount to allocate to this category for the month
+      responses:
+        "200":
+          description: Successfully allocated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/allocation"
+
+  /budget/{budgetId}/category-group:
+    get:
+      summary: Get the list of category groups in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The list of category groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/categoryGroup"
+    post:
+      summary: Create a new category group in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The name of the new category group
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/categoryGroup"
+
+  /budget/{budgetId}/category-group/{id}:
+    put:
+      summary: Update a category group
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the category group id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The new category group name
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/categoryGroup"
+    delete:
+      summary: Delete a category group
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the category group id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
 components:
   schemas:
     budget:
@@ -510,4 +757,54 @@ components:
           type: integer
         inflow:
           type: integer
+
+    category:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: "The category id"
+        name:
+          type: string
+          description: "The category name"
+        categoryGroupId:
+          type: integer
+          description: "The id of the category group this category belongs to (if any)"
+
+    categoryGroup:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: "The category group id"
+        name:
+          type: string
+          description: "The category group name"
+
+    allocation:
+      type: object
+      required:
+        - id
+        - categoryId
+        - month
+        - amount
+      properties:
+        id:
+          type: integer
+          description: "The allocation id"
+        categoryId:
+          type: integer
+          description: "The category the allocation is for"
+        month:
+          type: string
+          description: "The month the allocation is for (first day)"
+        amount:
+          type: integer
+          description: "The amount allocated to the category for the month"
 
