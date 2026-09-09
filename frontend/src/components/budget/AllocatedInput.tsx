@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { setAllocation } from '../../lib/api/budget'
-import { formatMoney } from '../../lib/money'
+import { centsFromInput, formatMoney } from '../../lib/money'
 
 type AllocatedInputProps = {
   budgetId: number
@@ -29,10 +29,9 @@ export default function AllocatedInput({ budgetId, categoryId, month, allocated 
 
   function commit() {
     if (!editing) return
-    const dollars = Number(draft)
     setEditing(false)
-    if (draft.trim() === '' || Number.isNaN(dollars)) return
-    const cents = Math.round(dollars * 100)
+    const cents = centsFromInput(draft)
+    if (cents === null) return
     if (cents === allocated) return
     update.mutate(cents)
   }

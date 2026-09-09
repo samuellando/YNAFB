@@ -132,21 +132,27 @@ func groupAccountTransactions(rows []data.ListAccountTransactionsRow) []AccountT
 				sourceID := int(row.SourceAccountID.Int64)
 				sourceAccountID = &sourceID
 			}
+			var sourceAccountName *string
+			if row.SourceAccountName.Valid {
+				name := row.SourceAccountName.String
+				sourceAccountName = &name
+			}
 			var payeeName string
 			if row.PayeeName.Valid {
 				payeeName = row.PayeeName.String
 			}
 			transactions = append(transactions, AccountTransaction{
-				Id:               int(row.TrxID),
-				Date:             row.Date.Format(time.RFC3339),
-				PayeeId:          int(row.PayeeID),
-				PayeeName:        payeeName,
-				Outflow:          int(row.Outflow),
-				Inflow:           int(row.Inflow),
-				Note:             row.Note,
-				Reconciled:       row.Reconciled,
-				SourceAccountId:  sourceAccountID,
-				TransactionLines: make([]AccountTransactionLine, 0),
+				Id:                int(row.TrxID),
+				Date:              row.Date.Format(time.RFC3339),
+				PayeeId:           int(row.PayeeID),
+				PayeeName:         payeeName,
+				Outflow:           int(row.Outflow),
+				Inflow:            int(row.Inflow),
+				Note:              row.Note,
+				Reconciled:        row.Reconciled,
+				SourceAccountId:   sourceAccountID,
+				SourceAccountName: sourceAccountName,
+				TransactionLines:  make([]AccountTransactionLine, 0),
 			})
 		}
 		tx := &transactions[len(transactions)-1]

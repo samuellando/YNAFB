@@ -9,7 +9,9 @@ import {
   type Goal,
   type GoalType,
 } from '../lib/api/budget'
+import { centsFromInput, centsToInput } from '../lib/money'
 import { isMonth } from '../lib/month'
+import AmountInput from './ui/AmountInput'
 import DialogShell from './ui/DialogShell'
 
 export type GoalDialogState = {
@@ -58,7 +60,7 @@ type GoalFormProps = {
 function GoalForm({ budgetId, month, dialog, existing, onClose }: GoalFormProps) {
   const queryClient = useQueryClient()
   const [type, setType] = useState<GoalType>(existing?.type ?? 'monthly')
-  const [amount, setAmount] = useState(existing ? (existing.amount / 100).toFixed(2) : '')
+  const [amount, setAmount] = useState(existing ? centsToInput(existing.amount) : '')
   const [startMonth, setStartMonth] = useState(
     existing ? toYearMonth(existing.startMonth) : month,
   )
@@ -67,8 +69,8 @@ function GoalForm({ budgetId, month, dialog, existing, onClose }: GoalFormProps)
   )
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
-  const dollars = Number(amount)
-  const validAmount = amount.trim() !== '' && Number.isFinite(dollars) && dollars > 0
+  const amountCents = centsFromInput(amount)
+  const validAmount = amountCents !== null && amountCents > 0
   const validStart = isMonth(startMonth.trim())
   const end = endMonth.trim()
   const validEnd = end === '' ? type !== 'save' : isMonth(end)
@@ -81,11 +83,12 @@ function GoalForm({ budgetId, month, dialog, existing, onClose }: GoalFormProps)
 
   const save = useMutation({
     mutationFn: () => {
+      if (amountCents === null) throw new Error('Enter a valid amount')
       const input = {
         type,
         startMonth: startMonth.trim(),
         ...(end !== '' ? { endMonth: end } : {}),
-        amount: Math.round(dollars * 100),
+        amount: amountCents,
       }
       return existing
         ? updateGoal(budgetId, dialog.categoryId, input)
@@ -136,14 +139,7 @@ function GoalForm({ budgetId, month, dialog, existing, onClose }: GoalFormProps)
 
       <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-slate-300">
         Amount
-        <input
-          type="text"
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="0.00"
-          className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none focus:border-emerald-400"
-        />
+        <AmountInput value={amount} onChange={setAmount} className="px-3 py-2" />
       </label>
 
       <div className="mt-4 grid grid-cols-2 gap-3">

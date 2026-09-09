@@ -25,6 +25,291 @@ export type AccountSummary = {
   reconciledBalance: number
 }
 
+export type AccountDetail = components['schemas']['accountDetail']
+export type AccountTransaction = components['schemas']['accountTransaction']
+export type AccountTransactionLine = components['schemas']['accountTransactionLine']
+
+// ---- Payees ----
+
+export type Payee = components['schemas']['payee']
+
+export async function listPayees(budgetId: number): Promise<Payee[]> {
+  const { data, error, response } = await client.GET('/budget/{budgetId}/payee', {
+    params: { path: { budgetId: String(budgetId) } },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to load payees', response.status)
+  }
+  return data
+}
+
+export async function createPayee(budgetId: number, name: string): Promise<Payee> {
+  const { data, error, response } = await client.POST('/budget/{budgetId}/payee', {
+    params: { path: { budgetId: String(budgetId) } },
+    body: { name },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to create payee', response.status)
+  }
+  return data
+}
+
+function apiError(error: unknown, fallback: string, status: number): ApiError {
+  const detail = typeof error === 'string' ? error.trim() : ''
+  return new ApiError(detail !== '' ? detail : fallback, status)
+}
+
+export async function reconcileAccount(
+  budgetId: number,
+  accountId: number,
+  input: { date: string; balance: number },
+): Promise<void> {
+  const { error, response } = await client.POST('/budget/{budgetId}/account/{id}/reconcile', {
+    params: { path: { budgetId: String(budgetId), id: String(accountId) } },
+    body: { date: input.date, balance: input.balance },
+    parseAs: 'text',
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to reconcile account', response.status)
+  }
+}
+
+export async function importStatement(
+  budgetId: number,
+  accountId: number,
+  file: File,
+): Promise<number> {
+  const form = new FormData()
+  form.append('statement', file)
+  // openapi-fetch types multipart bodies as their schema shape; the runtime
+  // body must be FormData.
+  const { data, error, response } = await client.POST(
+    '/budget/{budgetId}/account/{id}/import',
+    {
+      params: { path: { budgetId: String(budgetId), id: String(accountId) } },
+      body: form as unknown as { statement: string },
+      parseAs: 'text',
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to import statement', response.status)
+  }
+  const count = Number(data)
+  if (!Number.isInteger(count) || count < 0) {
+    throw new ApiError('Failed to import statement', response.status)
+  }
+  return count
+}
+
+export type PayeeDefaultLine = components['schemas']['payeeDefaultLine']
+
+export async function listPayeeDefaultLines(
+  budgetId: number,
+  payeeId: number,
+): Promise<PayeeDefaultLine[]> {
+  const { data, error, response } = await client.GET(
+    '/budget/{budgetId}/payee/{payeeId}/default-line',
+    {
+      params: { path: { budgetId: String(budgetId), payeeId: String(payeeId) } },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to load payee defaults', response.status)
+  }
+  return data
+}
+
+export type PayeeDefaultLineInput = {
+  destAccountId?: number
+  categoryId?: number
+  income: boolean
+  percent: number
+}
+
+export async function createPayeeDefaultLine(
+  budgetId: number,
+  payeeId: number,
+  input: PayeeDefaultLineInput,
+): Promise<void> {
+  const { error, response } = await client.POST(
+    '/budget/{budgetId}/payee/{payeeId}/default-line',
+    {
+      params: { path: { budgetId: String(budgetId), payeeId: String(payeeId) } },
+      body: {
+        ...(input.destAccountId !== undefined ? { destAccountId: input.destAccountId } : {}),
+        ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+        income: input.income,
+        percent: input.percent,
+      },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to save payee default', response.status)
+  }
+}
+
+export async function deletePayeeDefaultLine(
+  budgetId: number,
+  payeeId: number,
+  id: number,
+): Promise<void> {
+  const { error, response } = await client.DELETE(
+    '/budget/{budgetId}/payee/{payeeId}/default-line/{id}',
+    {
+      params: { path: { budgetId: String(budgetId), payeeId: String(payeeId), id: String(id) } },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to save payee default', response.status)
+  }
+}
+
+export type TransactionInput = {
+  payeeId: number
+  date: string
+  outflow: number
+  inflow: number
+  note: string
+}
+
+// ---- Transactions ----
+
+export async function updateTransaction(
+  budgetId: number,
+  accountId: number,
+  trxId: number,
+  input: TransactionInput,
+): Promise<void> {
+  const { error, response } = await client.PUT(
+    '/budget/{budgetId}/account/{accountId}/transaction/{id}',
+    {
+      params: {
+        path: { budgetId: String(budgetId), accountId: String(accountId), id: String(trxId) },
+      },
+      body: {
+        payeeId: input.payeeId,
+        date: input.date,
+        outflow: input.outflow,
+        inflow: input.inflow,
+        note: input.note,
+      },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to update transaction', response.status)
+  }
+}
+
+export async function deleteTransaction(
+  budgetId: number,
+  accountId: number,
+  trxId: number,
+): Promise<void> {
+  const { error, response } = await client.DELETE(
+    '/budget/{budgetId}/account/{accountId}/transaction/{id}',
+    {
+      params: {
+        path: { budgetId: String(budgetId), accountId: String(accountId), id: String(trxId) },
+      },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to delete transaction', response.status)
+  }
+}
+
+export type TransactionLineInput = {
+  destAccountId?: number
+  categoryId?: number
+  income: boolean
+  outflow: number
+  inflow: number
+}
+
+function lineBody(input: TransactionLineInput) {
+  return {
+    ...(input.destAccountId !== undefined ? { destAccountId: input.destAccountId } : {}),
+    ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+    income: input.income,
+    outflow: input.outflow,
+    inflow: input.inflow,
+  }
+}
+
+export async function createTransactionLine(
+  budgetId: number,
+  accountId: number,
+  trxId: number,
+  input: TransactionLineInput,
+): Promise<void> {
+  const { error, response } = await client.POST(
+    '/budget/{budgetId}/account/{accountId}/transaction/{trxId}/line',
+    {
+      params: {
+        path: {
+          budgetId: String(budgetId),
+          accountId: String(accountId),
+          trxId: String(trxId),
+        },
+      },
+      body: lineBody(input),
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to create transaction line', response.status)
+  }
+}
+
+export async function updateTransactionLine(
+  budgetId: number,
+  accountId: number,
+  trxId: number,
+  lineId: number,
+  input: TransactionLineInput,
+): Promise<void> {
+  const { error, response } = await client.PUT(
+    '/budget/{budgetId}/account/{accountId}/transaction/{trxId}/line/{id}',
+    {
+      params: {
+        path: {
+          budgetId: String(budgetId),
+          accountId: String(accountId),
+          trxId: String(trxId),
+          id: String(lineId),
+        },
+      },
+      body: lineBody(input),
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to update transaction line', response.status)
+  }
+}
+
+export async function deleteTransactionLine(
+  budgetId: number,
+  accountId: number,
+  trxId: number,
+  lineId: number,
+): Promise<void> {
+  const { error, response } = await client.DELETE(
+    '/budget/{budgetId}/account/{accountId}/transaction/{trxId}/line/{id}',
+    {
+      params: {
+        path: {
+          budgetId: String(budgetId),
+          accountId: String(accountId),
+          trxId: String(trxId),
+          id: String(lineId),
+        },
+      },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to delete transaction line', response.status)
+  }
+}
+
 export async function listBudgets(): Promise<Budget[]> {
   const { data, response } = await client.GET('/budget')
   if (!response.ok) {
@@ -39,6 +324,34 @@ export async function listAccounts(budgetId: number): Promise<AccountSummary[]> 
   })
   if (!response.ok) {
     throw new ApiError('Failed to load accounts', response.status)
+  }
+  return data
+}
+
+// ---- Accounts ----
+
+export async function getAccountDetail(
+  budgetId: number,
+  accountId: number,
+): Promise<AccountDetail> {
+  const { data, error, response } = await client.GET('/budget/{budgetId}/account/{id}', {
+    params: { path: { budgetId: String(budgetId), id: String(accountId) } },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to load account', response.status)
+  }
+  return data
+}
+
+export type Account = components['schemas']['account']
+
+export async function createAccount(budgetId: number, name: string): Promise<Account> {
+  const { data, error, response } = await client.POST('/budget/{budgetId}/account', {
+    params: { path: { budgetId: String(budgetId) } },
+    body: { name },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to create account', response.status)
   }
   return data
 }
@@ -115,18 +428,21 @@ export async function updateCategoryGroup(
   }
 }
 
+export type Category = components['schemas']['category']
+
 export async function createCategory(
   budgetId: number,
   name: string,
   categoryGroupId?: number,
-): Promise<void> {
-  const { response } = await client.POST('/budget/{budgetId}/category', {
+): Promise<Category> {
+  const { data, response } = await client.POST('/budget/{budgetId}/category', {
     params: { path: { budgetId: String(budgetId) } },
     body: { name, ...(categoryGroupId !== undefined ? { categoryGroupId } : {}) },
   })
   if (!response.ok) {
     throw new ApiError('Failed to create category', response.status)
   }
+  return data
 }
 
 export async function getGoal(budgetId: number, categoryId: number): Promise<Goal> {

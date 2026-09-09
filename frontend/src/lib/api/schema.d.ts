@@ -1604,6 +1604,8 @@ export interface components {
             id: number;
             /** @description The account the funds were transferred from (present only on mirror transfer rows) */
             sourceAccountId?: number;
+            /** @description The name of the account the funds were transferred from (present only on mirror transfer rows) */
+            sourceAccountName?: string;
             date: string;
             payeeId: number;
             payeeName: string;

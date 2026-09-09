@@ -25,11 +25,12 @@ export default function CategoryDialog({ budgetId, dialog, groups, onClose }: Ca
   const [groupId, setGroupId] = useState<number | null>(dialog.groupId)
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (dialog.mode === 'edit') {
-        return updateCategory(budgetId, dialog.categoryId, name.trim(), groupId ?? undefined)
+        await updateCategory(budgetId, dialog.categoryId, name.trim(), groupId ?? undefined)
+      } else {
+        await createCategory(budgetId, name.trim(), groupId ?? undefined)
       }
-      return createCategory(budgetId, name.trim(), groupId ?? undefined)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budget-month', budgetId] })

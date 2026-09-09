@@ -1,10 +1,18 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createBudget, listAccounts, listBudgets, type Budget } from '../lib/api/budget'
+import {
+  createAccount,
+  createBudget,
+  listAccounts,
+  listBudgets,
+  type Budget,
+} from '../lib/api/budget'
 import { deauthenticate } from '../lib/api/auth'
 import { saveSelectedBudget } from '../lib/budgetSelection'
 import { formatMoney } from '../lib/money'
+import { useClickOutside } from '../lib/useClickOutside'
+import { ApiError } from '../lib/api/errors'
 import { CheckIcon, ChevronDownIcon, LogOutIcon, PlusIcon } from './icons'
 
 type SidebarProps = {
@@ -18,19 +26,18 @@ export default function Sidebar({ budgetId }: SidebarProps) {
   const [budgetMenuOpen, setBudgetMenuOpen] = useState(false)
   const [newBudgetOpen, setNewBudgetOpen] = useState(false)
   const [name, setName] = useState('')
+  const [newAccountOpen, setNewAccountOpen] = useState(false)
+  const [accountName, setAccountName] = useState('')
   const budgetMenuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!budgetMenuOpen) return
-    function handleClickOutside(event: MouseEvent) {
-      if (budgetMenuRef.current && !budgetMenuRef.current.contains(event.target as Node)) {
-        setBudgetMenuOpen(false)
-        setNewBudgetOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [budgetMenuOpen])
+  useClickOutside(
+    budgetMenuRef,
+    () => {
+      setBudgetMenuOpen(false)
+      setNewBudgetOpen(false)
+    },
+    budgetMenuOpen,
+  )
 
   const budgets = useQuery({ queryKey: ['budgets'], queryFn: listBudgets })
   const accounts = useQuery({
@@ -49,6 +56,16 @@ export default function Sidebar({ budgetId }: SidebarProps) {
       setName('')
       saveSelectedBudget(budget.id)
       navigate(`/budget/${budget.id}`)
+    },
+  })
+
+  const addAccount = useMutation({
+    mutationFn: (newAccountName: string) => createAccount(budgetId, newAccountName),
+    onSuccess: async (account) => {
+      await queryClient.invalidateQueries({ queryKey: ['accounts', budgetId] })
+      setNewAccountOpen(false)
+      setAccountName('')
+      navigate(`/budget/${budgetId}/account/${account.id}`)
     },
   })
 
@@ -71,6 +88,13 @@ export default function Sidebar({ budgetId }: SidebarProps) {
     e.preventDefault()
     if (name.trim()) {
       create.mutate(name.trim())
+    }
+  }
+
+  function submitNewAccount(e: FormEvent) {
+    e.preventDefault()
+    if (accountName.trim()) {
+      addAccount.mutate(accountName.trim())
     }
   }
 
@@ -192,6 +216,43 @@ export default function Sidebar({ budgetId }: SidebarProps) {
           ))}
           {!accounts.isLoading && accountItems.length === 0 && (
             <li className="px-3 py-2 text-sm text-slate-500">No accounts yet</li>
+          )}
+          <li>
+            {newAccountOpen ? (
+              <form onSubmit={submitNewAccount} className="flex gap-2 px-3 py-1">
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="Account name"
+                  autoFocus
+                  className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 outline-none focus:border-emerald-400"
+                />
+                <button
+                  type="submit"
+                  disabled={accountName.trim() === '' || addAccount.isPending}
+                  className="rounded bg-emerald-500 px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50"
+                >
+                  {addAccount.isPending ? '…' : 'Add'}
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setNewAccountOpen(true)}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-emerald-400 transition hover:bg-slate-800/60"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Add account
+              </button>
+            )}
+          </li>
+          {addAccount.isError && (
+            <li className="px-3 text-sm text-red-400">
+              {addAccount.error instanceof ApiError
+                ? addAccount.error.message
+                : 'Failed to create account'}
+            </li>
           )}
         </ul>
       </div>
