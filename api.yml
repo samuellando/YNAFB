@@ -276,6 +276,280 @@ paths:
               schema:
                 type: integer
 
+  /budget/{budgetId}/account/{accountId}/transaction:
+    post:
+      summary: Create a new transaction in an account
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: accountId
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payeeId
+                - date
+                - outflow
+                - inflow
+              properties:
+                payeeId:
+                  type: integer
+                  description: The payee the transaction is with
+                date:
+                  type: string
+                  description: The transaction date (RFC3339)
+                outflow:
+                  type: integer
+                  description: The total outflow of the transaction
+                inflow:
+                  type: integer
+                  description: The total inflow of the transaction
+                note:
+                  type: string
+                  description: A note on the transaction
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/transaction"
+
+  /budget/{budgetId}/account/{accountId}/transaction/{id}:
+    put:
+      summary: Update a transaction
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: accountId
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the transaction id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payeeId
+                - date
+                - outflow
+                - inflow
+              properties:
+                payeeId:
+                  type: integer
+                  description: The payee the transaction is with
+                date:
+                  type: string
+                  description: The transaction date (RFC3339)
+                outflow:
+                  type: integer
+                  description: The total outflow of the transaction
+                inflow:
+                  type: integer
+                  description: The total inflow of the transaction
+                note:
+                  type: string
+                  description: A note on the transaction
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/transaction"
+    delete:
+      summary: Delete a transaction
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: accountId
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the transaction id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
+  /budget/{budgetId}/account/{accountId}/transaction/{trxId}/line:
+    post:
+      summary: Create a new line on a transaction
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: accountId
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      - name: trxId
+        in: path
+        description: the transaction id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - outflow
+                - inflow
+              properties:
+                destAccountId:
+                  type: integer
+                  description: The destination account id (for transfer lines)
+                categoryId:
+                  type: integer
+                  description: The category id (for spend lines)
+                income:
+                  type: boolean
+                  description: Whether this is an income line
+                outflow:
+                  type: integer
+                  description: The outflow of this line
+                inflow:
+                  type: integer
+                  description: The inflow of this line
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/trxLine"
+
+  /budget/{budgetId}/account/{accountId}/transaction/{trxId}/line/{id}:
+    put:
+      summary: Update a line on a transaction
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: accountId
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      - name: trxId
+        in: path
+        description: the transaction id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the line id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - outflow
+                - inflow
+              properties:
+                destAccountId:
+                  type: integer
+                  description: The destination account id (for transfer lines)
+                categoryId:
+                  type: integer
+                  description: The category id (for spend lines)
+                income:
+                  type: boolean
+                  description: Whether this is an income line
+                outflow:
+                  type: integer
+                  description: The outflow of this line
+                inflow:
+                  type: integer
+                  description: The inflow of this line
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/trxLine"
+    delete:
+      summary: Delete a line on a transaction
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: accountId
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      - name: trxId
+        in: path
+        description: the transaction id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the line id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
   /budget/{budgetId}/category:
     get:
       summary: Get the list of categories in a budget
@@ -1256,4 +1530,68 @@ components:
         percent:
           type: integer
           description: "The percent of the transaction this line accounts for"
+
+    transaction:
+      type: object
+      required:
+        - id
+        - accountId
+        - payeeId
+        - date
+        - outflow
+        - inflow
+        - note
+      properties:
+        id:
+          type: integer
+          description: "The transaction id"
+        accountId:
+          type: integer
+          description: "The account the transaction is in"
+        payeeId:
+          type: integer
+          description: "The payee the transaction is with"
+        date:
+          type: string
+          description: "The transaction date (RFC3339)"
+        outflow:
+          type: integer
+          description: "The total outflow of the transaction"
+        inflow:
+          type: integer
+          description: "The total inflow of the transaction"
+        note:
+          type: string
+          description: "A note on the transaction"
+
+    trxLine:
+      type: object
+      required:
+        - id
+        - trxId
+        - income
+        - outflow
+        - inflow
+      properties:
+        id:
+          type: integer
+          description: "The line id"
+        trxId:
+          type: integer
+          description: "The transaction the line is on"
+        destAccountId:
+          type: integer
+          description: "The destination account id (present on transfer lines)"
+        categoryId:
+          type: integer
+          description: "The category id (present on spend lines)"
+        income:
+          type: boolean
+          description: "Whether this is an income line"
+        outflow:
+          type: integer
+          description: "The outflow of this line"
+        inflow:
+          type: integer
+          description: "The inflow of this line"
 

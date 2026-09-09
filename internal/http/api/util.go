@@ -77,3 +77,10 @@ func nullInt64ToInt(id sql.NullInt64) *int {
 	return &v
 }
 
+func StrPtrToStr(note *string) string {
+	if note == nil {
+		return ""
+	}
+	return *note
+}
+
