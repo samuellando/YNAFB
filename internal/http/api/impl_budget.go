@@ -249,5 +249,5 @@ func (s ApiServer) DeleteBudgetBudgetId(ctx context.Context, request DeleteBudge
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return DeleteBudgetBudgetId204Response{}, nil
 }
