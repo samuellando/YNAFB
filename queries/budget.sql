@@ -84,7 +84,7 @@ SELECT
   COALESCE(bms.available, (
     SELECT prev.available
     FROM budget_month_summary AS prev
-    WHERE prev.budget_id = @id AND prev.month < @month
+    WHERE CAST(@month AS UNIX_EPOCH_INTEGER) < unixepoch() AND prev.budget_id = @id AND prev.month < @month
     ORDER BY prev.month desc
     LIMIT 1
   ) , 0) AS available,
