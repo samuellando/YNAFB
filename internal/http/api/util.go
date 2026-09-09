@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"database/sql"
 	"time"
 	"samuellando.com/YNAFB/internal/db/types"
 )
@@ -44,5 +45,35 @@ func nullUnixTimeToMonthString(t types.NullUnixTime) *string {
 	}
 	s := t.Time.Format(time.RFC3339)
 	return &s
+}
+
+func nullStringToPtr(s sql.NullString) *string {
+	if !s.Valid {
+		return nil
+	}
+	name := s.String
+	return &name
+}
+
+func BoolPtrToBool(income *bool) bool {
+	if income == nil {
+		return false
+	}
+	return *income
+}
+
+func intToNullInt64(id *int) sql.NullInt64 {
+	if id == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*id), Valid: true}
+}
+
+func nullInt64ToInt(id sql.NullInt64) *int {
+	if !id.Valid {
+		return nil
+	}
+	v := int(id.Int64)
+	return &v
 }
 

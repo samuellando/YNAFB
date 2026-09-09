@@ -755,6 +755,148 @@ paths:
         "200":
           description: Successfully deleted
 
+  /budget/{budgetId}/payee/{payeeId}/default-line:
+    get:
+      summary: Get the list of default lines for a payee in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: payeeId
+        in: path
+        description: the payee id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The list of default lines for the payee
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/payeeDefaultLine"
+    post:
+      summary: Create a new default line for a payee in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: payeeId
+        in: path
+        description: the payee id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - percent
+              properties:
+                destAccountId:
+                  type: integer
+                  description: The destination account id (for transfer lines)
+                categoryId:
+                  type: integer
+                  description: The category id (for spend lines)
+                income:
+                  type: boolean
+                  description: Whether this is an income line
+                percent:
+                  type: integer
+                  description: The percent of the transaction this line accounts for
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/payeeDefaultLine"
+
+  /budget/{budgetId}/payee/{payeeId}/default-line/{id}:
+    put:
+      summary: Update a default line for a payee in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: payeeId
+        in: path
+        description: the payee id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the default line id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - percent
+              properties:
+                destAccountId:
+                  type: integer
+                  description: The destination account id (for transfer lines)
+                categoryId:
+                  type: integer
+                  description: The category id (for spend lines)
+                income:
+                  type: boolean
+                  description: Whether this is an income line
+                percent:
+                  type: integer
+                  description: The percent of the transaction this line accounts for
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/payeeDefaultLine"
+    delete:
+      summary: Delete a default line for a payee in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: payeeId
+        in: path
+        description: the payee id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the default line id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
 components:
   schemas:
     budget:
@@ -1081,4 +1223,37 @@ components:
         name:
           type: string
           description: "The payee name"
+
+    payeeDefaultLine:
+      type: object
+      required:
+        - id
+        - payeeId
+        - income
+        - percent
+      properties:
+        id:
+          type: integer
+          description: "The default line id"
+        payeeId:
+          type: integer
+          description: "The payee the default line is for"
+        destAccountId:
+          type: integer
+          description: "The destination account id (present on transfer lines)"
+        destAccountName:
+          type: string
+          description: "The destination account name (present on list responses)"
+        categoryId:
+          type: integer
+          description: "The category id (present on spend lines)"
+        categoryName:
+          type: string
+          description: "The category name (present on list responses)"
+        income:
+          type: boolean
+          description: "Whether this is an income line"
+        percent:
+          type: integer
+          description: "The percent of the transaction this line accounts for"
 

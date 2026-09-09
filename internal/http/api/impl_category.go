@@ -2,27 +2,11 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strconv"
 
 	"samuellando.com/YNAFB/data"
 )
-
-func categoryGroupIDToNull(id *int) sql.NullInt64 {
-	if id == nil {
-		return sql.NullInt64{}
-	}
-	return sql.NullInt64{Int64: int64(*id), Valid: true}
-}
-
-func nullToCategoryGroupID(id sql.NullInt64) *int {
-	if !id.Valid {
-		return nil
-	}
-	categoryGroupID := int(id.Int64)
-	return &categoryGroupID
-}
 
 func (s ApiServer) GetBudgetBudgetIdCategory(ctx context.Context, request GetBudgetBudgetIdCategoryRequestObject) (GetBudgetBudgetIdCategoryResponseObject, error) {
 	// Collect params
@@ -71,7 +55,7 @@ func (s ApiServer) PostBudgetBudgetIdCategory(ctx context.Context, request PostB
 	// Query the database
 	category, err := s.queries.CreateCategory(ctx, data.CreateCategoryParams{
 		Name:            request.Body.Name,
-		CategoryGroupID: categoryGroupIDToNull(request.Body.CategoryGroupId),
+		CategoryGroupID: intToNullInt64(request.Body.CategoryGroupId),
 		BudgetID:        int64(budgetID),
 		LoginID:         loginID,
 	})
@@ -82,7 +66,7 @@ func (s ApiServer) PostBudgetBudgetIdCategory(ctx context.Context, request PostB
 	return PostBudgetBudgetIdCategory200JSONResponse{
 		Id:              int(category.ID),
 		Name:            category.Name,
-		CategoryGroupId: nullToCategoryGroupID(category.CategoryGroupID),
+		CategoryGroupId: nullInt64ToInt(category.CategoryGroupID),
 	}, nil
 }
 
@@ -108,7 +92,7 @@ func (s ApiServer) PutBudgetBudgetIdCategoryId(ctx context.Context, request PutB
 	// Query the database
 	category, err := s.queries.UpdateCategory(ctx, data.UpdateCategoryParams{
 		Name:            request.Body.Name,
-		CategoryGroupID: categoryGroupIDToNull(request.Body.CategoryGroupId),
+		CategoryGroupID: intToNullInt64(request.Body.CategoryGroupId),
 		ID:              int64(id),
 		BudgetID:        int64(budgetID),
 		LoginID:         loginID,
@@ -120,7 +104,7 @@ func (s ApiServer) PutBudgetBudgetIdCategoryId(ctx context.Context, request PutB
 	return PutBudgetBudgetIdCategoryId200JSONResponse{
 		Id:              int(category.ID),
 		Name:            category.Name,
-		CategoryGroupId: nullToCategoryGroupID(category.CategoryGroupID),
+		CategoryGroupId: nullInt64ToInt(category.CategoryGroupID),
 	}, nil
 }
 
