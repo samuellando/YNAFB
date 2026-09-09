@@ -12,3 +12,6 @@ bin/*
 
 # Any account statements
 *.pdf
+
+# Embedded frontend build output
+cmd/ynafb-server/web/

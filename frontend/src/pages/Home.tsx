@@ -1,5 +1,3 @@
-const comingSoon = ['Budget', 'Accounts', 'Categories', 'Payees', 'Transactions']
-
 export default function Home() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-8 bg-slate-950 px-6 text-slate-100">

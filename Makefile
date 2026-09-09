@@ -1,9 +1,10 @@
 BIN := bin/ynafb-server
+WEB := cmd/ynafb-server/web
 
 .PHONY: build build-backend build-frontend run backend frontend clean
 
-## Production build: Go server binary + frontend bundle.
-build: build-backend build-frontend
+## Production build: frontend bundle (embedded into the server) + Go server binary.
+build: build-frontend build-backend
 
 build-backend:
 	go build -o $(BIN) ./cmd/ynafb-server
@@ -15,11 +16,15 @@ build-frontend:
 run:
 	$(MAKE) -j2 backend frontend
 
-backend:
+backend: ensure-web
 	go run ./cmd/ynafb-server
+
+# The server embeds cmd/ynafb-server/web; build it once if missing.
+ensure-web:
+	@test -d $(WEB) || $(MAKE) build-frontend
 
 frontend:
 	npm --prefix frontend run dev
 
 clean:
-	rm -rf $(BIN) frontend/dist
+	rm -rf $(BIN) $(WEB) frontend/dist
