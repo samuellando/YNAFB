@@ -1,14 +1,8 @@
 import { Link, Navigate } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
-import { hasSession } from '../lib/api/auth'
+import { useSession } from '../lib/useSession'
 
 export default function Home() {
-  const { data: authed } = useQuery({
-    queryKey: ['session'],
-    queryFn: hasSession,
-    retry: false,
-    refetchOnWindowFocus: false,
-  })
+  const { data: authed } = useSession()
 
   if (authed === undefined) {
     return <div className="min-h-svh bg-slate-950" />

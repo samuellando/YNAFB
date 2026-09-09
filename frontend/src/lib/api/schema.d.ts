@@ -43,7 +43,10 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        /** @description the budget name */
+                        name: string;
+                    };
                 };
             };
             responses: {
@@ -106,7 +109,10 @@ export interface paths {
             };
             requestBody?: {
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        /** @description the new budget name */
+                        name: string;
+                    };
                 };
             };
             responses: {

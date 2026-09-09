@@ -40,3 +40,11 @@ export function authenticate(username: string, password: string) {
 export function signup(username: string, password: string) {
   return postForm('/auth/signup', { username, password })
 }
+
+export async function deauthenticate(): Promise<void> {
+  try {
+    await fetch('/auth/deauthenticate', { method: 'POST', credentials: 'include' })
+  } catch {
+    throw new AuthError('Could not reach the server. Please try again.')
+  }
+}
