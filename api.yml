@@ -1,0 +1,513 @@
+openapi: 3.1.0
+info:
+  title: The YNAFB api description
+  description: |
+    This API allows for managing the state of budgets, accounts and their 
+    components. It is used by the YNAFB frontend.
+  version: 0.0.1
+paths:
+  /budget:
+    get:
+      summary: Get the list of the user's budgets
+      responses:
+        "200":
+          description: everything is fine
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/budget"
+    post:
+      summary: Create a new budget
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              name:
+                description: the budget name
+                type: string
+      responses:
+        "201":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/budget"
+
+  /budget/{budgetId}:
+    get:
+      summary: get a budget's month summary for the current month
+      parameters:
+      - name: budgetId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The budgets monthly summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/budgetMonth"
+    
+    put:
+      summary: Update a budget
+      parameters:
+      - name: budgetId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              name:
+                description: the new budget name
+                type: string
+      responses:
+        "200":
+          description: Successfully updated 
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/budget"
+
+    delete:
+      summary: Delete a budget
+      parameters:
+      - name: budgetId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Successfully deleted
+
+  /budget/{budgetId}/{month}:
+    get:
+      summary: get a budget's month summary for the current month
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: month
+        in: path
+        description: the monthly budget to pull
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/budgetMonth"
+
+  /budget/{budgetId}/account:
+    get:
+      summary: Get the lisst of accounts in a budget with balance information
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/accountSummaryDetail"
+
+    post:
+      summary: Create a new account in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The name of the new account
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/account"
+
+  /budget/{budgetId}/account/{id}:
+    get:
+      summary: Get an account's balance summary and its transactions
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The account summary and its transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/accountDetail"
+
+    put:
+      summary: Update an account
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The new account name
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/account"
+
+    delete:
+      summary: Delete an account
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
+  /budget/{budgetId}/account/{id}/import:
+    post:
+      summary: Import transactions into an account from a bank statement file
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - statement
+              properties:
+                statement:
+                  type: string
+                  format: binary
+                  description: The bank statement file to import
+      responses:
+        "200":
+          description: The number of transactions imported
+          content:
+            text/plain:
+              schema:
+                type: integer
+
+components:
+  schemas:
+    budget:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: "The budget id"
+        name:
+          type: string
+          description: "The budget name"
+
+    budgetMonth:
+      type: object
+      required:
+        - month
+        - summary
+        - categories
+        - goals
+      properties:
+        month:
+          type: string
+          description: "The month the budget is for (first day)"
+        summary:
+          $ref: "#/components/schemas/budgetMonthSummary"
+        categories:
+          type: array
+          description: The list of all the categories and their values for the month
+          items:
+            $ref: "#/components/schemas/budgetMonthCategory"
+
+    budgetMonthCategory:
+      type: object
+      required:
+        - categoryId
+        - categoryName
+        - allocated
+        - spent
+        - available
+      properties:
+        categoryId:
+          type: integer
+        categoryName:
+          type: string
+        categoryGroupName:
+          type: string
+        allocated:
+          type: integer
+          description: The amount of money allocated to this category this month
+        spent:
+          type: integer
+          description: The amount of money spent in this category this month
+        available:
+          type: integer
+          description: The amount of money available to spen in this category (to date allocations - spend)
+        goal:
+          $ref: "#/components/schemas/budgetMonthGoal"
+
+    budgetMonthSummary:
+      type: object
+      required:
+        - readyToAssign
+        - income
+        - allocated
+        - spent
+        - available
+        - uncategorized
+      properties:
+        readyToAssign:
+          type: integer
+          description: The amount of money that is available to assign (net worth - already assigned to date)
+        income:
+          type: integer
+          description: The total income for the month
+        allocated:
+          type: integer
+          description: The total allocated for the month
+        spent:
+          type: integer
+          description: The total spent for the month
+        available:
+          type: integer
+          description: The total available to spent (total allocated to date - spend)
+        uncategorized:
+          type: integer
+          description: The absolute value of the uncategorize transactions
+
+    budgetMonthGoal:
+      type: object
+      required:
+        - type
+        - startMonth
+        - amount
+        - allocated
+        - amountForMonth
+        - gap
+      properties:
+        type:
+          type: string
+          enum: [monthly, save, refill]
+          description: The type of goal this is
+        startMonth:
+          type: string
+          description: The month the goal started
+        endMonth:
+          type: string
+          description: The month the goal ends (exclusive)
+        amount:
+          type: integer
+          description: The goals amount value (meaning varies by type)
+        allocated:
+          type: integer
+          description: The total amount allocated to this goal to date (previous months only)
+        amountForMonth:
+          type: integer
+          description: The amount needed to allocated this month to stay on track
+        gap:
+          type: integer
+          description: The difference between the allocated amount and the amountForMonth
+
+    account:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: "The account id"
+        name:
+          type: string
+          description: "The account name"
+
+    accountDetail:
+      type: object
+      required:
+        - summary
+        - transactions
+      properties:
+        summary:
+          $ref: "#/components/schemas/accountSummaryDetail"
+        transactions:
+          type: array
+          description: The account's transactions, each with its nested transaction lines
+          items:
+            $ref: "#/components/schemas/accountTransaction"
+
+    accountSummaryDetail:
+      type: object
+      required:
+        - id
+        - name
+        - balance
+        - reconciledBalance
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        balance:
+          type: integer
+        reconciledBalance:
+          type: integer
+
+    accountTransaction:
+      type: object
+      required:
+        - id
+        - date
+        - payeeId
+        - payeeName
+        - outflow
+        - inflow
+        - note
+        - reconciled
+        - transactionLines
+      properties:
+        id:
+          type: integer
+        sourceAccountId:
+          type: integer
+          description: "The account the funds were transferred from (present only on mirror transfer rows)"
+        date:
+          type: string
+        payeeId:
+          type: integer
+        payeeName:
+          type: string
+        outflow:
+          type: integer
+          description: "The total outflow of the transaction"
+        inflow:
+          type: integer
+          description: "The total inflow of the transaction"
+        note:
+          type: string
+        reconciled:
+          type: boolean
+        transactionLines:
+          type: array
+          description: The transaction's lines (category allocations and transfers)
+          items:
+            $ref: "#/components/schemas/accountTransactionLine"
+
+    accountTransactionLine:
+      type: object
+      description: |
+        a transaction line, can be one of a transfer to a destination account,
+        income, or a categorization.
+      required:
+        - lineId
+        - income
+        - outflow
+        - inflow
+      properties:
+        lineId:
+          type: integer
+        destAccountId:
+          type: integer
+        destAccountName:
+          type: string
+        categoryId:
+          type: integer
+        categoryName:
+          type: string
+        income:
+          type: boolean
+        outflow:
+          type: integer
+        inflow:
+          type: integer
+
