@@ -4,6 +4,7 @@ import {
   createCategory,
   createPayee,
   createPayeeDefaultLine,
+  createTransaction,
   createTransactionLine,
   deletePayeeDefaultLine,
   deleteTransaction,
@@ -21,23 +22,25 @@ import {
   type TransactionLineInput,
 } from '../../lib/api/budget'
 import { categoryOptions, defaultLineAmounts, linePercents } from '../../lib/accountView'
-import { dateFromInput, dateInputValue, isDateInput } from '../../lib/date'
+import { dateFromInput, dateInputValue, isDateInput, todayInput } from '../../lib/date'
 import { centsFromInput, centsToInput, formatMoney } from '../../lib/money'
 import { currentMonth } from '../../lib/month'
 import { PlusIcon, WarningIcon, XIcon } from '../icons'
 import AmountInput from '../ui/AmountInput'
 import DialogShell from '../ui/DialogShell'
+import { CANCEL_BUTTON, DANGER_BUTTON, PRIMARY_BUTTON } from '../ui/buttons'
 import EntityPicker, { type EntityOption } from '../ui/EntityPicker'
 import { TRANSACTION_LINE_GRID } from './layout'
 
 export type TransactionDialogState = {
-  transaction: AccountTransaction
+  transaction: AccountTransaction | null
 }
 
 type TransactionDialogProps = {
   budgetId: number
   accountId: number
   dialog: TransactionDialogState
+  progress?: { index: number; total: number }
   onCancel: () => void
   onDone: () => void
   onSkip?: () => void
@@ -136,12 +139,14 @@ export default function TransactionDialog({
   budgetId,
   accountId,
   dialog,
+  progress,
   onCancel,
   onDone,
   onSkip,
 }: TransactionDialogProps) {
   const queryClient = useQueryClient()
   const { transaction } = dialog
+  const isCreate = transaction === null
   const instanceId = useId()
   const keyCounter = useRef(0)
   const current = currentMonth()
@@ -188,18 +193,23 @@ export default function TransactionDialog({
     [categoryOpts],
   )
 
-  const [payeeId, setPayeeId] = useState<number | null>(transaction.payeeId)
-  const [date, setDate] = useState(dateInputValue(transaction.date))
-  const [outflow, setOutflow] = useState(centsToInput(transaction.outflow))
-  const [inflow, setInflow] = useState(centsToInput(transaction.inflow))
-  const [note, setNote] = useState(transaction.note)
+  const [payeeId, setPayeeId] = useState<number | null>(transaction?.payeeId ?? null)
+  const [date, setDate] = useState(
+    transaction ? dateInputValue(transaction.date) : todayInput(),
+  )
+  const [outflow, setOutflow] = useState(
+    transaction ? centsToInput(transaction.outflow) : '',
+  )
+  const [inflow, setInflow] = useState(transaction ? centsToInput(transaction.inflow) : '')
+  const [note, setNote] = useState(transaction?.note ?? '')
   const [lines, setLines] = useState<LineDraft[]>(() =>
-    transaction.transactionLines.map(draftFromLine),
+    transaction ? transaction.transactionLines.map(draftFromLine) : [],
   )
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [saveAsDefault, setSaveAsDefault] = useState(true)
   const outflowRefs = useRef(new Map<string, HTMLInputElement>())
   const prefilledDefaults = useRef(false)
+  const prefilledCreatePayee = useRef<number | null>(null)
 
   const defaultsQuery = useQuery({
     queryKey: ['payee-defaults', budgetId, payeeId],
@@ -210,9 +220,14 @@ export default function TransactionDialog({
     enabled: payeeId !== null,
   })
 
+  const existingLineCount = transaction?.transactionLines.length ?? 0
+  const existingOutflow = transaction?.outflow ?? 0
+  const existingInflow = transaction?.inflow ?? 0
+
   // One-shot prefill of async payee defaults into form state on open.
   // Fires at most once (ref guard); the set-state-in-effect lint warning is expected here.
   useEffect(() => {
+    if (isCreate || transaction === null) return
     if (prefilledDefaults.current) return
     if (transaction.transactionLines.length > 0) return
     if (lines.length > 0) return
@@ -224,17 +239,36 @@ export default function TransactionDialog({
     setLines(drafts)
   }, [
     defaultsQuery.data,
+    existingInflow,
+    existingLineCount,
+    existingOutflow,
+    isCreate,
     lines.length,
     newKey,
-    transaction.transactionLines.length,
-    transaction.outflow,
-    transaction.inflow,
+    transaction,
   ])
 
   const outflowCents = parseAmount(outflow)
   const inflowCents = parseAmount(inflow)
   const validDate = isDateInput(date)
   const validAmounts = outflowCents !== null && inflowCents !== null
+
+  // In create mode there are no stored totals, so prefill payee defaults once
+  // per payee selection as soon as totals are entered. Skips when the user
+  // already added lines.
+  useEffect(() => {
+    if (!isCreate) return
+    if (payeeId === null) return
+    if (lines.length > 0) return
+    if (prefilledCreatePayee.current === payeeId) return
+    const defaults = defaultsQuery.data
+    if (!defaults || defaults.length === 0) return
+    if (outflowCents === null || inflowCents === null) return
+    const drafts = draftsFromDefaults(defaults, outflowCents, inflowCents, newKey)
+    if (!drafts) return
+    prefilledCreatePayee.current = payeeId
+    setLines(drafts)
+  }, [defaultsQuery.data, inflowCents, isCreate, lines.length, newKey, outflowCents, payeeId])
 
   const lineStates = lines.map((draft) => {
     const lineOut = parseAmount(draft.outflow)
@@ -317,21 +351,37 @@ export default function TransactionDialog({
       if (outflowCents === null || inflowCents === null) {
         throw new Error('Enter valid amounts')
       }
-      await updateTransaction(budgetId, accountId, transaction.id, {
+      const input = {
         payeeId,
         date: dateFromInput(date),
         outflow: outflowCents,
         inflow: inflowCents,
         note: note.trim(),
-      })
+      }
+      if (isCreate || transaction === null) {
+        const created = await createTransaction(budgetId, accountId, input)
+        for (const state of lineStates) {
+          await createTransactionLine(
+            budgetId,
+            accountId,
+            created.id,
+            draftToInput(state.draft, state.out, state.in),
+          )
+        }
+        if (saveAsDefault && lineStates.length > 0) {
+          await replacePayeeDefaults()
+        }
+        return
+      }
+      await updateTransaction(budgetId, accountId, transaction.id, input)
       const kept = new Set<number>()
       for (const state of lineStates) {
-        const input = draftToInput(state.draft, state.out, state.in)
+        const lineInput = draftToInput(state.draft, state.out, state.in)
         if (state.draft.lineId === null) {
-          await createTransactionLine(budgetId, accountId, transaction.id, input)
+          await createTransactionLine(budgetId, accountId, transaction.id, lineInput)
         } else {
           kept.add(state.draft.lineId)
-          await updateTransactionLine(budgetId, accountId, transaction.id, state.draft.lineId, input)
+          await updateTransactionLine(budgetId, accountId, transaction.id, state.draft.lineId, lineInput)
         }
       }
       for (const line of transaction.transactionLines) {
@@ -350,7 +400,10 @@ export default function TransactionDialog({
   })
 
   const remove = useMutation({
-    mutationFn: () => deleteTransaction(budgetId, accountId, transaction.id),
+    mutationFn: () => {
+      if (transaction === null) throw new Error('Nothing to delete')
+      return deleteTransaction(budgetId, accountId, transaction.id)
+    },
     onSuccess: async () => {
       await invalidate()
       onDone()
@@ -374,7 +427,16 @@ export default function TransactionDialog({
 
   return (
     <DialogShell wide onClose={onCancel}>
-      <h3 className="text-lg font-bold tracking-tight">Edit transaction</h3>
+      <div className="flex items-baseline justify-between gap-4">
+        <h3 className="text-lg font-bold tracking-tight">
+          {isCreate ? 'Add transaction' : 'Edit transaction'}
+        </h3>
+        {progress && (
+          <p className="shrink-0 text-sm text-slate-400" aria-live="polite">
+            transaction {progress.index}/{progress.total}
+          </p>
+        )}
+      </div>
 
       {loading && <p className="py-6 text-center text-sm text-slate-400">Loading…</p>}
 
@@ -474,12 +536,6 @@ export default function TransactionDialog({
                   <select
                     aria-label="Line type"
                     value={draft.kind}
-                    disabled={draft.lineId !== null && draft.kind === 'transfer'}
-                    title={
-                      draft.lineId !== null && draft.kind === 'transfer'
-                        ? "Transfer lines can't be changed to another type"
-                        : undefined
-                    }
                     onChange={(e) => setKind(draft.key, e.target.value as LineKind)}
                     className="w-full cursor-pointer rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100 outline-none focus:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -585,26 +641,28 @@ export default function TransactionDialog({
             </label>
           </div>
           <div className="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => (confirmingDelete ? remove.mutate() : setConfirmingDelete(true))}
-              disabled={remove.isPending}
-              className="mr-auto rounded-lg border border-red-900 px-4 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {remove.isPending ? 'Deleting…' : confirmingDelete ? 'Confirm delete' : 'Delete'}
-            </button>
+            {!isCreate && (
+              <button
+                type="button"
+                onClick={() => (confirmingDelete ? remove.mutate() : setConfirmingDelete(true))}
+                disabled={remove.isPending}
+                className={DANGER_BUTTON}
+              >
+                {remove.isPending ? 'Deleting…' : confirmingDelete ? 'Confirm delete' : 'Delete'}
+              </button>
+            )}
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
+              className={CANCEL_BUTTON}
             >
-              Cancel
+              {onSkip ? 'Stop' : 'Cancel'}
             </button>
             {onSkip && (
               <button
                 type="button"
                 onClick={onSkip}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
+                className={CANCEL_BUTTON}
               >
                 Skip
               </button>
@@ -613,9 +671,17 @@ export default function TransactionDialog({
               type="button"
               onClick={() => save.mutate()}
               disabled={!canSave || save.isPending}
-              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className={PRIMARY_BUTTON}
             >
-              {save.isPending ? 'Saving…' : 'Save'}
+              {save.isPending
+                ? isCreate
+                  ? 'Adding…'
+                  : 'Saving…'
+                : onSkip
+                  ? 'Next'
+                  : isCreate
+                    ? 'Add'
+                    : 'Save'}
             </button>
           </div>
         </>

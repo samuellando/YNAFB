@@ -27,16 +27,18 @@ export default function CategoryGroupSection({
 
   return (
     <section>
-      <div
+      <button
+        type="button"
+        disabled={!editable}
         onClick={editable ? () => onEditGroup(groupId, group.name ?? 'Other') : undefined}
-        className={`bg-slate-900/80 px-4 py-2 ${isFirst ? '' : 'border-t border-slate-800'} ${
-          editable ? 'cursor-pointer transition hover:bg-slate-800/50' : ''
+        className={`block w-full bg-slate-900/80 px-4 py-2 text-left ${isFirst ? '' : 'border-t border-slate-800'} ${
+          editable ? 'cursor-pointer transition hover:bg-slate-800/50' : 'cursor-default'
         }`}
       >
         <h2 className="text-sm font-semibold tracking-wide text-slate-100">
           {group.name ?? 'Other'}
         </h2>
-      </div>
+      </button>
       {group.categories.map((category) => (
         <CategoryRow
           key={category.categoryId}

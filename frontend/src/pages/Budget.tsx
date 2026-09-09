@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createBudget, listBudgets } from '../lib/api/budget'
 import { loadSelectedBudget, saveSelectedBudget } from '../lib/budgetSelection'
+import LoadingScreen from '../components/ui/LoadingScreen'
 
 export default function Budget() {
   const navigate = useNavigate()
@@ -10,6 +11,15 @@ export default function Budget() {
   const [name, setName] = useState('')
 
   const budgets = useQuery({ queryKey: ['budgets'], queryFn: listBudgets, retry: false })
+
+  const selected =
+    budgets.data && budgets.data.length > 0
+      ? (budgets.data.find((b) => b.id === loadSelectedBudget())?.id ?? budgets.data[0].id)
+      : null
+
+  useEffect(() => {
+    if (selected !== null) saveSelectedBudget(selected)
+  }, [selected])
 
   const create = useMutation({
     mutationFn: createBudget,
@@ -20,25 +30,19 @@ export default function Budget() {
     },
   })
 
-  if (budgets.isLoading) {
-    return <div className="min-h-svh bg-slate-950" />
-  }
-
-  if (budgets.data && budgets.data.length > 0) {
-    const stored = loadSelectedBudget()
-    const selected =
-      budgets.data.find((b) => b.id === stored)?.id ?? budgets.data[0].id
-    if (selected !== stored) {
-      saveSelectedBudget(selected)
-    }
-    return <Navigate to={`/budget/${selected}`} replace />
-  }
-
   function handleCreate(e: FormEvent) {
     e.preventDefault()
     if (name.trim()) {
       create.mutate(name.trim())
     }
+  }
+
+  if (budgets.isPending) {
+    return <LoadingScreen />
+  }
+
+  if (selected !== null) {
+    return <Navigate to={`/budget/${selected}`} replace />
   }
 
   return (

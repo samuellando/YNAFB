@@ -1,48 +1,49 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { deleteCategoryGroup, updateCategoryGroup } from '../lib/api/budget'
-import DialogShell from './ui/DialogShell'
-import { CANCEL_BUTTON, DANGER_BUTTON, PRIMARY_BUTTON } from './ui/buttons'
+import { deleteAccount, updateAccount } from '../../lib/api/budget'
+import DialogShell from '../ui/DialogShell'
+import { CANCEL_BUTTON, DANGER_BUTTON, PRIMARY_BUTTON } from '../ui/buttons'
 
-export type GroupDialogState = {
-  groupId: number
+export type AccountDialogState = {
   name: string
 }
 
-type GroupDialogProps = {
+type AccountDialogProps = {
   budgetId: number
-  dialog: GroupDialogState
+  accountId: number
+  dialog: AccountDialogState
   onClose: () => void
+  onDeleted: () => void
 }
 
-export default function GroupDialog({ budgetId, dialog, onClose }: GroupDialogProps) {
+export default function AccountDialog({ budgetId, accountId, dialog, onClose, onDeleted }: AccountDialogProps) {
   const queryClient = useQueryClient()
   const [name, setName] = useState(dialog.name)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const save = useMutation({
-    mutationFn: () => updateCategoryGroup(budgetId, dialog.groupId, name.trim()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-month', budgetId] })
-      queryClient.invalidateQueries({ queryKey: ['category-groups', budgetId] })
-      onClose()
-    },
-  })
-
-  const remove = useMutation({
-    mutationFn: () => deleteCategoryGroup(budgetId, dialog.groupId),
+    mutationFn: () => updateAccount(budgetId, accountId, name.trim()),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['budget-month', budgetId] }),
-        queryClient.invalidateQueries({ queryKey: ['category-groups', budgetId] }),
+        queryClient.invalidateQueries({ queryKey: ['account', budgetId, accountId] }),
+        queryClient.invalidateQueries({ queryKey: ['accounts', budgetId] }),
       ])
       onClose()
     },
   })
 
+  const remove = useMutation({
+    mutationFn: () => deleteAccount(budgetId, accountId),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ['account', budgetId, accountId] })
+      await queryClient.invalidateQueries({ queryKey: ['accounts', budgetId] })
+      onDeleted()
+    },
+  })
+
   return (
     <DialogShell onClose={onClose}>
-        <h3 className="text-lg font-bold tracking-tight">Edit group</h3>
+        <h3 className="text-lg font-bold tracking-tight">Edit account</h3>
         <label className="mt-5 flex flex-col gap-1.5 text-sm font-medium text-slate-300">
           Name
           <input

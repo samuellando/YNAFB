@@ -48,7 +48,7 @@ export default function AllocatedInput({ budgetId, categoryId, month, allocated 
         onClick={startEdit}
         title="Edit allocated amount"
         aria-label={`Allocated ${formatMoney(allocated)}. Activate to edit.`}
-        className="ml-auto w-28 cursor-pointer rounded px-1.5 py-0.5 text-right text-sm tabular-nums text-slate-100 transition hover:bg-slate-800/60 hover:text-emerald-300"
+        className="relative z-10 ml-auto w-28 cursor-pointer rounded px-1.5 py-0.5 text-right text-sm tabular-nums text-slate-100 transition hover:bg-slate-800/60 hover:text-emerald-300"
       >
         {formatMoney(allocated)}
       </button>
@@ -69,7 +69,7 @@ export default function AllocatedInput({ budgetId, categoryId, month, allocated 
         if (e.key === 'Escape') cancel()
       }}
       aria-label="Allocated amount"
-      className="ml-auto w-28 rounded border border-emerald-400 bg-slate-800/60 px-1.5 py-0.5 text-right text-sm tabular-nums text-slate-100 outline-none transition focus:ring-1 focus:ring-emerald-400"
+      className="relative z-10 ml-auto w-28 rounded border border-emerald-400 bg-slate-800/60 px-1.5 py-0.5 text-right text-sm tabular-nums text-slate-100 outline-none transition focus:ring-1 focus:ring-emerald-400"
     />
   )
 }

@@ -214,7 +214,7 @@ export default function Sidebar({ budgetId }: SidebarProps) {
               </NavLink>
             </li>
           ))}
-          {!accounts.isLoading && accountItems.length === 0 && (
+          {!accounts.isPending && accountItems.length === 0 && (
             <li className="px-3 py-2 text-sm text-slate-500">No accounts yet</li>
           )}
           <li>

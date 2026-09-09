@@ -5,6 +5,7 @@ import { dateFromInput, isDateInput, todayInput } from '../../lib/date'
 import { formatMoney, signedCentsFromInput } from '../../lib/money'
 import AmountInput from '../ui/AmountInput'
 import DialogShell from '../ui/DialogShell'
+import { CANCEL_BUTTON, PRIMARY_BUTTON } from '../ui/buttons'
 
 type ReconcileDialogProps = {
   budgetId: number
@@ -80,18 +81,14 @@ export default function ReconcileDialog({
         <p className="mt-3 text-sm text-red-400">{reconcile.error.message}</p>
       )}
       <div className="mt-6 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
-        >
+        <button type="button" onClick={onClose} className={CANCEL_BUTTON}>
           Cancel
         </button>
         <button
           type="button"
           onClick={() => reconcile.mutate()}
           disabled={!canSave || reconcile.isPending}
-          className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className={PRIMARY_BUTTON}
         >
           {reconcile.isPending ? 'Reconciling…' : 'Reconcile'}
         </button>

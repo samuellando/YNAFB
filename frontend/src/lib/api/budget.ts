@@ -172,7 +172,35 @@ export type TransactionInput = {
   note: string
 }
 
+export type Transaction = components['schemas']['transaction']
+
 // ---- Transactions ----
+
+export async function createTransaction(
+  budgetId: number,
+  accountId: number,
+  input: TransactionInput,
+): Promise<Transaction> {
+  const { data, error, response } = await client.POST(
+    '/budget/{budgetId}/account/{accountId}/transaction',
+    {
+      params: {
+        path: { budgetId: String(budgetId), accountId: String(accountId) },
+      },
+      body: {
+        payeeId: input.payeeId,
+        date: input.date,
+        outflow: input.outflow,
+        inflow: input.inflow,
+        note: input.note,
+      },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to create transaction', response.status)
+  }
+  return data
+}
 
 export async function updateTransaction(
   budgetId: number,
@@ -356,6 +384,30 @@ export async function createAccount(budgetId: number, name: string): Promise<Acc
   return data
 }
 
+export async function updateAccount(
+  budgetId: number,
+  accountId: number,
+  name: string,
+): Promise<Account> {
+  const { data, error, response } = await client.PUT('/budget/{budgetId}/account/{id}', {
+    params: { path: { budgetId: String(budgetId), id: String(accountId) } },
+    body: { name },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to update account', response.status)
+  }
+  return data
+}
+
+export async function deleteAccount(budgetId: number, accountId: number): Promise<void> {
+  const { error, response } = await client.DELETE('/budget/{budgetId}/account/{id}', {
+    params: { path: { budgetId: String(budgetId), id: String(accountId) } },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to delete account', response.status)
+  }
+}
+
 export async function createBudget(name: string): Promise<Budget> {
   const { data, response } = await client.POST('/budget', { body: { name } })
   if (!response.ok) {
@@ -514,5 +566,23 @@ export async function updateCategory(
   })
   if (!response.ok) {
     throw new ApiError('Failed to update category', response.status)
+  }
+}
+
+export async function deleteCategory(budgetId: number, categoryId: number): Promise<void> {
+  const { response } = await client.DELETE('/budget/{budgetId}/category/{id}', {
+    params: { path: { budgetId: String(budgetId), id: String(categoryId) } },
+  })
+  if (!response.ok) {
+    throw new ApiError('Failed to delete category', response.status)
+  }
+}
+
+export async function deleteCategoryGroup(budgetId: number, groupId: number): Promise<void> {
+  const { response } = await client.DELETE('/budget/{budgetId}/category-group/{id}', {
+    params: { path: { budgetId: String(budgetId), id: String(groupId) } },
+  })
+  if (!response.ok) {
+    throw new ApiError('Failed to delete category group', response.status)
   }
 }

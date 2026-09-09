@@ -1,5 +1,6 @@
 import { formatMonthLabel, shiftMonth } from '../../lib/month'
 import { ChevronLeftIcon, ChevronRightIcon } from '../icons'
+import { OUTLINE_BUTTON } from '../ui/buttons'
 
 type MonthNavigatorProps = {
   selected: string
@@ -35,7 +36,7 @@ export default function MonthNavigator({ selected, current, onSelect }: MonthNav
         type="button"
         onClick={() => onSelect(current)}
         disabled={selected === current}
-        className="ml-3 rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-emerald-400 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200"
+        className={`ml-3 ${OUTLINE_BUTTON}`}
       >
         This month
       </button>

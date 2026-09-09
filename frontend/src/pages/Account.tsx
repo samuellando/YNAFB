@@ -1,31 +1,29 @@
 import { useMemo, useState } from 'react'
-import { Navigate, useParams } from 'react-router'
+import { Navigate, useNavigate, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { getAccountDetail, type AccountTransaction } from '../lib/api/budget'
 import { needsCategorize, uncategorizedAmount } from '../lib/accountView'
+import { parseIdParam } from '../lib/params'
 import AccountBalance from '../components/account/AccountBalance'
+import AccountDialog from '../components/account/AccountDialog'
 import ImportDialog from '../components/account/ImportDialog'
+import { PencilIcon } from '../components/icons'
 import ReconcileDialog from '../components/account/ReconcileDialog'
 import TransactionDialog from '../components/account/TransactionDialog'
 import TransactionTable from '../components/account/TransactionTable'
 import BudgetMonthError from '../components/budget/BudgetMonthError'
-
-const HEADER_BUTTON =
-  'rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-emerald-400 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200'
-
-function isIdParam(value: string | undefined): value is string {
-  return value !== undefined && /^\d+$/.test(value)
-}
+import { OUTLINE_BUTTON } from '../components/ui/buttons'
 
 export default function Account() {
   const { budgetId, accountId } = useParams()
-  const valid = isIdParam(budgetId) && isIdParam(accountId)
-  const budget = valid ? Number(budgetId) : NaN
-  const id = valid ? Number(accountId) : NaN
+  const navigate = useNavigate()
+  const budget = parseIdParam(budgetId)
+  const id = parseIdParam(accountId)
+  const valid = budget !== null && id !== null
 
   const query = useQuery({
     queryKey: ['account', budget, id],
-    queryFn: () => getAccountDetail(budget, id),
+    queryFn: () => getAccountDetail(budget ?? 0, id ?? 0),
     enabled: valid,
   })
   const transactions = useMemo(() => query.data?.transactions ?? [], [query.data])
@@ -33,15 +31,28 @@ export default function Account() {
   const uncategorized = useMemo(() => uncategorizedAmount(transactions), [transactions])
 
   const [selected, setSelected] = useState<AccountTransaction | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [reconcileOpen, setReconcileOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [queue, setQueue] = useState<number[] | null>(null)
+  const [queueTotal, setQueueTotal] = useState(0)
 
   const needsWork = useMemo(() => transactions.filter(needsCategorize), [transactions])
 
   function startCategorize() {
     if (needsWork.length === 0) return
-    setQueue(needsWork.map((t) => t.id))
+    // Walk oldest to newest, even though the table lists newest first.
+    const ordered = [...needsWork].sort(
+      (a, b) => Date.parse(a.date) - Date.parse(b.date) || a.id - b.id,
+    )
+    setQueue(ordered.map((t) => t.id))
+    setQueueTotal(ordered.length)
+  }
+
+  function cancelQueue() {
+    setQueue(null)
+    setQueueTotal(0)
   }
 
   function advanceQueue() {
@@ -56,7 +67,7 @@ export default function Account() {
     flowId === null ? null : (transactions.find((t) => t.id === flowId) ?? null)
 
   if (!valid) {
-    return <Navigate to={isIdParam(budgetId) ? `/budget/${budgetId}` : '/budget'} replace />
+    return <Navigate to={budget !== null ? `/budget/${budget}` : '/budget'} replace />
   }
 
   const summary = query.data?.summary
@@ -65,13 +76,35 @@ export default function Account() {
     <>
       <div className="mx-auto flex min-h-full max-w-5xl flex-col px-8 pb-6 pt-12">
         <header className="flex items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold tracking-tight">{summary?.name ?? 'Account'}</h1>
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-3xl font-bold tracking-tight">
+              {summary?.name ?? 'Account'}
+            </h1>
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              disabled={!summary}
+              aria-label="Edit account"
+              title="Edit account"
+              className="shrink-0 cursor-pointer rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-800 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+            >
+              <PencilIcon className="h-4 w-4" />
+            </button>
+          </div>
           <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              disabled={!summary}
+              className={OUTLINE_BUTTON}
+            >
+              Add transaction
+            </button>
             <button
               type="button"
               onClick={startCategorize}
               disabled={!summary || needsWork.length === 0}
-              className={HEADER_BUTTON}
+              className={OUTLINE_BUTTON}
             >
               Categorize
             </button>
@@ -79,7 +112,7 @@ export default function Account() {
               type="button"
               onClick={() => setImportOpen(true)}
               disabled={!summary}
-              className={HEADER_BUTTON}
+              className={OUTLINE_BUTTON}
             >
               Import
             </button>
@@ -87,7 +120,7 @@ export default function Account() {
               type="button"
               onClick={() => setReconcileOpen(true)}
               disabled={!summary}
-              className={HEADER_BUTTON}
+              className={OUTLINE_BUTTON}
             >
               Reconcile
             </button>
@@ -123,13 +156,35 @@ export default function Account() {
         />
       )}
 
-      {flowTransaction && (
+      {adding && (
+        <TransactionDialog
+          key="new"
+          budgetId={budget}
+          accountId={id}
+          dialog={{ transaction: null }}
+          onCancel={() => setAdding(false)}
+          onDone={() => setAdding(false)}
+        />
+      )}
+
+      {editOpen && summary && (
+        <AccountDialog
+          budgetId={budget}
+          accountId={id}
+          dialog={{ name: summary.name }}
+          onClose={() => setEditOpen(false)}
+          onDeleted={() => navigate(`/budget/${budget}`)}
+        />
+      )}
+
+      {flowTransaction && queue && (
         <TransactionDialog
           key={flowTransaction.id}
           budgetId={budget}
           accountId={id}
           dialog={{ transaction: flowTransaction }}
-          onCancel={() => setQueue(null)}
+          progress={{ index: queueTotal - queue.length + 1, total: queueTotal }}
+          onCancel={cancelQueue}
           onDone={advanceQueue}
           onSkip={advanceQueue}
         />

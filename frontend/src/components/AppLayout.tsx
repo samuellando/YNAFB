@@ -1,18 +1,18 @@
 import { useEffect } from 'react'
 import { Navigate, Outlet, useParams } from 'react-router'
 import { saveSelectedBudget } from '../lib/budgetSelection'
+import { parseIdParam } from '../lib/params'
 import Sidebar from './Sidebar'
 
 export default function AppLayout() {
   const { budgetId } = useParams()
-  const id = Number(budgetId)
-  const valid = budgetId !== undefined && !Number.isNaN(id)
+  const id = parseIdParam(budgetId)
 
   useEffect(() => {
-    if (valid) saveSelectedBudget(id)
-  }, [id, valid])
+    if (id !== null) saveSelectedBudget(id)
+  }, [id])
 
-  if (!valid) {
+  if (id === null) {
     return <Navigate to="/budget" replace />
   }
 

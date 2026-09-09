@@ -8,6 +8,7 @@ import {
 } from '../lib/api/budget'
 import { groupCategories } from '../lib/budgetView'
 import { currentMonth, isMonth } from '../lib/month'
+import { parseIdParam } from '../lib/params'
 import CategoryDialog, { type CategoryDialogState } from '../components/CategoryDialog'
 import GroupDialog, { type GroupDialogState } from '../components/GroupDialog'
 import GoalDialog, { type GoalDialogState } from '../components/GoalDialog'
@@ -20,7 +21,7 @@ import ReadyToAssign from '../components/budget/ReadyToAssign'
 export default function MonthlyBudget() {
   const navigate = useNavigate()
   const { budgetId, month } = useParams()
-  const id = Number(budgetId)
+  const id = parseIdParam(budgetId)
 
   const now = currentMonth()
   const invalidMonth = month !== undefined && !isMonth(month)
@@ -28,12 +29,14 @@ export default function MonthlyBudget() {
 
   const query = useQuery({
     queryKey: ['budget-month', id, selected],
-    queryFn: () => getBudgetMonth(id, selected),
+    queryFn: () => getBudgetMonth(id ?? 0, selected),
+    enabled: id !== null,
   })
 
   const categoryGroups = useQuery({
     queryKey: ['category-groups', id],
-    queryFn: () => listCategoryGroups(id),
+    queryFn: () => listCategoryGroups(id ?? 0),
+    enabled: id !== null,
   })
 
   const [dialog, setDialog] = useState<CategoryDialogState | null>(null)
@@ -75,6 +78,12 @@ export default function MonthlyBudget() {
       categoryName: category.categoryName,
       goal: category.goal,
     })
+  }
+
+  // Unreachable: AppLayout rejects invalid ids, but the queries above must be
+  // disabled until then and the dialog props need a narrowed type.
+  if (id === null) {
+    return <Navigate to="/budget" replace />
   }
 
   return (

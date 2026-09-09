@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { importStatement } from '../../lib/api/budget'
 import { CheckIcon } from '../icons'
 import DialogShell from '../ui/DialogShell'
+import { CANCEL_BUTTON, PRIMARY_BUTTON } from '../ui/buttons'
 
 type ImportDialogProps = {
   budgetId: number
@@ -57,18 +58,14 @@ export default function ImportDialog({ budgetId, accountId, onClose }: ImportDia
             <p className="mt-3 text-sm text-red-400">{upload.error.message}</p>
           )}
           <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
-            >
+            <button type="button" onClick={onClose} className={CANCEL_BUTTON}>
               Cancel
             </button>
             <button
               type="button"
               onClick={() => upload.mutate()}
               disabled={file === null || upload.isPending}
-              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className={PRIMARY_BUTTON}
             >
               {upload.isPending ? 'Importing…' : 'Import'}
             </button>
@@ -85,7 +82,7 @@ export default function ImportDialog({ budgetId, accountId, onClose }: ImportDia
               type="button"
               onClick={onClose}
               autoFocus
-              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+              className={PRIMARY_BUTTON}
             >
               Close
             </button>

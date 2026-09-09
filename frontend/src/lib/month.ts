@@ -10,7 +10,10 @@ export function currentMonth(): string {
 }
 
 export function isMonth(value: string): boolean {
-  return /^\d{4}-\d{2}$/.test(value)
+  const match = /^(\d{4})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const month = Number(match[2])
+  return month >= 1 && month <= 12
 }
 
 export function shiftMonth(month: string, delta: number): string {

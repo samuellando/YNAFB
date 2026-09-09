@@ -13,6 +13,7 @@ import { centsFromInput, centsToInput } from '../lib/money'
 import { isMonth } from '../lib/month'
 import AmountInput from './ui/AmountInput'
 import DialogShell from './ui/DialogShell'
+import { CANCEL_BUTTON, DANGER_BUTTON, PRIMARY_BUTTON } from './ui/buttons'
 
 export type GoalDialogState = {
   categoryId: number
@@ -177,27 +178,23 @@ function GoalForm({ budgetId, month, dialog, existing, onClose }: GoalFormProps)
       )}
       <div className="mt-6 flex justify-end gap-2">
         {existing && (
-          <button
-            type="button"
-            onClick={() => (confirmingDelete ? remove.mutate() : setConfirmingDelete(true))}
-            disabled={remove.isPending}
-            className="mr-auto rounded-lg border border-red-900 px-4 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
+            <button
+              type="button"
+              onClick={() => (confirmingDelete ? remove.mutate() : setConfirmingDelete(true))}
+              disabled={remove.isPending}
+              className={DANGER_BUTTON}
+            >
             {remove.isPending ? 'Deleting…' : confirmingDelete ? 'Confirm delete' : 'Delete'}
           </button>
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
-        >
+        <button type="button" onClick={onClose} className={CANCEL_BUTTON}>
           Cancel
         </button>
         <button
           type="button"
           onClick={() => save.mutate()}
           disabled={!canSave || save.isPending}
-          className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className={PRIMARY_BUTTON}
         >
           {save.isPending ? 'Saving…' : 'Save'}
         </button>

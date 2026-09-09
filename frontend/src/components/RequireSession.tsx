@@ -1,11 +1,12 @@
 import { Navigate, Outlet } from 'react-router'
 import { useSession } from '../lib/useSession'
+import LoadingScreen from './ui/LoadingScreen'
 
 export default function RequireSession() {
   const { data: authed } = useSession()
 
   if (authed === undefined) {
-    return <div className="min-h-svh bg-slate-950" />
+    return <LoadingScreen />
   }
 
   if (!authed) {

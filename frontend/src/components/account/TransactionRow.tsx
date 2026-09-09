@@ -54,7 +54,7 @@ export default function TransactionRow({ transaction, onSelect }: TransactionRow
           <button
             type="button"
             onClick={() => onSelect(transaction)}
-            className="cursor-pointer truncate text-left text-sm text-slate-100 transition hover:text-emerald-300"
+            className="cursor-pointer truncate text-left text-sm text-slate-100 transition after:absolute after:inset-0 after:content-[''] hover:text-emerald-300"
           >
             {transaction.payeeName}
           </button>
@@ -86,8 +86,8 @@ export default function TransactionRow({ transaction, onSelect }: TransactionRow
   return (
     <div>
       <div
-        className={`${TRANSACTION_GRID} items-center border-t border-slate-800/60 px-4 py-1.5 ${
-          mirror ? '' : 'hover:bg-slate-800/30'
+        className={`${TRANSACTION_GRID} relative items-center border-t border-slate-800/60 px-4 py-1.5 ${
+          mirror ? '' : 'cursor-pointer hover:bg-slate-800/30'
         }`}
         title={mirror ? "Can't edit transfers from other accounts" : undefined}
       >

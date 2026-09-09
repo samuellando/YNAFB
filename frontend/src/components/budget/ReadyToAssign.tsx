@@ -1,6 +1,6 @@
 import type { BudgetMonthSummary } from '../../lib/api/budget'
 import { formatMoney } from '../../lib/money'
-import { WarningIcon } from '../icons'
+import UncategorizedChip from '../ui/UncategorizedChip'
 
 type ReadyToAssignProps = {
   summary: BudgetMonthSummary
@@ -23,12 +23,7 @@ export default function ReadyToAssign({ summary }: ReadyToAssignProps) {
         </p>
       </div>
       <div className="flex flex-1 justify-start pl-10">
-        {summary.uncategorized > 0 && (
-          <span className="flex items-center gap-1.5 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-3 py-1 text-xs font-semibold whitespace-nowrap text-yellow-300">
-            <WarningIcon className="h-3.5 w-3.5" />
-            {formatMoney(summary.uncategorized)} uncategorized
-          </span>
-        )}
+        {summary.uncategorized > 0 && <UncategorizedChip amount={summary.uncategorized} />}
       </div>
     </div>
   )

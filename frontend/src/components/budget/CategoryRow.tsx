@@ -23,11 +23,11 @@ export default function CategoryRow({
   onOpenGoal,
 }: CategoryRowProps) {
   return (
-    <div className={`${CATEGORY_GRID} items-center border-t border-slate-800/60 px-4 py-1.5 hover:bg-slate-800/30`}>
+    <div className={`${CATEGORY_GRID} relative cursor-pointer items-center border-t border-slate-800/60 px-4 py-1.5 hover:bg-slate-800/30`}>
       <button
         type="button"
         onClick={() => onEditCategory(category, groupId)}
-        className="cursor-pointer truncate pl-5 text-left text-sm text-slate-300 transition hover:text-slate-100"
+        className="cursor-pointer truncate pl-5 text-left text-sm text-slate-300 transition after:absolute after:inset-0 after:content-[''] hover:text-slate-100"
       >
         {category.categoryName}
       </button>

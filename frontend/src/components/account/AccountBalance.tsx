@@ -1,6 +1,6 @@
 import { availableTone } from '../../lib/budgetView'
 import { formatMoney } from '../../lib/money'
-import { WarningIcon } from '../icons'
+import UncategorizedChip from '../ui/UncategorizedChip'
 
 type AccountBalanceProps = {
   balance: number
@@ -30,9 +30,8 @@ export default function AccountBalance({
         </span>
       </p>
       {uncategorized > 0 && (
-        <span className="mt-3 flex items-center gap-1.5 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-3 py-1 text-xs font-semibold whitespace-nowrap text-yellow-300">
-          <WarningIcon className="h-3.5 w-3.5" />
-          {formatMoney(uncategorized)} uncategorized
+        <span className="mt-3">
+          <UncategorizedChip amount={uncategorized} />
         </span>
       )}
     </div>

@@ -1,11 +1,12 @@
 import { Link, Navigate } from 'react-router'
 import { useSession } from '../lib/useSession'
+import LoadingScreen from '../components/ui/LoadingScreen'
 
 export default function Home() {
   const { data: authed } = useSession()
 
   if (authed === undefined) {
-    return <div className="min-h-svh bg-slate-950" />
+    return <LoadingScreen />
   }
 
   if (authed) {
@@ -34,7 +35,6 @@ export default function Home() {
           </Link>
         </nav>
       </header>
-
     </div>
   )
 }
