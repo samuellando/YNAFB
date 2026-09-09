@@ -162,6 +162,7 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 				endMonth = &endMonthString
 			}
 			goal = &BudgetMonthGoal{
+				Type: BudgetMonthGoalType(goalRow.Type),
 				Allocated:      int(goalRow.Allocated),
 				Amount:         int(goalRow.Amount),
 				AmountForMonth: int(goalRow.AmountForMonth),

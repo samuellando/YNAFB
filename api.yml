@@ -423,6 +423,138 @@ paths:
               schema:
                 $ref: "#/components/schemas/allocation"
 
+  /budget/{budgetId}/category/{categoryId}/goal:
+    get:
+      summary: Get the goal for a category in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: categoryId
+        in: path
+        description: the category id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The goal for the category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/goal"
+    post:
+      summary: Create a new goal for a category in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: categoryId
+        in: path
+        description: the category id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - startMonth
+                - amount
+              properties:
+                type:
+                  type: string
+                  enum: [monthly, save, refill]
+                  description: The type of goal
+                startMonth:
+                  type: string
+                  description: The month the goal starts (YYYY-MM)
+                endMonth:
+                  type: string
+                  description: The month the goal ends (exclusive, required for save goals)
+                amount:
+                  type: integer
+                  description: The goals amount value (meaning varies by type)
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/goal"
+    put:
+      summary: Update the goal for a category in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: categoryId
+        in: path
+        description: the category id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - startMonth
+                - amount
+              properties:
+                type:
+                  type: string
+                  enum: [monthly, save, refill]
+                  description: The type of goal
+                startMonth:
+                  type: string
+                  description: The month the goal starts (YYYY-MM)
+                endMonth:
+                  type: string
+                  description: The month the goal ends (exclusive, required for save goals)
+                amount:
+                  type: integer
+                  description: The goals amount value (meaning varies by type)
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/goal"
+    delete:
+      summary: Delete the goal for a category in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: categoryId
+        in: path
+        description: the category id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
   /budget/{budgetId}/category-group:
     get:
       summary: Get the list of category groups in a budget
@@ -807,4 +939,33 @@ components:
         amount:
           type: integer
           description: "The amount allocated to the category for the month"
+
+    goal:
+      type: object
+      required:
+        - id
+        - categoryId
+        - type
+        - startMonth
+        - amount
+      properties:
+        id:
+          type: integer
+          description: "The goal id"
+        categoryId:
+          type: integer
+          description: "The category the goal is for"
+        type:
+          type: string
+          enum: [monthly, save, refill]
+          description: "The type of goal"
+        startMonth:
+          type: string
+          description: "The month the goal started (first day)"
+        endMonth:
+          type: string
+          description: "The month the goal ends (exclusive)"
+        amount:
+          type: integer
+          description: "The goals amount value (meaning varies by type)"
 
