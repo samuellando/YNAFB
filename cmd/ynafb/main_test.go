@@ -262,12 +262,6 @@ func TestUpdateCommandsFail(t *testing.T) {
 			wantErr: `unknown account "Nope"`,
 		},
 		{
-			name:    "allocation",
-			setup:   [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}},
-			args:    []string{"allocation", "update", "2026-08", "Groceries", "30.00"},
-			wantErr: `no allocation for 2026-08 "Groceries"`,
-		},
-		{
 			name:    "category",
 			setup:   [][]string{{"budget", "create", "Home Budget"}, {"category", "create", "Groceries"}},
 			args:    []string{"category", "update", "Nope", "Food"},
@@ -2144,8 +2138,11 @@ func TestAllocationMonthBehavior(t *testing.T) {
 
 	assertRowCount(t, dbPath, "allocation", 2)
 
-	// Same category + month must be rejected (UNIQUE budget+category+month).
-	assertCommandFails(t, dbPath, "UNIQUE constraint failed", "allocation", "create", "2026-08", "Groceries", "60.00")
+	// Setting the same category + month again replaces the allocation instead of erroring.
+	stdout, stderr, exitCode := invoke(t, dbPath, "allocation", "create", "2026-08", "Groceries", "60.00")
+	if exitCode != 0 {
+		t.Fatalf("allocation create failed: stdout=%q stderr=%q", stdout, stderr)
+	}
 
 	assertRowCount(t, dbPath, "allocation", 2)
 }

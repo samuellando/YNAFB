@@ -647,7 +647,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			result, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
+			result, err := queries.SetAllocation(ctx, data.SetAllocationParams{
 				BudgetID:   budget.ID,
 				LoginID:    budget.LoginID,
 				CategoryID: category,
@@ -686,16 +686,13 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			_, err = queries.UpdateAllocation(ctx, data.UpdateAllocationParams{
+			_, err = queries.SetAllocation(ctx, data.SetAllocationParams{
 				Amount:     amount,
 				BudgetID:   budget.ID,
 				LoginID:    budget.LoginID,
 				CategoryID: category,
 				Month:      types.UnixTime{Time: month},
 			})
-			if errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("no allocation for %s %q in budget %q", month.Format("2006-01"), args[1], budget.Name)
-			}
 			if err != nil {
 				return err
 			}

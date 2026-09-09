@@ -112,7 +112,7 @@ func newGoal(t *testing.T, queries *data.Queries, ctx context.Context, budget da
 
 func newAllocation(t *testing.T, queries *data.Queries, ctx context.Context, loginID, budget, category int64, month types.UnixTime, amount int64) data.Allocation {
 	t.Helper()
-	a, err := queries.CreateAllocation(ctx, data.CreateAllocationParams{
+	a, err := queries.SetAllocation(ctx, data.SetAllocationParams{
 		BudgetID:   budget,
 		CategoryID: category,
 		Month:      month,

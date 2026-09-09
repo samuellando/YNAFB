@@ -1,5 +1,5 @@
--- name: CreateAllocation :one
-INSERT INTO
+-- name: SetAllocation :one
+INSERT OR REPLACE INTO
   allocation (budget_id, category_id, month, amount)
 SELECT
     b.id, ?, ?, ?
@@ -7,21 +7,3 @@ SELECT
     WHERE b.id = @budget_id AND b.login_id = @login_id
 RETURNING
   *;
-
--- name: UpdateAllocation :one
-UPDATE allocation
-SET
-  amount = ?
-WHERE
-  allocation.category_id = @category_id
-  AND allocation.month = ?
-  AND allocation.budget_id IN (
-    SELECT
-      b.id
-    FROM
-      budget AS b
-    WHERE
-      b.id = @budget_id
-      AND b.login_id = @login_id
-  )
-RETURNING *;
