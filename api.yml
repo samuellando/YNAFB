@@ -655,6 +655,106 @@ paths:
         "200":
           description: Successfully deleted
 
+  /budget/{budgetId}/payee:
+    get:
+      summary: Get the list of payees in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The list of payees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/payee"
+    post:
+      summary: Create a new payee in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The name of the new payee
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/payee"
+
+  /budget/{budgetId}/payee/{id}:
+    put:
+      summary: Update a payee
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the payee id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The new payee name
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/payee"
+    delete:
+      summary: Delete a payee
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the payee id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
 components:
   schemas:
     budget:
@@ -968,4 +1068,17 @@ components:
         amount:
           type: integer
           description: "The goals amount value (meaning varies by type)"
+
+    payee:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: "The payee id"
+        name:
+          type: string
+          description: "The payee name"
 
