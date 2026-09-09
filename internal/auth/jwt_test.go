@@ -45,7 +45,7 @@ func TestParseJWTRoundTrip(t *testing.T) {
 	}
 }
 
-func TestParseJWTConsumesToken(t *testing.T) {
+func TestParseJWTRetainsToken(t *testing.T) {
 	token, err := GenerateJWT("alice")
 	if err != nil {
 		t.Fatal(err)
@@ -53,9 +53,15 @@ func TestParseJWTConsumesToken(t *testing.T) {
 	if _, _, err := ParseJWT(token); err != nil {
 		t.Fatal(err)
 	}
-	// A token is single-use, so a second parse must be denied.
-	if _, _, err := ParseJWT(token); err == nil {
-		t.Fatal("expected a reused token to be rejected")
+	// A token stays valid across parses until it expires or is devalidated.
+	for i := 0; i < 2; i++ {
+		subject, _, err := ParseJWT(token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if subject != "alice" {
+			t.Fatalf("expected subject alice, got %q", subject)
+		}
 	}
 }
 

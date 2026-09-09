@@ -83,8 +83,6 @@ func ParseJWT(token string) (subject string, newToken string, err error) {
 	if !valid(token) {
 		return "", "", fmt.Errorf("Denied")
 	}
-	// Token used once is no longer valid
-	DevalidateJWT(token)
 	// Parse the subject
 	claims := &jwt.RegisteredClaims{}
 	_, err = jwt.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) {
