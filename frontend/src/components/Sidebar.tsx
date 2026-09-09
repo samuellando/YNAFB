@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { NavLink, useNavigate } from 'react-router'
+import { NavLink, useLocation, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createBudget, listAccounts, listBudgets, type Budget } from '../lib/api/budget'
 import { deauthenticate } from '../lib/api/auth'
@@ -13,6 +13,7 @@ type SidebarProps = {
 
 export default function Sidebar({ budgetId }: SidebarProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [budgetMenuOpen, setBudgetMenuOpen] = useState(false)
   const [newBudgetOpen, setNewBudgetOpen] = useState(false)
@@ -150,10 +151,11 @@ export default function Sidebar({ budgetId }: SidebarProps) {
       <nav className="border-b border-slate-800 p-3">
         <NavLink
           to={`/budget/${budgetId}`}
-          end
           className={({ isActive }) =>
             `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              isActive ? 'bg-slate-800' : 'text-slate-200 hover:bg-slate-800/60'
+              isActive && !location.pathname.includes('/account/')
+                ? 'bg-slate-800'
+                : 'text-slate-200 hover:bg-slate-800/60'
             }`
           }
         >

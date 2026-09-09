@@ -23,6 +23,7 @@ function App() {
             <Route index element={<Budget />} />
             <Route path=":budgetId" element={<AppLayout />}>
               <Route index element={<MonthlyBudget />} />
+              <Route path=":month" element={<MonthlyBudget />} />
               <Route path="account/:accountId" element={<Account />} />
             </Route>
           </Route>
