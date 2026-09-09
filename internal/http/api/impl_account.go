@@ -260,6 +260,66 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountId(ctx context.Context, request De
 	return DeleteBudgetBudgetIdAccountId200Response{}, nil
 }
 
+func (s ApiServer) PostBudgetBudgetIdAccountIdReconcile(ctx context.Context, request PostBudgetBudgetIdAccountIdReconcileRequestObject) (PostBudgetBudgetIdAccountIdReconcileResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	idString := request.Id
+	id, err := strconv.Atoi(idString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid account id: %w", err)
+	}
+	if request.Body == nil {
+		return nil, fmt.Errorf("`date` and `balance` are required in request body")
+	}
+	date, err := time.Parse(time.RFC3339, request.Body.Date)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid date: %w", err)
+	}
+	// Query the database
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	txQueries := s.queries.WithTx(tx)
+
+	balance, err := txQueries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+		LoginID:  loginID,
+		BudgetID: int64(budgetID),
+		ID:       int64(id),
+		Date:     types.UnixTime{Time: date},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if int(balance) != request.Body.Balance {
+		return nil, fmt.Errorf("balance mismatch: statement %d != calculated %d", request.Body.Balance, balance)
+	}
+
+	_, err = txQueries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID: int64(budgetID),
+		ID:       int64(id),
+		LoginID:  loginID,
+		Date:     types.UnixTime{Time: date},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return PostBudgetBudgetIdAccountIdReconcile200Response{}, nil
+}
+
 func (s ApiServer) PostBudgetBudgetIdAccountIdImport(ctx context.Context, request PostBudgetBudgetIdAccountIdImportRequestObject) (PostBudgetBudgetIdAccountIdImportResponseObject, error) {
 	// Collect params
 	loginID, err := getLoginID(ctx)

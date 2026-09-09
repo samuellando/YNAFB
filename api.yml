@@ -276,6 +276,41 @@ paths:
               schema:
                 type: integer
 
+  /budget/{budgetId}/account/{id}/reconcile:
+    post:
+      summary: Reconcile an account against a statement balance
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        description: the account id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - date
+                - balance
+              properties:
+                date:
+                  type: string
+                  description: Reconcile all transactions up to and including this date (RFC3339)
+                balance:
+                  type: integer
+                  description: The statement balance as of the date (in cents)
+      responses:
+        "200":
+          description: Successfully reconciled
+
   /budget/{budgetId}/account/{accountId}/transaction:
     post:
       summary: Create a new transaction in an account
