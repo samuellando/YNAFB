@@ -1122,7 +1122,7 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 				return err
 			}
 
-			goal, err := queries.GetGoalByCategory(ctx, data.GetGoalByCategoryParams{
+			_, err = queries.GetGoalByCategory(ctx, data.GetGoalByCategoryParams{
 				BudgetID:   budget.ID,
 				LoginID:    budget.LoginID,
 				CategoryID: categoryID,
@@ -1135,9 +1135,9 @@ func executeResourceAction(ctx context.Context, db *sql.DB, queries *data.Querie
 			}
 
 			if err := queries.DeleteGoal(ctx, data.DeleteGoalParams{
-				ID:       goal.ID,
-				BudgetID: budget.ID,
-				LoginID:  budget.LoginID,
+				CategoryID: categoryID,
+				BudgetID:   budget.ID,
+				LoginID:    budget.LoginID,
 			}); err != nil {
 				return err
 			}

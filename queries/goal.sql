@@ -29,15 +29,15 @@ RETURNING *;
 -- name: DeleteGoal :exec
 DELETE FROM goal
 WHERE
-  goal.id = @id
-  AND goal.budget_id IN (
+  goal.budget_id IN (
     SELECT
       b.id
     FROM
       budget AS b
     WHERE
       b.id = @budget_id AND b.login_id = @login_id
-  );
+  )
+  AND goal.category_id = @category_id;
 
 -- name: ListGoals :many
 SELECT

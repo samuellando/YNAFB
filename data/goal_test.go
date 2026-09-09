@@ -314,7 +314,7 @@ func TestDeleteGoal(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	category := newCategory(t, queries, ctx, budget, "testcategory")
-	goal := newGoal(t, queries, ctx, budget, category.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 5000)
+	_ = newGoal(t, queries, ctx, budget, category.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 5000)
 	goals, err := queries.ListGoals(ctx, data.ListGoalsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -322,7 +322,7 @@ func TestDeleteGoal(t *testing.T) {
 	if len(goals) != 1 {
 		t.Fatal("There should be one goal before")
 	}
-	err = queries.DeleteGoal(ctx, data.DeleteGoalParams{ID: goal.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
+	err = queries.DeleteGoal(ctx, data.DeleteGoalParams{CategoryID: category.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,12 +456,12 @@ func TestScopingDeleteGoalScopedByLogin(t *testing.T) {
 	budgetA := newBudget(t, queries, ctx, "budgetA")
 	budgetB := newBudget(t, queries, ctx, "budgetB")
 	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
-	goalB := newGoal(t, queries, ctx, budgetB, categoryB.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 1000)
+	_ = newGoal(t, queries, ctx, budgetB, categoryB.ID, "monthly", mustTime(t, 2026, 1, 1), types.NullUnixTime{}, 1000)
 
 	err := queries.DeleteGoal(ctx, data.DeleteGoalParams{
-		ID:       goalB.ID,
-		BudgetID: budgetB.ID,
-		LoginID:  budgetA.LoginID,
+		CategoryID: categoryB.ID,
+		BudgetID:   budgetB.ID,
+		LoginID:    budgetA.LoginID,
 	})
 	if err != nil {
 		t.Fatal(err)
