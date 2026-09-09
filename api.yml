@@ -27,9 +27,10 @@ paths:
               type: object
               required:
                 - name
-              name:
-                description: the budget name
-                type: string
+              properties:
+                name:
+                  description: the budget name
+                  type: string
       responses:
         "201":
           description: Successfully created
@@ -70,9 +71,10 @@ paths:
               type: object
               required:
                 - name
-              name:
-                description: the new budget name
-                type: string
+              properties:
+                name:
+                  description: the new budget name
+                  type: string
       responses:
         "200":
           description: Successfully updated 

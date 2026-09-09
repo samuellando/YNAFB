@@ -59,14 +59,10 @@ func (s ApiServer) PostBudget(ctx context.Context, request PostBudgetRequestObje
 	if err != nil {
 		return nil, err
 	}
-	nameAny, ok := (*request.Body)["name"]
-	if !ok {
+	if request.Body == nil || request.Body.Name == "" {
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
-	name, ok := nameAny.(string)
-	if !ok {
-		return nil, fmt.Errorf("`name` must be of type string")
-	}
+	name := request.Body.Name
 	// Query the DB
 	budget, err := s.queries.CreateBudget(ctx, data.CreateBudgetParams{
 		LoginID: loginID,
@@ -206,14 +202,10 @@ func (s ApiServer) PutBudgetBudgetId(ctx context.Context, request PutBudgetBudge
 	if err != nil {
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
-	nameAny, ok := (*request.Body)["name"]
-	if !ok {
+	if request.Body == nil || request.Body.Name == "" {
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
-	name, ok := nameAny.(string)
-	if !ok {
-		return nil, fmt.Errorf("`name` must be of type string")
-	}
+	name := request.Body.Name
 	// Query the DB
 	budget, err := s.queries.UpdateBudget(ctx, data.UpdateBudgetParams{
 		LoginID: loginID,
