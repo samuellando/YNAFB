@@ -30,13 +30,13 @@ export default function CategoryGroupSection({
       <button
         type="button"
         disabled={!editable}
-        onClick={editable ? () => onEditGroup(groupId, group.name ?? 'Other') : undefined}
+        onClick={editable ? () => onEditGroup(groupId, group.name ?? 'No group') : undefined}
         className={`block w-full bg-slate-900/80 px-4 py-2 text-left ${isFirst ? '' : 'border-t border-slate-800'} ${
           editable ? 'cursor-pointer transition hover:bg-slate-800/50' : 'cursor-default'
         }`}
       >
         <h2 className="text-sm font-semibold tracking-wide text-slate-100">
-          {group.name ?? 'Other'}
+          {group.name ?? 'No group'}
         </h2>
       </button>
       {group.categories.map((category) => (
