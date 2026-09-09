@@ -318,7 +318,7 @@ func TestGetCategoryByNameDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestDeleteCategoryGroupCascadesCategories(t *testing.T) {
+func TestDeleteCategoryGroupNullsCategories(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
@@ -336,12 +336,12 @@ func TestDeleteCategoryGroupCascadesCategories(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM category WHERE id = ?`, category.ID).Scan(&count); err != nil {
+	var group sql.NullInt64
+	if err := db.QueryRow(`SELECT category_group_id FROM category WHERE id = ?`, category.ID).Scan(&group); err != nil {
 		t.Fatal(err)
 	}
-	if count != 0 {
-		t.Error("Deleting a category group should cascade delete its categories")
+	if group.Valid {
+		t.Error("Deleting a category group should null its categories' group, not delete them")
 	}
 }
 

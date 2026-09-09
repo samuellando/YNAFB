@@ -1615,7 +1615,7 @@ func TestGroupCommands(t *testing.T) {
 	assertRowCount(t, dbPath, "category_group", 1)
 }
 
-func TestGroupDeleteCascadesCategories(t *testing.T) {
+func TestGroupDeleteNullsCategories(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "ynafb.db")
 
 	runCommands(t, dbPath, [][]string{
@@ -1657,8 +1657,16 @@ func TestGroupDeleteCascadesCategories(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM category").Scan(&count); err != nil {
 		t.Fatalf("count categories: %v", err)
 	}
-	if count != 0 {
-		t.Fatalf("total categories = %d, want 0 (group delete cascades)", count)
+	if count != 1 {
+		t.Fatalf("total categories = %d, want 1 (group delete orphans)", count)
+	}
+
+	var group sql.NullInt64
+	if err := db.QueryRow("SELECT category_group_id FROM category WHERE name = 'Groceries'").Scan(&group); err != nil {
+		t.Fatalf("lookup category group: %v", err)
+	}
+	if group.Valid {
+		t.Fatalf("category group after delete = %d, want NULL (group delete orphans)", group.Int64)
 	}
 }
 
