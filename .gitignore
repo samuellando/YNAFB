@@ -7,7 +7,8 @@ data/models.go
 *.gen.go
 
 # local SQLite database
-ynafb.db
+*.db
+*.db.back
 bin/*
 
 # Any account statements
