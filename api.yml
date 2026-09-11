@@ -480,6 +480,9 @@ paths:
                 categoryId:
                   type: integer
                   description: The category id (for spend lines)
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for spend lines)
                 income:
                   type: boolean
                   description: Whether this is an income line
@@ -540,6 +543,9 @@ paths:
                 categoryId:
                   type: integer
                   description: The category id (for spend lines)
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for spend lines)
                 income:
                   type: boolean
                   description: Whether this is an income line
@@ -1120,6 +1126,9 @@ paths:
                 categoryId:
                   type: integer
                   description: The category id (for spend lines)
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for spend lines)
                 income:
                   type: boolean
                   description: Whether this is an income line
@@ -1170,6 +1179,9 @@ paths:
                 categoryId:
                   type: integer
                   description: The category id (for spend lines)
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for spend lines)
                 income:
                   type: boolean
                   description: Whether this is an income line
@@ -1439,6 +1451,10 @@ components:
           type: integer
         categoryName:
           type: string
+        expenseShareId:
+          type: integer
+        expenseShareName:
+          type: string 
         income:
           type: boolean
         outflow:
@@ -1564,6 +1580,12 @@ components:
         categoryName:
           type: string
           description: "The category name (present on list responses)"
+        expenseShareId:
+          type: integer
+          description: The expense share id (for spend lines)
+        expenseShareName:
+          type: string 
+          description: The expense share name (for spend lines)
         income:
           type: boolean
           description: "Whether this is an income line"
@@ -1625,6 +1647,9 @@ components:
         categoryId:
           type: integer
           description: "The category id (present on spend lines)"
+        expenseShareId:
+          type: integer
+          description: The expense share id (for spend lines)
         income:
           type: boolean
           description: "Whether this is an income line"

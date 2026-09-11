@@ -179,6 +179,16 @@ func groupAccountTransactions(rows []data.ListAccountTransactionsRow) []AccountT
 			name := row.CategoryName.String
 			categoryName = &name
 		}
+		var expenseShareID *int
+		if row.ExpenseShareID.Valid {
+			expID := int(row.ExpenseShareID.Int64)
+			expenseShareID = &expID
+		}
+		var expenseShareName *string
+		if row.ExpenseShareName.Valid {
+			name := row.ExpenseShareName.String
+			expenseShareName = &name
+		}
 		lineOutflow := 0
 		if row.LineOutflow.Valid {
 			lineOutflow = int(row.LineOutflow.Int64)
@@ -193,6 +203,8 @@ func groupAccountTransactions(rows []data.ListAccountTransactionsRow) []AccountT
 			DestAccountName: destAccountName,
 			CategoryId:      categoryID,
 			CategoryName:    categoryName,
+			ExpenseShareId: expenseShareID,
+			ExpenseShareName: expenseShareName,
 			Income:          row.Income,
 			Outflow:         lineOutflow,
 			Inflow:          lineInflow,

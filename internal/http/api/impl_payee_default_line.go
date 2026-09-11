@@ -37,14 +37,16 @@ func (s ApiServer) GetBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context,
 	resp := GetBudgetBudgetIdPayeePayeeIdDefaultLine200JSONResponse{}
 	for _, line := range lines {
 		resp = append(resp, PayeeDefaultLine{
-			Id:              int(line.ID),
-			PayeeId:         int(line.PayeeID),
-			DestAccountId:   nullInt64ToInt(line.DestAccountID),
-			DestAccountName: nullStringToPtr(line.DestAccountName),
-			CategoryId:      nullInt64ToInt(line.CategoryID),
-			CategoryName:    nullStringToPtr(line.CategoryName),
-			Income:          line.Income,
-			Percent:         int(line.Percent),
+			Id:               int(line.ID),
+			PayeeId:          int(line.PayeeID),
+			DestAccountId:    nullInt64ToInt(line.DestAccountID),
+			DestAccountName:  nullStringToPtr(line.DestAccountName),
+			CategoryId:       nullInt64ToInt(line.CategoryID),
+			CategoryName:     nullStringToPtr(line.CategoryName),
+			ExpenseShareId:   nullInt64ToInt(line.CategoryID),
+			ExpenseShareName: nullStringToPtr(line.ExpenseShareName),
+			Income:           line.Income,
+			Percent:          int(line.Percent),
 		})
 	}
 	return resp, nil
@@ -74,6 +76,7 @@ func (s ApiServer) PostBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context
 		PayeeID:       int64(payeeID),
 		DestAccountID: intToNullInt64(request.Body.DestAccountId),
 		CategoryID:    intToNullInt64(request.Body.CategoryId),
+		ExpenseShareID:    intToNullInt64(request.Body.ExpenseShareId),
 		Income:        BoolPtrToBool(request.Body.Income),
 		Percent:       int64(request.Body.Percent),
 		BudgetID:      int64(budgetID),
@@ -88,6 +91,7 @@ func (s ApiServer) PostBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context
 		PayeeId:       int(line.PayeeID),
 		DestAccountId: nullInt64ToInt(line.DestAccountID),
 		CategoryId:    nullInt64ToInt(line.CategoryID),
+		ExpenseShareId:    nullInt64ToInt(line.ExpenseShareID),
 		Income:        line.Income,
 		Percent:       int(line.Percent),
 	}, nil
@@ -122,6 +126,7 @@ func (s ApiServer) PutBudgetBudgetIdPayeePayeeIdDefaultLineId(ctx context.Contex
 		PayeeID:       int64(payeeID),
 		DestAccountID: intToNullInt64(request.Body.DestAccountId),
 		CategoryID:    intToNullInt64(request.Body.CategoryId),
+		ExpenseShareID:    intToNullInt64(request.Body.ExpenseShareId),
 		Income:        BoolPtrToBool(request.Body.Income),
 		Percent:       int64(request.Body.Percent),
 		ID:            int64(id),
@@ -137,6 +142,7 @@ func (s ApiServer) PutBudgetBudgetIdPayeePayeeIdDefaultLineId(ctx context.Contex
 		PayeeId:       int(line.PayeeID),
 		DestAccountId: nullInt64ToInt(line.DestAccountID),
 		CategoryId:    nullInt64ToInt(line.CategoryID),
+		ExpenseShareId:    nullInt64ToInt(line.ExpenseShareID),
 		Income:        line.Income,
 		Percent:       int(line.Percent),
 	}, nil

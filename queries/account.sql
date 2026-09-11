@@ -131,12 +131,14 @@ SELECT
   tc.id AS trx_line_id,
   tc.dest_account_id,
   tc.category_id,
+  tc.expense_share_id,
   COALESCE(tc.income, false),
   tc.outflow AS line_outflow,
   tc.inflow AS line_inflow,
   a.name AS account_name,
   sa.name AS source_account_name,
   oa.name AS dest_account_name,
+    bes.name AS expense_share_name,
   c.name AS category_name,
   p.name AS payee_name
 FROM
@@ -151,6 +153,7 @@ FROM
   LEFT JOIN account AS oa ON tc.dest_account_id = oa.id
   LEFT JOIN category AS c ON tc.category_id = c.id
   LEFT JOIN payee AS p ON at.payee_id = p.id
+  LEFT JOIN budget_expense_share AS bes ON bes.expense_share_id = tc.expense_share_id
 WHERE
   b.login_id = @login_id
   AND at.budget_id = @budget_id

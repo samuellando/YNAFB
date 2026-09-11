@@ -627,6 +627,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The outflow of this line */
@@ -686,6 +688,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The outflow of this line */
@@ -1415,6 +1419,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The percent of the transaction this line accounts for */
@@ -1470,6 +1476,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The percent of the transaction this line accounts for */
@@ -1628,6 +1636,8 @@ export interface components {
             destAccountName?: string;
             categoryId?: number;
             categoryName?: string;
+            expenseShareId?: number;
+            expenseShareName?: string;
             income: boolean;
             outflow: number;
             inflow: number;
@@ -1692,6 +1702,10 @@ export interface components {
             categoryId?: number;
             /** @description The category name (present on list responses) */
             categoryName?: string;
+            /** @description The expense share id (for spend lines) */
+            expenseShareId?: number;
+            /** @description The expense share name (for spend lines) */
+            expenseShareName?: string;
             /** @description Whether this is an income line */
             income: boolean;
             /** @description The percent of the transaction this line accounts for */
@@ -1722,6 +1736,8 @@ export interface components {
             destAccountId?: number;
             /** @description The category id (present on spend lines) */
             categoryId?: number;
+            /** @description The expense share id (for spend lines) */
+            expenseShareId?: number;
             /** @description Whether this is an income line */
             income: boolean;
             /** @description The outflow of this line */

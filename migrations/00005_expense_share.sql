@@ -231,6 +231,7 @@ PRAGMA legacy_alter_table = ON;
 DROP TABLE expense_share_trx_split_line;
 DROP TABLE expense_share_trx_split;
 DROP TABLE expense_share_trx;
+DROP TABLE expense_share_codes;
 DROP TABLE budget_expense_share;
 DROP TABLE expense_share;
 
