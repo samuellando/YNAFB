@@ -1529,6 +1529,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/budget/{budgetId}/expense-share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the expense shares this budget is linked to */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["expenseShareBudgetSummary"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a new empty expense share and link it to this budget
+         *     If an expesne share code is passed in, it will join an existing expense share
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description The defualt name, only applicable when creating an expense share */
+                        defaultName?: string;
+                        /** @description The code of an existing expense share to join */
+                        code?: string;
+                    };
+                };
+            };
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["expenseShareBudgetSummary"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a new expense share code to share with others */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the budget id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1744,6 +1858,11 @@ export interface components {
             outflow: number;
             /** @description The inflow of this line */
             inflow: number;
+        };
+        expenseShareBudgetSummary: {
+            id: number;
+            defaultName: string;
+            name: string;
         };
     };
     responses: never;

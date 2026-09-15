@@ -1220,6 +1220,111 @@ paths:
         "200":
           description: Successfully deleted
 
+  /budget/{budgetId}/expense-share:
+    get:
+      summary: List the expense shares this budget is linked to
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/expenseShareBudgetSummary"
+    post:
+      summary: |
+        Create a new empty expense share and link it to this budget
+        If an expesne share code is passed in, it will join an existing expense share
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                defaultName:
+                  type: string
+                  description: The defualt name, only applicable when creating an expense share
+                code:
+                  type: string
+                  description: The code of an existing expense share to join
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/expenseShareBudgetSummary"
+
+  /budget/{budgetId}/expense-share/{expenseShareId}/code:
+    get: 
+      summary: Get a new expense share code to share with others
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - code
+                properties:
+                  code:
+                    type: string
+
+  # /budget/{budgetId}/expense-share/{expenseShareId}:
+    # get: 
+    #   summary: |
+    #     Get the expense share summary for this budget
+    #     Similar to the account summary, showing the details and all the transactions
+    # put: 
+    #   summary: Update an expense share for this budget
+    # delete:
+    #   summary: Delete an expense share from this budget
+
+  # /budget/{budgetId}/expense-share/{expenseShareId}/trx:
+  #   post:
+  #     summary: Publish a transaction to the expense share for others to see 
+  #   put:
+  #     summary: Update transaction in the expense share for all users
+  #   delete:
+  #     summary: Delete transaction in the expense share for all users
+  #
+  # /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/split:
+  #   put:
+  #
+  # /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/split/{splitId}/line:
+  #   post:
+  #
+  # /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/split/{splitId}/line/{lineId}:
+  #   post:
+  #   put:
+  #   delete:
+
 components:
   schemas:
     budget:
@@ -1660,3 +1765,16 @@ components:
           type: integer
           description: "The inflow of this line"
 
+    expenseShareBudgetSummary:
+      type: object
+      required:
+        - id
+        - defaultName
+        - name
+      properties:
+        id:
+          type: integer
+        defaultName:
+          type: string
+        name:
+          type: string

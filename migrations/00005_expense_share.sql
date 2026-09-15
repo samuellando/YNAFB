@@ -1,11 +1,12 @@
 -- +goose NO TRANSACTION
 -- +goose up
 CREATE TABLE expense_share (
-  id INTEGER PRIMARY KEY
+  id INTEGER PRIMARY KEY,
+  default_name TEXT NOT NULL CHECK (LENGTH(default_name) >= 3)
 );
 
 -- Share codes for the expense share so other users can add it.
-CREATE TABLE expense_share_codes (
+CREATE TABLE expense_share_code (
   id INTEGER PRIMARY KEY,
   expense_share_id integer NOT NULL REFERENCES expense_share (id) ON DELETE CASCADE,
   code TEXT NOT NULL CHECK (LENGTH(code) >= 10),
@@ -231,7 +232,7 @@ PRAGMA legacy_alter_table = ON;
 DROP TABLE expense_share_trx_split_line;
 DROP TABLE expense_share_trx_split;
 DROP TABLE expense_share_trx;
-DROP TABLE expense_share_codes;
+DROP TABLE expense_share_code;
 DROP TABLE budget_expense_share;
 DROP TABLE expense_share;
 
