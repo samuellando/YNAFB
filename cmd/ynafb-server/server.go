@@ -9,9 +9,14 @@ import (
 	"samuellando.com/YNAFB/internal/http/handler"
 	"samuellando.com/YNAFB/internal/http/middleware"
 	"samuellando.com/YNAFB/internal/http/api"
+	"samuellando.com/YNAFB/internal/config"
 )
 
 func main() {
+	err := config.LoadConfigFromFile("config.json")
+	if err != nil {
+		log.Fatal(err)
+	}
 	m := http.NewServeMux()
 	db, err := dbutil.Open("./ynafb.db")
 	if err != nil {
