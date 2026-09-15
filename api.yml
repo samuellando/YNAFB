@@ -1296,15 +1296,31 @@ paths:
                   code:
                     type: string
 
-  # /budget/{budgetId}/expense-share/{expenseShareId}:
+  /budget/{budgetId}/expense-share/{expenseShareId}:
     # get: 
     #   summary: |
     #     Get the expense share summary for this budget
     #     Similar to the account summary, showing the details and all the transactions
     # put: 
     #   summary: Update an expense share for this budget
-    # delete:
-    #   summary: Delete an expense share from this budget
+    delete:
+      summary: Delete an expense share from this budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Successfully deleted
 
   # /budget/{budgetId}/expense-share/{expenseShareId}/trx:
   #   post:

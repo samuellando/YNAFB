@@ -119,3 +119,32 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareExpenseShareIdCode(ctx context.C
 		Code: expenseShareCode.Code,
 	}, nil
 }
+
+func (s ApiServer) DeleteBudgetBudgetIdExpenseShareExpenseShareId(ctx context.Context, request DeleteBudgetBudgetIdExpenseShareExpenseShareIdRequestObject) (DeleteBudgetBudgetIdExpenseShareExpenseShareIdResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	expenseShareString := request.ExpenseShareId
+	expenseShareID, err := strconv.Atoi(expenseShareString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid expenseShare id: %w", err)
+	}
+	// Query the database
+	err = s.queries.LeaveExpenseShare(ctx, data.LeaveExpenseShareParams{
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID: int64(budgetID),
+		LoginID: int64(loginID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Send the response
+	return DeleteBudgetBudgetIdExpenseShareExpenseShareId204Response{}, nil
+}
