@@ -586,3 +586,83 @@ export async function deleteCategoryGroup(budgetId: number, groupId: number): Pr
     throw new ApiError('Failed to delete category group', response.status)
   }
 }
+
+// ---- Expense shares ----
+
+export type BudgetExpenseShare = components['schemas']['BudgetExpenseShare']
+export type ExpenseShare = components['schemas']['ExpenseShare']
+
+export async function listExpenseShares(budgetId: number): Promise<BudgetExpenseShare[]> {
+  const { data, error, response } = await client.GET('/budget/{budgetId}/expense-share', {
+    params: { path: { budgetId: String(budgetId) } },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to load expense shares', response.status)
+  }
+  return data
+}
+
+export async function createExpenseShare(budgetId: number, defaultName: string): Promise<ExpenseShare> {
+  const { data, error, response } = await client.POST('/budget/{budgetId}/expense-share', {
+    params: { path: { budgetId: String(budgetId) } },
+    body: { defaultName },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to create expense share', response.status)
+  }
+  return data
+}
+
+export async function joinExpenseShare(budgetId: number, code: string): Promise<ExpenseShare> {
+  const { data, error, response } = await client.POST('/budget/{budgetId}/expense-share', {
+    params: { path: { budgetId: String(budgetId) } },
+    body: { code },
+  })
+  if (!response.ok) {
+    throw apiError(error, 'Failed to join expense share', response.status)
+  }
+  return data
+}
+
+export async function updateExpenseShare(
+  budgetId: number,
+  expenseShareId: number,
+  name: string,
+): Promise<BudgetExpenseShare> {
+  const { data, error, response } = await client.PUT(
+    '/budget/{budgetId}/expense-share/{expenseShareId}',
+    {
+      params: { path: { budgetId: String(budgetId), expenseShareId: String(expenseShareId) } },
+      body: { name },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to update expense share', response.status)
+  }
+  return data
+}
+
+export async function leaveExpenseShare(budgetId: number, expenseShareId: number): Promise<void> {
+  const { error, response } = await client.DELETE(
+    '/budget/{budgetId}/expense-share/{expenseShareId}',
+    {
+      params: { path: { budgetId: String(budgetId), expenseShareId: String(expenseShareId) } },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to leave expense share', response.status)
+  }
+}
+
+export async function getExpenseShareCode(budgetId: number, expenseShareId: number): Promise<string> {
+  const { data, error, response } = await client.GET(
+    '/budget/{budgetId}/expense-share/{expenseShareId}/code',
+    {
+      params: { path: { budgetId: String(budgetId), expenseShareId: String(expenseShareId) } },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to get expense share code', response.status)
+  }
+  return data.code
+}

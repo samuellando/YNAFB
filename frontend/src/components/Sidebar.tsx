@@ -6,6 +6,7 @@ import {
   createBudget,
   listAccounts,
   listBudgets,
+  listExpenseShares,
   type Budget,
 } from '../lib/api/budget'
 import { deauthenticate } from '../lib/api/auth'
@@ -14,6 +15,7 @@ import { formatMoney } from '../lib/money'
 import { useClickOutside } from '../lib/useClickOutside'
 import { ApiError } from '../lib/api/errors'
 import { CheckIcon, ChevronDownIcon, LogOutIcon, PlusIcon } from './icons'
+import ExpenseShareDialog, { type ExpenseShareDialogState } from './ExpenseShareDialog'
 
 type SidebarProps = {
   budgetId: number
@@ -28,6 +30,7 @@ export default function Sidebar({ budgetId }: SidebarProps) {
   const [name, setName] = useState('')
   const [newAccountOpen, setNewAccountOpen] = useState(false)
   const [accountName, setAccountName] = useState('')
+  const [expenseShareDialog, setExpenseShareDialog] = useState<ExpenseShareDialogState | null>(null)
   const budgetMenuRef = useRef<HTMLDivElement>(null)
 
   useClickOutside(
@@ -43,6 +46,10 @@ export default function Sidebar({ budgetId }: SidebarProps) {
   const accounts = useQuery({
     queryKey: ['accounts', budgetId],
     queryFn: () => listAccounts(budgetId),
+  })
+  const expenseShares = useQuery({
+    queryKey: ['expense-shares', budgetId],
+    queryFn: () => listExpenseShares(budgetId),
   })
 
   const activeBudget = budgets.data?.find((b) => b.id === budgetId)
@@ -100,6 +107,7 @@ export default function Sidebar({ budgetId }: SidebarProps) {
 
   const accountItems = accounts.data ?? []
   const reconciled = new Set(accountItems.filter((a) => a.balance === a.reconciledBalance).map((a) => a.id))
+  const expenseShareItems = expenseShares.data ?? []
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-800 bg-slate-900">
@@ -177,7 +185,7 @@ export default function Sidebar({ budgetId }: SidebarProps) {
           to={`/budget/${budgetId}`}
           className={({ isActive }) =>
             `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              isActive && !location.pathname.includes('/account/')
+              isActive && !location.pathname.includes('/account/') && !location.pathname.includes('/expense-share/')
                 ? 'bg-slate-800'
                 : 'text-slate-200 hover:bg-slate-800/60'
             }`
@@ -187,11 +195,11 @@ export default function Sidebar({ budgetId }: SidebarProps) {
         </NavLink>
       </nav>
 
-      <div className="flex min-h-0 flex-1 flex-col p-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
         <h2 className="px-3 pb-2 text-xs font-semibold tracking-widest text-slate-500 uppercase">
           Accounts
         </h2>
-        <ul className="flex-1 space-y-1 overflow-y-auto">
+        <ul className="space-y-1">
           {accountItems.map((account) => (
             <li key={account.id}>
               <NavLink
@@ -255,6 +263,46 @@ export default function Sidebar({ budgetId }: SidebarProps) {
             </li>
           )}
         </ul>
+        <div className="mx-3 mt-4 border-t border-slate-800" />
+        <h2 className="px-3 pt-4 pb-2 text-xs font-semibold tracking-widest text-slate-500 uppercase">
+          Expense shares
+        </h2>
+        <ul className="space-y-1">
+          {expenseShareItems.map((share) => (
+            <li key={share.id}>
+              <NavLink
+                to={`/budget/${budgetId}/expense-share/${share.id}`}
+                className={({ isActive }) =>
+                  `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                    isActive ? 'bg-slate-800' : 'hover:bg-slate-800/60'
+                  }`
+                }
+              >
+                <span className="truncate text-slate-200">{share.name}</span>
+              </NavLink>
+            </li>
+          ))}
+          {!expenseShares.isPending && expenseShareItems.length === 0 && (
+            <li className="px-3 py-2 text-sm text-slate-500">No expense shares yet</li>
+          )}
+          <li>
+            <button
+              type="button"
+              onClick={() => setExpenseShareDialog({ mode: 'create' })}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-emerald-400 transition hover:bg-slate-800/60"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Add expense share
+            </button>
+          </li>
+          {expenseShares.isError && (
+            <li className="px-3 text-sm text-red-400">
+              {expenseShares.error instanceof ApiError
+                ? expenseShares.error.message
+                : 'Failed to load expense shares'}
+            </li>
+          )}
+        </ul>
       </div>
 
       <div className="border-t border-slate-800 p-3">
@@ -267,6 +315,18 @@ export default function Sidebar({ budgetId }: SidebarProps) {
           Sign out
         </button>
       </div>
+      {expenseShareDialog && (
+        <ExpenseShareDialog
+          key={expenseShareDialog.mode}
+          budgetId={budgetId}
+          dialog={expenseShareDialog}
+          onClose={() => setExpenseShareDialog(null)}
+          onDone={(shareId) => {
+            setExpenseShareDialog(null)
+            navigate(`/budget/${budgetId}/expense-share/${shareId}`)
+          }}
+        />
+      )}
     </aside>
   )
 }
