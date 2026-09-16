@@ -1237,7 +1237,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/expenseShareBudgetSummary"
+                  $ref: "#/components/schemas/BudgetExpenseShare"
     post:
       summary: |
         Create a new empty expense share and link it to this budget
@@ -1266,7 +1266,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/expenseShareBudgetSummary"
+                $ref: "#/components/schemas/ExpenseShare"
 
   /budget/{budgetId}/expense-share/{expenseShareId}/code:
     get: 
@@ -1301,8 +1301,36 @@ paths:
     #   summary: |
     #     Get the expense share summary for this budget
     #     Similar to the account summary, showing the details and all the transactions
-    # put: 
-    #   summary: Update an expense share for this budget
+    put: 
+      summary: Update an expense share for this budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name for the expense share in this budget
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetExpenseShare"
     delete:
       summary: Delete an expense share from this budget
       parameters:
@@ -1781,16 +1809,27 @@ components:
           type: integer
           description: "The inflow of this line"
 
-    expenseShareBudgetSummary:
+    BudgetExpenseShare:
       type: object
       required:
         - id
-        - defaultName
         - name
       properties:
         id:
           type: integer
-        defaultName:
-          type: string
         name:
+          type: string
+
+    ExpenseShare:
+      type: object
+      required:
+        - id
+        - name
+        - defaultName
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        defaultName:
           type: string

@@ -32,10 +32,9 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShare(ctx context.Context, request Ge
 	// Send the response
 	resp := make(GetBudgetBudgetIdExpenseShare200JSONResponse, 0)
 	for _, share := range shares {
-		resp = append(resp, ExpenseShareBudgetSummary{
-			DefaultName: share.DefaultName,
+		resp = append(resp, BudgetExpenseShare{
 			Name:        share.Name,
-			Id:          int(share.ID),
+			Id:          int(share.ExpenseShareID),
 		})
 	}
 	return resp, nil
@@ -117,6 +116,42 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareExpenseShareIdCode(ctx context.C
 	// Send the response
 	return GetBudgetBudgetIdExpenseShareExpenseShareIdCode200JSONResponse{
 		Code: expenseShareCode.Code,
+	}, nil
+}
+
+func (s ApiServer) PutBudgetBudgetIdExpenseShareExpenseShareId(ctx context.Context, request PutBudgetBudgetIdExpenseShareExpenseShareIdRequestObject) (PutBudgetBudgetIdExpenseShareExpenseShareIdResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	expenseShareString := request.ExpenseShareId
+	expenseShareID, err := strconv.Atoi(expenseShareString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid expenseShare id: %w", err)
+	}
+	if request.Body == nil || request.Body.Name == nil || *request.Body.Name == "" {
+		return nil, fmt.Errorf("`name` is required in request body")
+	}
+	// Query the database
+	budgetExpenseShare, err := s.queries.UpdateExpenseShare(ctx, data.UpdateExpenseShareParams{
+		Name:           *request.Body.Name,
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Send the response
+	return PutBudgetBudgetIdExpenseShareExpenseShareId200JSONResponse{
+		Id:   int(budgetExpenseShare.ExpenseShareID),
+		Name: budgetExpenseShare.Name,
 	}, nil
 }
 

@@ -1554,7 +1554,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["expenseShareBudgetSummary"][];
+                        "application/json": components["schemas"]["BudgetExpenseShare"][];
                     };
                 };
             };
@@ -1590,7 +1590,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["expenseShareBudgetSummary"];
+                        "application/json": components["schemas"]["ExpenseShare"];
                     };
                 };
             };
@@ -1651,7 +1651,38 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Update an expense share for this budget */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the budget id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description The name for the expense share in this budget */
+                        name?: string;
+                    };
+                };
+            };
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BudgetExpenseShare"];
+                    };
+                };
+            };
+        };
         post?: never;
         /** Delete an expense share from this budget */
         delete: {
@@ -1898,10 +1929,14 @@ export interface components {
             /** @description The inflow of this line */
             inflow: number;
         };
-        expenseShareBudgetSummary: {
+        BudgetExpenseShare: {
             id: number;
-            defaultName: string;
             name: string;
+        };
+        ExpenseShare: {
+            id: number;
+            name: string;
+            defaultName: string;
         };
     };
     responses: never;
