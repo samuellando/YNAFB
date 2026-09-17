@@ -69,6 +69,6 @@ FROM payee_default_line AS pdl
 JOIN budget AS b ON pdl.budget_id = b.id
 LEFT JOIN account AS ao ON ao.id = pdl.dest_account_id
 LEFT JOIN category AS c ON c.id = pdl.category_id
-LEFT JOIN budget_expense_share AS es ON es.expense_share_id = pdl.expense_share_id AND es.budget_id = @budget
+LEFT JOIN budget_expense_share AS es ON es.expense_share_id = pdl.expense_share_id AND es.budget_id = @budget_id
 WHERE b.login_id = @login_id AND pdl.payee_id = @payee_id AND pdl.budget_id = @budget_id
 ORDER BY pdl.id;

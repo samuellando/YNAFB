@@ -169,8 +169,7 @@ func (ts *testServer) newDefaultLine(t *testing.T, budget data.Budget, payee dat
 	return l
 }
 
-func (ts *testServer) newTrx(t *testing.T, budget data.Budget, account data.Account, payee data.Payee) data.Trx {
-	t.Helper()
+func (ts *testServer) newTrx(t *testing.T, budget data.Budget, account data.Account, payee data.Payee) data.Trx {	t.Helper()
 	trx, err := ts.queries.CreateTrx(ts.ctx, data.CreateTrxParams{
 		BudgetID:     budget.ID,
 		LoginID:      budget.LoginID,
@@ -201,4 +200,21 @@ func (ts *testServer) newTrxLine(t *testing.T, budget data.Budget, trx data.Trx)
 		t.Fatal(err)
 	}
 	return l
+}
+
+func (ts *testServer) newExpenseShare(t *testing.T, budget data.Budget, name string) data.BudgetExpenseShare {
+	t.Helper()
+	e, err := ts.queries.CreateExpenseShare(ts.ctx, data.CreateExpenseShareParams{DefaultName: name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bes, err := ts.queries.JoinExpenseShare(ts.ctx, data.JoinExpenseShareParams{
+		ExpenseShareID: e.ID,
+		LoginID:        budget.LoginID,
+		BudgetID:       budget.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bes
 }

@@ -122,6 +122,7 @@ export async function listPayeeDefaultLines(
 export type PayeeDefaultLineInput = {
   destAccountId?: number
   categoryId?: number
+  expenseShareId?: number
   income: boolean
   percent: number
 }
@@ -138,6 +139,7 @@ export async function createPayeeDefaultLine(
       body: {
         ...(input.destAccountId !== undefined ? { destAccountId: input.destAccountId } : {}),
         ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+        ...(input.expenseShareId !== undefined ? { expenseShareId: input.expenseShareId } : {}),
         income: input.income,
         percent: input.percent,
       },
@@ -249,6 +251,7 @@ export async function deleteTransaction(
 export type TransactionLineInput = {
   destAccountId?: number
   categoryId?: number
+  expenseShareId?: number
   income: boolean
   outflow: number
   inflow: number
@@ -258,6 +261,7 @@ function lineBody(input: TransactionLineInput) {
   return {
     ...(input.destAccountId !== undefined ? { destAccountId: input.destAccountId } : {}),
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+    ...(input.expenseShareId !== undefined ? { expenseShareId: input.expenseShareId } : {}),
     income: input.income,
     outflow: input.outflow,
     inflow: input.inflow,

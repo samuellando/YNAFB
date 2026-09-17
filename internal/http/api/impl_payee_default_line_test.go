@@ -1,10 +1,12 @@
 package api_test
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 	"testing"
 
+	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/http/api"
 )
 
@@ -24,8 +26,7 @@ func TestGetBudgetBudgetIdPayeePayeeIdDefaultLine(t *testing.T) {
 	}
 }
 
-func TestPostBudgetBudgetIdPayeePayeeIdDefaultLine(t *testing.T) {
-	ts := setupTestServer(t)
+func TestPostBudgetBudgetIdPayeePayeeIdDefaultLine(t *testing.T) {	ts := setupTestServer(t)
 	budget := ts.newBudget(t, "Home Budget")
 	payee := ts.newPayee(t, budget, "Payee")
 	w := ts.doReq(t, "POST", "/api/v1/budget/"+strconv.Itoa(int(budget.ID))+"/payee/"+strconv.Itoa(int(payee.ID))+"/default-line",
@@ -54,13 +55,42 @@ func TestPutBudgetBudgetIdPayeePayeeIdDefaultLineId(t *testing.T) {
 	}
 }
 
-func TestDeleteBudgetBudgetIdPayeePayeeIdDefaultLineId(t *testing.T) {
-	ts := setupTestServer(t)
+func TestDeleteBudgetBudgetIdPayeePayeeIdDefaultLineId(t *testing.T) {	ts := setupTestServer(t)
 	budget := ts.newBudget(t, "Home Budget")
 	payee := ts.newPayee(t, budget, "Payee")
 	line := ts.newDefaultLine(t, budget, payee)
 	w := ts.doReq(t, "DELETE", "/api/v1/budget/"+strconv.Itoa(int(budget.ID))+"/payee/"+strconv.Itoa(int(payee.ID))+"/default-line/"+strconv.Itoa(int(line.ID)), nil, http.StatusOK)
 	if w.Body.Len() != 0 {
 		t.Fatalf("delete body = %q, want empty", w.Body.String())
+	}
+}
+
+func TestGetBudgetBudgetIdPayeePayeeIdDefaultLineExpenseShare(t *testing.T) {
+	ts := setupTestServer(t)
+	budget := ts.newBudget(t, "Home Budget")
+	payee := ts.newPayee(t, budget, "Payee")
+	share := ts.newExpenseShare(t, budget, "Trip")
+	_, err := ts.queries.CreatePayeeDefaultLine(ts.ctx, data.CreatePayeeDefaultLineParams{
+		BudgetID:       budget.ID,
+		LoginID:        budget.LoginID,
+		PayeeID:        payee.ID,
+		ExpenseShareID: sql.NullInt64{Int64: share.ExpenseShareID, Valid: true},
+		Income:         false,
+		Percent:        100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := ts.doReq(t, "GET", "/api/v1/budget/"+strconv.Itoa(int(budget.ID))+"/payee/"+strconv.Itoa(int(payee.ID))+"/default-line", nil, http.StatusOK)
+	var lines []api.PayeeDefaultLine
+	decodeJSON(t, w, &lines)
+	if len(lines) != 1 {
+		t.Fatalf("lines = %+v, want 1 entry", lines)
+	}
+	if lines[0].ExpenseShareId == nil || *lines[0].ExpenseShareId != int(share.ExpenseShareID) {
+		t.Fatalf("lines[0].ExpenseShareId = %+v, want %d", lines[0].ExpenseShareId, share.ExpenseShareID)
+	}
+	if lines[0].ExpenseShareName == nil || *lines[0].ExpenseShareName != "Trip" {
+		t.Fatalf("lines[0].ExpenseShareName = %+v, want Trip", lines[0].ExpenseShareName)
 	}
 }

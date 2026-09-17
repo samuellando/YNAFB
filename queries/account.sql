@@ -153,7 +153,7 @@ FROM
   LEFT JOIN account AS oa ON tc.dest_account_id = oa.id
   LEFT JOIN category AS c ON tc.category_id = c.id
   LEFT JOIN payee AS p ON at.payee_id = p.id
-  LEFT JOIN budget_expense_share AS bes ON bes.expense_share_id = tc.expense_share_id
+  LEFT JOIN budget_expense_share AS bes ON bes.expense_share_id = tc.expense_share_id AND bes.budget_id = @budget_id
 WHERE
   b.login_id = @login_id
   AND at.budget_id = @budget_id

@@ -25,6 +25,9 @@ export function transactionTarget(line: AccountTransactionLine): string {
   if (line.income) {
     return 'Income'
   }
+  if (line.expenseShareName) {
+    return line.expenseShareName
+  }
   return line.categoryName ?? '—'
 }
 
