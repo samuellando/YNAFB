@@ -183,3 +183,47 @@ func (s ApiServer) DeleteBudgetBudgetIdExpenseShareExpenseShareId(ctx context.Co
 	// Send the response
 	return DeleteBudgetBudgetIdExpenseShareExpenseShareId204Response{}, nil
 }
+
+func (s ApiServer) PostBudgetBudgetIdExpenseShareExpenseShareIdTrx(ctx context.Context, request PostBudgetBudgetIdExpenseShareExpenseShareIdTrxRequestObject) (PostBudgetBudgetIdExpenseShareExpenseShareIdTrxResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	expenseShareString := request.ExpenseShareId
+	expenseShareID, err := strconv.Atoi(expenseShareString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid expenseShare id: %w", err)
+	}
+	if request.Body == nil {
+		return nil, fmt.Errorf("`trxId` is required in request body")
+	}
+	// Query the db
+	row, err := s.queries.PublishExpenseShareTrx(ctx, data.PublishExpenseShareTrxParams{
+		ExpenseShareID: int64(expenseShareID),
+		TrxID:          int64(request.Body.TrxId),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Send the response
+	return PostBudgetBudgetIdExpenseShareExpenseShareIdTrx201JSONResponse{
+		Id:               int(row.ID),
+		ExpenseShareId:   int(row.ExpenseShareID),
+		TrxId:            int(row.TrxID.Int64),
+		PayeeName:        row.PayeeName,
+		Date:             row.Date.Format(time.RFC3339),
+		TotalOutflow:     int(row.TotalOutflow),
+		TotalInflow:      int(row.TotalInflow),
+		RequestedOutflow: int(row.RequestedOutflow),
+		RequestedInflow:  int(row.RequestedInflow),
+		Note:             row.Note,
+	}, nil
+}

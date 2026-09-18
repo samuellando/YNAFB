@@ -1350,13 +1350,44 @@ paths:
         "204":
           description: Successfully deleted
 
-  # /budget/{budgetId}/expense-share/{expenseShareId}/trx:
-  #   post:
-  #     summary: Publish a transaction to the expense share for others to see 
-  #   put:
-  #     summary: Update transaction in the expense share for all users
-  #   delete:
-  #     summary: Delete transaction in the expense share for all users
+  /budget/{budgetId}/expense-share/{expenseShareId}/trx:
+    post:
+      summary: Publish a transaction to the expense share for others to see
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - trxId
+              properties:
+                trxId:
+                  type: integer
+                  description: The local transaction id to publish
+      responses:
+        "201":
+          description: Successfully published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseShareTrx"
+    # put:
+    #   summary: Update transaction in the expense share for all users
+    # delete:
+    #   summary: Delete transaction in the expense share for all users
   #
   # /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/split:
   #   put:
@@ -1832,4 +1863,45 @@ components:
         name:
           type: string
         defaultName:
+          type: string
+
+    ExpenseShareTrx:
+      type: object
+      required:
+        - id
+        - expenseShareId
+        - trxId
+        - payeeName
+        - date
+        - totalOutflow
+        - totalInflow
+        - requestedOutflow
+        - requestedInflow
+        - note
+      properties:
+        id:
+          type: integer
+          description: "The published expense share transaction id"
+        expenseShareId:
+          type: integer
+          description: "The expense share this transaction was published to"
+        trxId:
+          type: integer
+          description: "The source local transaction id"
+        payeeName:
+          type: string
+        date:
+          type: string
+          description: "The transaction date (RFC3339)"
+        totalOutflow:
+          type: integer
+        totalInflow:
+          type: integer
+        requestedOutflow:
+          type: integer
+          description: "The sum of this transaction's lines pointing at the expense share (outflow)"
+        requestedInflow:
+          type: integer
+          description: "The sum of this transaction's lines pointing at the expense share (inflow)"
+        note:
           type: string

@@ -1713,6 +1713,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/trx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a transaction to the expense share for others to see */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description The local transaction id to publish */
+                        trxId: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successfully published */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseShareTrx"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1937,6 +1985,24 @@ export interface components {
             id: number;
             name: string;
             defaultName: string;
+        };
+        ExpenseShareTrx: {
+            /** @description The published expense share transaction id */
+            id: number;
+            /** @description The expense share this transaction was published to */
+            expenseShareId: number;
+            /** @description The source local transaction id */
+            trxId: number;
+            payeeName: string;
+            /** @description The transaction date (RFC3339) */
+            date: string;
+            totalOutflow: number;
+            totalInflow: number;
+            /** @description The sum of this transaction's lines pointing at the expense share (outflow) */
+            requestedOutflow: number;
+            /** @description The sum of this transaction's lines pointing at the expense share (inflow) */
+            requestedInflow: number;
+            note: string;
         };
     };
     responses: never;

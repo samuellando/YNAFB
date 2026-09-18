@@ -96,3 +96,45 @@ FROM
 WHERE
   b.id = @budget_id
   AND b.login_id = @login_id;
+
+-- name: PublishExpenseShareTrx :one
+INSERT INTO
+  expense_share_trx (
+    expense_share_id,
+    budget_id,
+    trx_id,
+    payee_name,
+    date,
+    total_outflow,
+    total_inflow,
+    requested_outflow,
+    requested_inflow,
+    note
+  )
+SELECT
+  tl.expense_share_id,
+  b.id,
+  t.id,
+  p.name,
+  t.date,
+  t.total_outflow,
+  t.total_inflow,
+  SUM(tl.outflow),
+  SUM(tl.inflow),
+  t.note
+FROM
+  budget AS b
+  JOIN trx AS t ON t.budget_id = b.id AND t.id = @trx_id
+  JOIN payee AS p ON p.budget_id = b.id AND p.id = t.payee_id
+  JOIN budget_expense_share AS bes ON bes.budget_id = b.id
+  AND bes.expense_share_id = @expense_share_id
+  JOIN trx_line AS tl ON tl.budget_id = b.id
+  AND tl.trx_id = t.id
+  AND tl.expense_share_id = @expense_share_id
+WHERE
+  b.id = @budget_id
+  AND b.login_id = @login_id
+GROUP BY
+  t.id
+RETURNING
+  *;
