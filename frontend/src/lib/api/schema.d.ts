@@ -1720,7 +1720,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List the transactions published to an expense share with their splits */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The transactions in the expense share */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseShareTrxDetail"][];
+                    };
+                };
+            };
+        };
         put?: never;
         /** Publish a transaction to the expense share for others to see */
         post: {
@@ -2003,6 +2028,46 @@ export interface components {
             /** @description The sum of this transaction's lines pointing at the expense share (inflow) */
             requestedInflow: number;
             note: string;
+        };
+        ExpenseShareTrxDetail: {
+            /** @description The published expense share transaction id */
+            id: number;
+            /** @description The expense share this transaction was published to */
+            expenseShareId: number;
+            /** @description The source local transaction id */
+            trxId: number;
+            /** @description The budget that published the transaction (absent if that budget was deleted) */
+            publisherBudgetId?: number;
+            payeeName: string;
+            /** @description The transaction date (RFC3339) */
+            date: string;
+            totalOutflow: number;
+            totalInflow: number;
+            requestedOutflow: number;
+            requestedInflow: number;
+            note: string;
+            /** @description One split per share member other than the publisher (stored, or defaulted) */
+            splits: components["schemas"]["ExpenseShareTrxSplit"][];
+        };
+        ExpenseShareTrxSplit: {
+            /** @description The budget this split belongs to */
+            budgetId: number;
+            splitOutflow: number;
+            splitInflow: number;
+            /** @description True when no split was stored and the amount was defaulted */
+            isDefault: boolean;
+            /** @description How this budget categorizes its split (only populated for the requesting budget) */
+            lines?: components["schemas"]["ExpenseShareTrxSplitLine"][];
+        };
+        ExpenseShareTrxSplitLine: {
+            /** @description The split line id */
+            id: number;
+            categoryId?: number;
+            categoryName?: string;
+            destAccountId?: number;
+            destAccountName?: string;
+            outflow: number;
+            inflow: number;
         };
     };
     responses: never;

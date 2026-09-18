@@ -112,7 +112,7 @@ INSERT INTO
     note
   )
 SELECT
-  tl.expense_share_id,
+  @expense_share_id,
   b.id,
   t.id,
   p.name,
@@ -138,3 +138,61 @@ GROUP BY
   t.id
 RETURNING
   *;
+
+-- name: ListExpenseShareMembers :many
+SELECT
+  bes.budget_id
+FROM
+  budget AS b
+  JOIN budget_expense_share AS mine ON mine.budget_id = b.id
+  AND mine.expense_share_id = @expense_share_id
+  JOIN budget_expense_share AS bes ON bes.expense_share_id = @expense_share_id
+WHERE
+  b.id = @budget_id
+  AND b.login_id = @login_id
+ORDER BY
+  bes.budget_id;
+
+-- name: ListExpenseShareTrxDetails :many
+SELECT
+  est.id AS est_id,
+  est.expense_share_id,
+  est.budget_id AS publisher_budget_id,
+  est.trx_id AS source_trx_id,
+  est.payee_name,
+  est.date,
+  est.total_outflow,
+  est.total_inflow,
+  est.requested_outflow,
+  est.requested_inflow,
+  est.note,
+  ess_all.id AS split_id,
+  ess_all.budget_id AS split_budget_id,
+  ess_all.split_outflow,
+  ess_all.split_inflow,
+  esl.id AS line_id,
+  esl.category_id,
+  c.name AS category_name,
+  esl.dest_account_id,
+  oa.name AS dest_account_name,
+  esl.outflow AS line_outflow,
+  esl.inflow AS line_inflow
+FROM
+  budget AS b
+  JOIN budget_expense_share AS mine ON mine.budget_id = b.id
+  AND mine.expense_share_id = @expense_share_id
+  JOIN expense_share_trx AS est ON est.expense_share_id = @expense_share_id
+  LEFT JOIN expense_share_trx_split AS ess_all ON ess_all.expense_share_trx_id = est.id
+  LEFT JOIN expense_share_trx_split AS ess_own ON ess_own.expense_share_trx_id = est.id
+  AND ess_own.budget_id = @budget_id
+  LEFT JOIN expense_share_trx_split_line AS esl ON esl.expense_share_trx_split_id = ess_own.id
+  LEFT JOIN category AS c ON c.id = esl.category_id
+  LEFT JOIN account AS oa ON oa.id = esl.dest_account_id
+WHERE
+  b.id = @budget_id
+  AND b.login_id = @login_id
+ORDER BY
+  est.date DESC,
+  est.id DESC,
+  ess_all.budget_id,
+  esl.id;
