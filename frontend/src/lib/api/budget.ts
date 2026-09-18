@@ -606,10 +606,10 @@ export async function listExpenseShares(budgetId: number): Promise<BudgetExpense
   return data
 }
 
-export async function createExpenseShare(budgetId: number, defaultName: string): Promise<ExpenseShare> {
+export async function createExpenseShare(budgetId: number, defaultName: string, displayName: string): Promise<ExpenseShare> {
   const { data, error, response } = await client.POST('/budget/{budgetId}/expense-share', {
     params: { path: { budgetId: String(budgetId) } },
-    body: { defaultName },
+    body: { defaultName, displayName },
   })
   if (!response.ok) {
     throw apiError(error, 'Failed to create expense share', response.status)
@@ -617,10 +617,10 @@ export async function createExpenseShare(budgetId: number, defaultName: string):
   return data
 }
 
-export async function joinExpenseShare(budgetId: number, code: string): Promise<ExpenseShare> {
+export async function joinExpenseShare(budgetId: number, code: string, displayName: string): Promise<ExpenseShare> {
   const { data, error, response } = await client.POST('/budget/{budgetId}/expense-share', {
     params: { path: { budgetId: String(budgetId) } },
-    body: { code },
+    body: { code, displayName },
   })
   if (!response.ok) {
     throw apiError(error, 'Failed to join expense share', response.status)
@@ -632,12 +632,13 @@ export async function updateExpenseShare(
   budgetId: number,
   expenseShareId: number,
   name: string,
+  displayName: string,
 ): Promise<BudgetExpenseShare> {
   const { data, error, response } = await client.PUT(
     '/budget/{budgetId}/expense-share/{expenseShareId}',
     {
       params: { path: { budgetId: String(budgetId), expenseShareId: String(expenseShareId) } },
-      body: { name },
+      body: { name, displayName },
     },
   )
   if (!response.ok) {

@@ -1581,6 +1581,8 @@ export interface paths {
                         defaultName?: string;
                         /** @description The code of an existing expense share to join */
                         code?: string;
+                        /** @description The name this budget shows as to other members of the expense share */
+                        displayName: string;
                     };
                 };
             };
@@ -1668,7 +1670,9 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @description The name for the expense share in this budget */
-                        name?: string;
+                        name: string;
+                        /** @description The name this budget shows as to other members of the expense share */
+                        displayName: string;
                     };
                 };
             };
@@ -2005,11 +2009,15 @@ export interface components {
         BudgetExpenseShare: {
             id: number;
             name: string;
+            /** @description The name this budget shows as to other members of the expense share */
+            displayName: string;
         };
         ExpenseShare: {
             id: number;
             name: string;
             defaultName: string;
+            /** @description The name this budget shows as to other members of the expense share */
+            displayName: string;
         };
         ExpenseShareTrx: {
             /** @description The published expense share transaction id */
@@ -2038,6 +2046,8 @@ export interface components {
             trxId: number;
             /** @description The budget that published the transaction (absent if that budget was deleted) */
             publisherBudgetId?: number;
+            /** @description The publisher's display name (absent if that budget was deleted or left) */
+            publisherDisplayName?: string;
             payeeName: string;
             /** @description The transaction date (RFC3339) */
             date: string;
@@ -2052,6 +2062,8 @@ export interface components {
         ExpenseShareTrxSplit: {
             /** @description The budget this split belongs to */
             budgetId: number;
+            /** @description The display name of the budget this split belongs to */
+            displayName: string;
             splitOutflow: number;
             splitInflow: number;
             /** @description True when no split was stored and the amount was defaulted */

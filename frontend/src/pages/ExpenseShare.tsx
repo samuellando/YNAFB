@@ -59,7 +59,7 @@ export default function ExpenseShare() {
             <button
               type="button"
               onClick={() =>
-                share && setRename({ mode: 'rename', shareId: share.id, name: share.name })
+                share &&                 setRename({ mode: 'rename', shareId: share.id, name: share.name, displayName: share.displayName })
               }
               disabled={!share}
               aria-label="Edit expense share"

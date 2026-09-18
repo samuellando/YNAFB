@@ -1254,6 +1254,8 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - displayName
               properties:
                 defaultName:
                   type: string
@@ -1261,6 +1263,9 @@ paths:
                 code:
                   type: string
                   description: The code of an existing expense share to join
+                displayName:
+                  type: string
+                  description: The name this budget shows as to other members of the expense share
       responses:
         "200":
           content:
@@ -1321,10 +1326,16 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - name
+                - displayName
               properties:
                 name:
                   type: string
                   description: The name for the expense share in this budget
+                displayName:
+                  type: string
+                  description: The name this budget shows as to other members of the expense share
       responses:
         "200":
           content:
@@ -1869,11 +1880,15 @@ components:
       required:
         - id
         - name
+        - displayName
       properties:
         id:
           type: integer
         name:
           type: string
+        displayName:
+          type: string
+          description: "The name this budget shows as to other members of the expense share"
 
     ExpenseShare:
       type: object
@@ -1881,6 +1896,7 @@ components:
         - id
         - name
         - defaultName
+        - displayName
       properties:
         id:
           type: integer
@@ -1888,6 +1904,9 @@ components:
           type: string
         defaultName:
           type: string
+        displayName:
+          type: string
+          description: "The name this budget shows as to other members of the expense share"
 
     ExpenseShareTrx:
       type: object
@@ -1957,6 +1976,9 @@ components:
         publisherBudgetId:
           type: integer
           description: "The budget that published the transaction (absent if that budget was deleted)"
+        publisherDisplayName:
+          type: string
+          description: "The publisher's display name (absent if that budget was deleted or left)"
         payeeName:
           type: string
         date:
@@ -1982,6 +2004,7 @@ components:
       type: object
       required:
         - budgetId
+        - displayName
         - splitOutflow
         - splitInflow
         - isDefault
@@ -1989,6 +2012,9 @@ components:
         budgetId:
           type: integer
           description: "The budget this split belongs to"
+        displayName:
+          type: string
+          description: "The display name of the budget this split belongs to"
         splitOutflow:
           type: integer
         splitInflow:

@@ -35,7 +35,7 @@ FROM
 
 -- name: JoinExpenseShare :one 
 INSERT INTO
-  budget_expense_share (budget_id, expense_share_id, name)
+  budget_expense_share (budget_id, expense_share_id, name, display_name)
 SELECT
   b.id,
   @expense_share_id,
@@ -46,7 +46,8 @@ SELECT
       expense_share
     WHERE
       id = @expense_share_id
-  ) AS name
+  ) AS name,
+  @display_name
 FROM
   budget AS b
 WHERE
@@ -58,7 +59,8 @@ RETURNING
 -- name: UpdateExpenseShare :one
 UPDATE budget_expense_share
 SET
-  name = ?
+  name = ?,
+  display_name = ?
 WHERE
   expense_share_id = @expense_share_id
   AND budget_id IN (
@@ -89,7 +91,8 @@ WHERE
 -- name: ListBudgetExpenseShares :many
 SELECT
   bes.expense_share_id,
-  bes.name
+  bes.name,
+  bes.display_name
 FROM
   budget_expense_share AS bes
   JOIN budget as b ON b.id = bes.budget_id
@@ -141,7 +144,8 @@ RETURNING
 
 -- name: ListExpenseShareMembers :many
 SELECT
-  bes.budget_id
+  bes.budget_id,
+  bes.display_name
 FROM
   budget AS b
   JOIN budget_expense_share AS mine ON mine.budget_id = b.id
@@ -166,8 +170,10 @@ SELECT
   est.requested_outflow,
   est.requested_inflow,
   est.note,
+  pub_bes.display_name AS publisher_display_name,
   ess_all.id AS split_id,
   ess_all.budget_id AS split_budget_id,
+  split_bes.display_name AS split_display_name,
   ess_all.split_outflow,
   ess_all.split_inflow,
   esl.id AS line_id,
@@ -182,7 +188,11 @@ FROM
   JOIN budget_expense_share AS mine ON mine.budget_id = b.id
   AND mine.expense_share_id = @expense_share_id
   JOIN expense_share_trx AS est ON est.expense_share_id = @expense_share_id
+  LEFT JOIN budget_expense_share AS pub_bes ON pub_bes.budget_id = est.budget_id
+  AND pub_bes.expense_share_id = @expense_share_id
   LEFT JOIN expense_share_trx_split AS ess_all ON ess_all.expense_share_trx_id = est.id
+  LEFT JOIN budget_expense_share AS split_bes ON split_bes.budget_id = ess_all.budget_id
+  AND split_bes.expense_share_id = @expense_share_id
   LEFT JOIN expense_share_trx_split AS ess_own ON ess_own.expense_share_trx_id = est.id
   AND ess_own.budget_id = @budget_id
   LEFT JOIN expense_share_trx_split_line AS esl ON esl.expense_share_trx_split_id = ess_own.id

@@ -212,6 +212,7 @@ func (ts *testServer) newExpenseShare(t *testing.T, budget data.Budget, name str
 		ExpenseShareID: e.ID,
 		LoginID:        budget.LoginID,
 		BudgetID:       budget.ID,
+		DisplayName:    budget.Name,
 	})
 	if err != nil {
 		t.Fatal(err)

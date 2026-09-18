@@ -34,6 +34,7 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShare(ctx context.Context, request Ge
 	resp := make(GetBudgetBudgetIdExpenseShare200JSONResponse, 0)
 	for _, share := range shares {
 		resp = append(resp, BudgetExpenseShare{
+			DisplayName: share.DisplayName,
 			Name:        share.Name,
 			Id:          int(share.ExpenseShareID),
 		})
@@ -75,10 +76,14 @@ func (s ApiServer) PostBudgetBudgetIdExpenseShare(ctx context.Context, request P
 	} else {
 		return nil, fmt.Errorf("Join code or default name required")
 	}
+	if request.Body.DisplayName == "" {
+		return nil, fmt.Errorf("`displayName` is required in request body")
+	}
 	budget_expense_share, err := s.queries.JoinExpenseShare(ctx, data.JoinExpenseShareParams{
 		ExpenseShareID: expense_share.ID,
 		LoginID:        loginID,
 		BudgetID:       int64(budgetID),
+		DisplayName:    request.Body.DisplayName,
 	})
 	if err != nil {
 		return nil, err
@@ -88,6 +93,7 @@ func (s ApiServer) PostBudgetBudgetIdExpenseShare(ctx context.Context, request P
 		Id:          int(expense_share.ID),
 		DefaultName: expense_share.DefaultName,
 		Name:        budget_expense_share.Name,
+		DisplayName: budget_expense_share.DisplayName,
 	}, nil
 }
 
@@ -136,12 +142,16 @@ func (s ApiServer) PutBudgetBudgetIdExpenseShareExpenseShareId(ctx context.Conte
 	if err != nil {
 		return nil, fmt.Errorf("Invalid expenseShare id: %w", err)
 	}
-	if request.Body == nil || request.Body.Name == nil || *request.Body.Name == "" {
+	if request.Body == nil || request.Body.Name == "" {
 		return nil, fmt.Errorf("`name` is required in request body")
+	}
+	if request.Body.DisplayName == "" {
+		return nil, fmt.Errorf("`displayName` is required in request body")
 	}
 	// Query the database
 	budgetExpenseShare, err := s.queries.UpdateExpenseShare(ctx, data.UpdateExpenseShareParams{
-		Name:           *request.Body.Name,
+		Name:           request.Body.Name,
+		DisplayName:    request.Body.DisplayName,
 		ExpenseShareID: int64(expenseShareID),
 		BudgetID:       int64(budgetID),
 		LoginID:        loginID,
@@ -151,8 +161,9 @@ func (s ApiServer) PutBudgetBudgetIdExpenseShareExpenseShareId(ctx context.Conte
 	}
 	// Send the response
 	return PutBudgetBudgetIdExpenseShareExpenseShareId200JSONResponse{
-		Id:   int(budgetExpenseShare.ExpenseShareID),
-		Name: budgetExpenseShare.Name,
+		Id:          int(budgetExpenseShare.ExpenseShareID),
+		Name:        budgetExpenseShare.Name,
+		DisplayName: budgetExpenseShare.DisplayName,
 	}, nil
 }
 
@@ -276,11 +287,17 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareExpenseShareIdTrx(ctx context.Co
 // groupExpenseShareTrx nests flat detail rows into trx -> splits -> own lines,
 // synthesizing default splits (requested / owing members, leftover cents dealt
 // in budget-id order) for members without a stored split.
-func groupExpenseShareTrx(budgetID int64, members []int64, rows []data.ListExpenseShareTrxDetailsRow) []ExpenseShareTrxDetail {
+func groupExpenseShareTrx(budgetID int64, members []data.ListExpenseShareMembersRow, rows []data.ListExpenseShareTrxDetailsRow) []ExpenseShareTrxDetail {
 	resp := make([]ExpenseShareTrxDetail, 0)
 	byTrx := make(map[int64]int)
-	isMember := make(map[int64]bool, len(members))
+	memberIDs := make([]int64, 0, len(members))
+	displayNames := make(map[int64]string, len(members))
 	for _, m := range members {
+		memberIDs = append(memberIDs, m.BudgetID)
+		displayNames[m.BudgetID] = m.DisplayName
+	}
+	isMember := make(map[int64]bool, len(members))
+	for _, m := range memberIDs {
 		isMember[m] = true
 	}
 	for _, row := range rows {
@@ -289,18 +306,19 @@ func groupExpenseShareTrx(budgetID int64, members []int64, rows []data.ListExpen
 			i = len(resp)
 			byTrx[row.EstID] = i
 			resp = append(resp, ExpenseShareTrxDetail{
-				Id:               int(row.EstID),
-				ExpenseShareId:   int(row.ExpenseShareID),
-				TrxId:            int(row.SourceTrxID.Int64),
-				PublisherBudgetId: nullInt64ToInt(row.PublisherBudgetID),
-				PayeeName:        row.PayeeName,
-				Date:             row.Date.Format(time.RFC3339),
-				TotalOutflow:     int(row.TotalOutflow),
-				TotalInflow:      int(row.TotalInflow),
-				RequestedOutflow: int(row.RequestedOutflow),
-				RequestedInflow:  int(row.RequestedInflow),
-				Note:             row.Note,
-				Splits:           make([]ExpenseShareTrxSplit, 0),
+				Id:                   int(row.EstID),
+				ExpenseShareId:         int(row.ExpenseShareID),
+				TrxId:                  int(row.SourceTrxID.Int64),
+				PublisherBudgetId:      nullInt64ToInt(row.PublisherBudgetID),
+				PublisherDisplayName:   nullStringToPtr(row.PublisherDisplayName),
+				PayeeName:              row.PayeeName,
+				Date:                   row.Date.Format(time.RFC3339),
+				TotalOutflow:           int(row.TotalOutflow),
+				TotalInflow:            int(row.TotalInflow),
+				RequestedOutflow:       int(row.RequestedOutflow),
+				RequestedInflow:        int(row.RequestedInflow),
+				Note:                   row.Note,
+				Splits:                 make([]ExpenseShareTrxSplit, 0),
 			})
 		}
 		detail := &resp[i]
@@ -313,6 +331,7 @@ func groupExpenseShareTrx(budgetID int64, members []int64, rows []data.ListExpen
 			if split == nil {
 				detail.Splits = append(detail.Splits, ExpenseShareTrxSplit{
 					BudgetId:     int(row.SplitBudgetID.Int64),
+					DisplayName:  displayNames[row.SplitBudgetID.Int64],
 					SplitOutflow: int(row.SplitOutflow.Int64),
 					SplitInflow:  int(row.SplitInflow.Int64),
 				})
@@ -345,8 +364,8 @@ func groupExpenseShareTrx(budgetID int64, members []int64, rows []data.ListExpen
 		if detail.PublisherBudgetId != nil {
 			publisher, publisherKnown = int64(*detail.PublisherBudgetId), true
 		}
-		owing := make([]int64, 0, len(members))
-		for _, m := range members {
+		owing := make([]int64, 0, len(memberIDs))
+		for _, m := range memberIDs {
 			if publisherKnown && m == publisher {
 				continue
 			}
@@ -378,7 +397,7 @@ func groupExpenseShareTrx(budgetID int64, members []int64, rows []data.ListExpen
 			if int64(j) < extra {
 				amount++
 			}
-			split := ExpenseShareTrxSplit{BudgetId: int(m), IsDefault: true}
+			split := ExpenseShareTrxSplit{BudgetId: int(m), DisplayName: displayNames[m], IsDefault: true}
 			if outflow {
 				split.SplitOutflow = int(amount)
 			} else {
