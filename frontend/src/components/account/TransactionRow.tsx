@@ -9,9 +9,12 @@ import { formatDate } from '../../lib/date'
 import { formatMoney } from '../../lib/money'
 import { CheckIcon, WarningIcon } from '../icons'
 import { TRANSACTION_GRID } from './layout'
+import PublishShareButton, { type PublishShareTarget } from './PublishShareButton'
 
 type TransactionRowProps = {
+  budgetId: number
   transaction: AccountTransaction
+  published: Map<number, Set<number>>
   onSelect: (transaction: AccountTransaction) => void
 }
 
@@ -37,10 +40,23 @@ function InflowCell({ value }: { value: number }) {
   )
 }
 
-export default function TransactionRow({ transaction, onSelect }: TransactionRowProps) {
+export default function TransactionRow({ budgetId, transaction, published, onSelect }: TransactionRowProps) {
   const split = isSplitTransaction(transaction)
   const unbalanced = isUnbalanced(transaction)
   const mirror = transaction.sourceAccountId !== undefined
+
+  const shareTargets = (() => {
+    const seen = new Map<number, PublishShareTarget>()
+    for (const line of transaction.transactionLines) {
+      if (line.expenseShareId === undefined || seen.has(line.expenseShareId)) continue
+      seen.set(line.expenseShareId, {
+        id: line.expenseShareId,
+        name: line.expenseShareName ?? `Share ${line.expenseShareId}`,
+        published: published.get(line.expenseShareId)?.has(transaction.id) ?? false,
+      })
+    }
+    return [...seen.values()]
+  })()
 
   const cells = (
     <>
@@ -62,6 +78,14 @@ export default function TransactionRow({ transaction, onSelect }: TransactionRow
         {transaction.note && (
           <span className="truncate text-xs text-slate-500">{transaction.note}</span>
         )}
+        {shareTargets.map((target) => (
+          <PublishShareButton
+            key={target.id}
+            budgetId={budgetId}
+            trxId={transaction.id}
+            target={target}
+          />
+        ))}
       </span>
       <span
         className={`flex min-w-0 items-center gap-1.5 text-sm ${split ? 'text-slate-500 italic' : 'text-slate-300'}`}

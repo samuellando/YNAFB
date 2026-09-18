@@ -595,6 +595,28 @@ export async function deleteCategoryGroup(budgetId: number, groupId: number): Pr
 
 export type BudgetExpenseShare = components['schemas']['BudgetExpenseShare']
 export type ExpenseShare = components['schemas']['ExpenseShare']
+export type ExpenseShareDetail = components['schemas']['ExpenseShareDetail']
+export type ExpenseShareSummary = components['schemas']['ExpenseShareSummary']
+export type ExpenseShareTrx = components['schemas']['ExpenseShareTrxDetail']
+export type ExpenseShareTrxSplit = components['schemas']['ExpenseShareTrxSplit']
+export type ExpenseShareTrxSplitLine = components['schemas']['ExpenseShareTrxSplitLine']
+export type PublishedExpenseShareTrx = components['schemas']['ExpenseShareTrx']
+
+export async function getExpenseShareDetail(
+  budgetId: number,
+  expenseShareId: number,
+): Promise<ExpenseShareDetail> {
+  const { data, error, response } = await client.GET(
+    '/budget/{budgetId}/expense-share/{expenseShareId}',
+    {
+      params: { path: { budgetId: String(budgetId), expenseShareId: String(expenseShareId) } },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to load expense share', response.status)
+  }
+  return data
+}
 
 export async function listExpenseShares(budgetId: number): Promise<BudgetExpenseShare[]> {
   const { data, error, response } = await client.GET('/budget/{budgetId}/expense-share', {
@@ -670,4 +692,85 @@ export async function getExpenseShareCode(budgetId: number, expenseShareId: numb
     throw apiError(error, 'Failed to get expense share code', response.status)
   }
   return data.code
+}
+
+export type ExpenseShareSplitInput = {
+  budgetId: number
+  outflow: number
+  inflow: number
+}
+
+export async function updateExpenseShareSplits(
+  budgetId: number,
+  expenseShareId: number,
+  trxId: number,
+  splits: ExpenseShareSplitInput[],
+): Promise<ExpenseShareTrx> {
+  const { data, error, response } = await client.PUT(
+    '/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/splits',
+    {
+      params: {
+        path: {
+          budgetId: String(budgetId),
+          expenseShareId: String(expenseShareId),
+          trxId: String(trxId),
+        },
+      },
+      body: { splits },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to update splits', response.status)
+  }
+  return data
+}
+
+export type ExpenseShareSplitLineInput = {
+  categoryId?: number
+  destAccountId?: number
+  outflow: number
+  inflow: number
+}
+
+export async function updateExpenseShareSplitLines(
+  budgetId: number,
+  expenseShareId: number,
+  trxId: number,
+  lines: ExpenseShareSplitLineInput[],
+): Promise<ExpenseShareTrx> {
+  const { data, error, response } = await client.PUT(
+    '/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/lines',
+    {
+      params: {
+        path: {
+          budgetId: String(budgetId),
+          expenseShareId: String(expenseShareId),
+          trxId: String(trxId),
+        },
+      },
+      body: { lines },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to save categorization', response.status)
+  }
+  return data
+}
+
+export async function publishExpenseShareTrx(
+  budgetId: number,
+  expenseShareId: number,
+  trxId: number,
+): Promise<PublishedExpenseShareTrx> {
+  const { data, error, response } = await client.POST(
+    '/budget/{budgetId}/expense-share/{expenseShareId}/trx',
+    {
+      params: { path: { budgetId: String(budgetId), expenseShareId: String(expenseShareId) } },
+      body: { trxId },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to publish transaction', response.status)
+  }
+  return data
 }

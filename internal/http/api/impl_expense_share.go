@@ -240,7 +240,7 @@ func (s ApiServer) PostBudgetBudgetIdExpenseShareExpenseShareIdTrx(ctx context.C
 	}, nil
 }
 
-func (s ApiServer) GetBudgetBudgetIdExpenseShareExpenseShareIdTrx(ctx context.Context, request GetBudgetBudgetIdExpenseShareExpenseShareIdTrxRequestObject) (GetBudgetBudgetIdExpenseShareExpenseShareIdTrxResponseObject, error) {
+func (s ApiServer) GetBudgetBudgetIdExpenseShareExpenseShareId(ctx context.Context, request GetBudgetBudgetIdExpenseShareExpenseShareIdRequestObject) (GetBudgetBudgetIdExpenseShareExpenseShareIdResponseObject, error) {
 	// Collect params
 	loginID, err := getLoginID(ctx)
 	if err != nil {
@@ -269,6 +269,14 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareExpenseShareIdTrx(ctx context.Co
 	if len(members) == 0 {
 		return nil, fmt.Errorf("Expense share not found for this budget")
 	}
+	share, err := s.queries.GetBudgetExpenseShare(ctx, data.GetBudgetExpenseShareParams{
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
 	// Flat trx x splits x own-lines rows, gated on the same membership.
 	rows, err := s.queries.ListExpenseShareTrxDetails(ctx, data.ListExpenseShareTrxDetailsParams{
 		ExpenseShareID: int64(expenseShareID),
@@ -278,10 +286,43 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareExpenseShareIdTrx(ctx context.Co
 	if err != nil {
 		return nil, err
 	}
+	transactions := groupExpenseShareTrx(int64(budgetID), members, rows)
+	// Per-member net balances come straight from SQL.
+	balances, err := s.queries.ListExpenseShareBalances(ctx, data.ListExpenseShareBalancesParams{
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
 	// Send the response
-	return GetBudgetBudgetIdExpenseShareExpenseShareIdTrx200JSONResponse(
-		groupExpenseShareTrx(int64(budgetID), members, rows),
-	), nil
+	return GetBudgetBudgetIdExpenseShareExpenseShareId200JSONResponse{
+		Summary:      summarizeExpenseShareTrx(share, members, transactions, balances),
+		Transactions: transactions,
+	}, nil
+}
+
+// summarizeExpenseShareTrx builds the share summary: identity and counts
+// plus the SQL-computed per-member net balances (positive = others owe this
+// member; negative = this member owes).
+func summarizeExpenseShareTrx(share data.GetBudgetExpenseShareRow, members []data.ListExpenseShareMembersRow, transactions []ExpenseShareTrxDetail, balances []data.ListExpenseShareBalancesRow) ExpenseShareSummary {
+	summary := ExpenseShareSummary{
+		Id:               int(share.ExpenseShareID),
+		Name:             share.Name,
+		DisplayName:      share.DisplayName,
+		MemberCount:      len(members),
+		TransactionCount: len(transactions),
+		Balances:         make([]ExpenseShareBalance, 0, len(balances)),
+	}
+	for _, b := range balances {
+		summary.Balances = append(summary.Balances, ExpenseShareBalance{
+			BudgetId:    int(b.BudgetID),
+			DisplayName: b.DisplayName,
+			Balance:     int(b.Balance),
+		})
+	}
+	return summary
 }
 
 // groupExpenseShareTrx nests flat detail rows into trx -> splits -> own lines,
@@ -309,6 +350,7 @@ func groupExpenseShareTrx(budgetID int64, members []data.ListExpenseShareMembers
 				Id:                   int(row.EstID),
 				ExpenseShareId:         int(row.ExpenseShareID),
 				TrxId:                  int(row.SourceTrxID.Int64),
+				AccountId:              nullInt64ToInt(row.SourceAccountID),
 				PublisherBudgetId:      nullInt64ToInt(row.PublisherBudgetID),
 				PublisherDisplayName:   nullStringToPtr(row.PublisherDisplayName),
 				PayeeName:              row.PayeeName,
@@ -355,8 +397,10 @@ func groupExpenseShareTrx(budgetID int64, members []data.ListExpenseShareMembers
 			}
 		}
 	}
-	// Fill defaults for owing members without a stored split. Members arrive
+	// Fill defaults for members without a stored split. Members arrive
 	// ordered by budget id, which also fixes leftover-cent distribution order.
+	// Non-publishers share the requested amount; the publisher keeps the
+	// unshared remainder (total - requested).
 	for i := range resp {
 		detail := &resp[i]
 		var publisher int64
@@ -366,9 +410,6 @@ func groupExpenseShareTrx(budgetID int64, members []data.ListExpenseShareMembers
 		}
 		owing := make([]int64, 0, len(memberIDs))
 		for _, m := range memberIDs {
-			if publisherKnown && m == publisher {
-				continue
-			}
 			if findExpenseShareSplit(detail.Splits, m) == nil {
 				owing = append(owing, m)
 			}
@@ -384,30 +425,403 @@ func groupExpenseShareTrx(budgetID int64, members []data.ListExpenseShareMembers
 			markOwnSplit()
 			continue
 		}
+		outflow := detail.TotalInflow == 0
 		requested := int64(detail.RequestedOutflow)
-		outflow := true
-		if detail.TotalInflow > 0 {
+		if !outflow {
 			requested = int64(detail.RequestedInflow)
-			outflow = false
 		}
-		base := requested / int64(len(owing))
-		extra := requested % int64(len(owing))
-		for j, m := range owing {
-			amount := base
-			if int64(j) < extra {
-				amount++
+		sharing := make([]int64, 0, len(owing))
+		for _, m := range owing {
+			if !publisherKnown || m != publisher {
+				sharing = append(sharing, m)
 			}
-			split := ExpenseShareTrxSplit{BudgetId: int(m), DisplayName: displayNames[m], IsDefault: true}
+		}
+		if len(sharing) > 0 {
+			base := requested / int64(len(sharing))
+			extra := requested % int64(len(sharing))
+			for j, m := range sharing {
+				amount := base
+				if int64(j) < extra {
+					amount++
+				}
+				split := ExpenseShareTrxSplit{BudgetId: int(m), DisplayName: displayNames[m], IsDefault: true}
+				if outflow {
+					split.SplitOutflow = int(amount)
+				} else {
+					split.SplitInflow = int(amount)
+				}
+				detail.Splits = append(detail.Splits, split)
+			}
+		}
+		// The publisher keeps the unshared remainder (total - requested,
+		// possibly 0). Only listed while they are still a share member;
+		// departed or deleted publishers vanish from splits entirely.
+		if publisherKnown && isMember[publisher] && findExpenseShareSplit(detail.Splits, publisher) == nil {
+			kept := int64(detail.TotalOutflow) - int64(detail.RequestedOutflow)
+			if !outflow {
+				kept = int64(detail.TotalInflow) - int64(detail.RequestedInflow)
+			}
+			split := ExpenseShareTrxSplit{BudgetId: int(publisher), DisplayName: displayNames[publisher], IsDefault: true}
 			if outflow {
-				split.SplitOutflow = int(amount)
+				split.SplitOutflow = int(kept)
 			} else {
-				split.SplitInflow = int(amount)
+				split.SplitInflow = int(kept)
 			}
 			detail.Splits = append(detail.Splits, split)
 		}
 		markOwnSplit()
 	}
 	return resp
+}
+
+func (s ApiServer) PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdSplits(ctx context.Context, request PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdSplitsRequestObject) (PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdSplitsResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetID, err := strconv.Atoi(request.BudgetId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	expenseShareID, err := strconv.Atoi(request.ExpenseShareId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid expenseShare id: %w", err)
+	}
+	trxID, err := strconv.Atoi(request.TrxId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid trx id: %w", err)
+	}
+	if request.Body == nil || len(request.Body.Splits) == 0 {
+		return nil, fmt.Errorf("`splits` is required in request body")
+	}
+	// Any member may edit splits; an empty member list means not your
+	// budget / not a member.
+	members, err := s.queries.ListExpenseShareMembers(ctx, data.ListExpenseShareMembersParams{
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(members) == 0 {
+		return nil, fmt.Errorf("Expense share not found for this budget")
+	}
+	trx, err := s.queries.GetExpenseShareTrxById(ctx, data.GetExpenseShareTrxByIdParams{
+		ExpenseShareID: int64(expenseShareID),
+		TrxID:          int64(trxID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	outflow := trx.TotalInflow == 0
+	var requested, total int64
+	if outflow {
+		requested, total = trx.RequestedOutflow, trx.TotalOutflow
+	} else {
+		requested, total = trx.RequestedInflow, trx.TotalInflow
+	}
+	// The publisher keeps the unshared remainder (total - requested) and its
+	// split is managed automatically, so it is never accepted from the client.
+	// A departed or deleted publisher has no split at all.
+	var publisher int64
+	publisherKnown := false
+	if trx.BudgetID.Valid {
+		publisher, publisherKnown = trx.BudgetID.Int64, true
+	}
+	// Validate every split before touching the database.
+	isMember := make(map[int]bool, len(members))
+	for _, m := range members {
+		isMember[int(m.BudgetID)] = true
+	}
+	if publisherKnown && !isMember[int(publisher)] {
+		publisherKnown = false
+	}
+	seen := make(map[int]bool, len(request.Body.Splits))
+	var sum int64
+	for _, split := range request.Body.Splits {
+		if publisherKnown && int64(split.BudgetId) == publisher {
+			return nil, fmt.Errorf("Split for the publishing budget %d is set automatically", split.BudgetId)
+		}
+		if !isMember[split.BudgetId] {
+			return nil, fmt.Errorf("Budget %d is not a member of this expense share", split.BudgetId)
+		}
+		if seen[split.BudgetId] {
+			return nil, fmt.Errorf("Duplicate split for budget %d", split.BudgetId)
+		}
+		seen[split.BudgetId] = true
+		if split.Outflow < 0 || split.Inflow < 0 {
+			return nil, fmt.Errorf("Split amounts must not be negative")
+		}
+		if outflow && split.Inflow != 0 {
+			return nil, fmt.Errorf("Inflow splits are not allowed on an outflow transaction")
+		}
+		if !outflow && split.Outflow != 0 {
+			return nil, fmt.Errorf("Outflow splits are not allowed on an inflow transaction")
+		}
+		// A zero split is allowed for members who are not paying.
+		sum += int64(split.Outflow + split.Inflow)
+	}
+	// Every non-publisher member needs a stored split; otherwise the read path
+	// would synthesize a default on top of the stored ones.
+	for _, m := range members {
+		if publisherKnown && m.BudgetID == publisher {
+			continue
+		}
+		if !seen[int(m.BudgetID)] {
+			return nil, fmt.Errorf("Missing split for budget %d", m.BudgetID)
+		}
+	}
+	if sum != requested {
+		return nil, fmt.Errorf("Splits total %d != requested %d", sum, requested)
+	}
+	// Replace all stored splits atomically.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	txQueries := s.queries.WithTx(tx)
+	if err := txQueries.DeleteExpenseShareSplits(ctx, data.DeleteExpenseShareSplitsParams{
+		TrxID: int64(trxID),
+	}); err != nil {
+		return nil, err
+	}
+	for _, split := range request.Body.Splits {
+		if _, err := txQueries.CreateExpenseShareSplit(ctx, data.CreateExpenseShareSplitParams{
+			TrxID:          int64(trxID),
+			ExpenseShareID: int64(expenseShareID),
+			BudgetID:       sql.NullInt64{Int64: int64(split.BudgetId), Valid: true},
+			SplitOutflow:   int64(split.Outflow),
+			SplitInflow:    int64(split.Inflow),
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if publisherKnown && total-requested > 0 {
+		var splitOutflow, splitInflow int64
+		if outflow {
+			splitOutflow = total - requested
+		} else {
+			splitInflow = total - requested
+		}
+		if _, err := txQueries.CreateExpenseShareSplit(ctx, data.CreateExpenseShareSplitParams{
+			TrxID:          int64(trxID),
+			ExpenseShareID: int64(expenseShareID),
+			BudgetID:       sql.NullInt64{Int64: publisher, Valid: true},
+			SplitOutflow:   splitOutflow,
+			SplitInflow:    splitInflow,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	// Re-read and return the updated transaction detail.
+	rows, err := s.queries.ListExpenseShareTrxDetails(ctx, data.ListExpenseShareTrxDetailsParams{
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       sql.NullInt64{Int64: int64(budgetID), Valid: true},
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, detail := range groupExpenseShareTrx(int64(budgetID), members, rows) {
+		if detail.Id == trxID {
+			return PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdSplits200JSONResponse(detail), nil
+		}
+	}
+	return nil, fmt.Errorf("Expense share transaction not found")
+}
+
+func (s ApiServer) PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdLines(ctx context.Context, request PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdLinesRequestObject) (PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdLinesResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetID, err := strconv.Atoi(request.BudgetId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	expenseShareID, err := strconv.Atoi(request.ExpenseShareId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid expenseShare id: %w", err)
+	}
+	trxID, err := strconv.Atoi(request.TrxId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid trx id: %w", err)
+	}
+	if request.Body == nil {
+		return nil, fmt.Errorf("`lines` is required in request body")
+	}
+	// Any member may categorize their own split; an empty member list means
+	// not your budget / not a member.
+	members, err := s.queries.ListExpenseShareMembers(ctx, data.ListExpenseShareMembersParams{
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(members) == 0 {
+		return nil, fmt.Errorf("Expense share not found for this budget")
+	}
+	trx, err := s.queries.GetExpenseShareTrxById(ctx, data.GetExpenseShareTrxByIdParams{
+		ExpenseShareID: int64(expenseShareID),
+		TrxID:          int64(trxID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// The publisher categorizes through the source transaction's own lines, so
+	// split lines are only for the other members (recording both would double
+	// count in the publisher's budget views).
+	if trx.BudgetID.Valid && trx.BudgetID.Int64 == int64(budgetID) {
+		return nil, fmt.Errorf("The publishing budget categorizes through the source transaction")
+	}
+	outflow := trx.TotalInflow == 0
+	// Targets must live in this budget; fetch the valid ids once.
+	categories, err := s.queries.ListCategories(ctx, data.ListCategoriesParams{
+		LoginID:  loginID,
+		BudgetID: int64(budgetID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	validCategory := make(map[int]bool, len(categories))
+	for _, c := range categories {
+		validCategory[int(c.ID)] = true
+	}
+	accounts, err := s.queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{
+		LoginID:  loginID,
+		BudgetID: int64(budgetID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	validAccount := make(map[int]bool, len(accounts))
+	for _, a := range accounts {
+		validAccount[int(a.ID)] = true
+	}
+	// Validate every line before touching the database.
+	for _, line := range request.Body.Lines {
+		if (line.CategoryId == nil) == (line.DestAccountId == nil) {
+			return nil, fmt.Errorf("Each line needs exactly one of categoryId or destAccountId")
+		}
+		if line.CategoryId != nil && !validCategory[*line.CategoryId] {
+			return nil, fmt.Errorf("Category %d not found in this budget", *line.CategoryId)
+		}
+		if line.DestAccountId != nil && !validAccount[*line.DestAccountId] {
+			return nil, fmt.Errorf("Account %d not found in this budget", *line.DestAccountId)
+		}
+		if line.Outflow < 0 || line.Inflow < 0 {
+			return nil, fmt.Errorf("Line amounts must not be negative")
+		}
+		if outflow && (line.Inflow != 0 || line.Outflow == 0) {
+			return nil, fmt.Errorf("Lines on an outflow transaction need an outflow amount")
+		}
+		if !outflow && (line.Outflow != 0 || line.Inflow == 0) {
+			return nil, fmt.Errorf("Lines on an inflow transaction need an inflow amount")
+		}
+	}
+	// Replace this budget's lines atomically, materializing a stored split
+	// from the (possibly defaulted) amounts first when there isn't one yet.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	txQueries := s.queries.WithTx(tx)
+	split, err := txQueries.GetExpenseShareSplit(ctx, data.GetExpenseShareSplitParams{
+		TrxID:    int64(trxID),
+		BudgetID: sql.NullInt64{Int64: int64(budgetID), Valid: true},
+	})
+	if err == sql.ErrNoRows {
+		// Read through the tx: the open transaction holds this test's only
+		// migrated :memory: connection, so a pooled query could land on a
+		// fresh empty connection.
+		rows, err := txQueries.ListExpenseShareTrxDetails(ctx, data.ListExpenseShareTrxDetailsParams{
+			ExpenseShareID: int64(expenseShareID),
+			BudgetID:       sql.NullInt64{Int64: int64(budgetID), Valid: true},
+			LoginID:        loginID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		var own *ExpenseShareTrxSplit
+		for _, detail := range groupExpenseShareTrx(int64(budgetID), members, rows) {
+			if detail.Id == trxID {
+				own = findExpenseShareSplit(detail.Splits, int64(budgetID))
+				break
+			}
+		}
+		if own == nil {
+			return nil, fmt.Errorf("No split found for this budget")
+		}
+		split, err = txQueries.CreateExpenseShareSplit(ctx, data.CreateExpenseShareSplitParams{
+			TrxID:          int64(trxID),
+			ExpenseShareID: int64(expenseShareID),
+			BudgetID:       sql.NullInt64{Int64: int64(budgetID), Valid: true},
+			SplitOutflow:   int64(own.SplitOutflow),
+			SplitInflow:    int64(own.SplitInflow),
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	// A zero split has nothing to categorize.
+	splitAmount := split.SplitOutflow
+	if !outflow {
+		splitAmount = split.SplitInflow
+	}
+	if splitAmount == 0 && len(request.Body.Lines) > 0 {
+		return nil, fmt.Errorf("Cannot categorize a zero split")
+	}
+	if err := txQueries.DeleteExpenseShareSplitLines(ctx, data.DeleteExpenseShareSplitLinesParams{
+		SplitID: split.ID,
+	}); err != nil {
+		return nil, err
+	}
+	for _, line := range request.Body.Lines {
+		if _, err := txQueries.CreateExpenseShareSplitLine(ctx, data.CreateExpenseShareSplitLineParams{
+			BudgetID:      int64(budgetID),
+			SplitID:       split.ID,
+			DestAccountID: intToNullInt64(line.DestAccountId),
+			CategoryID:    intToNullInt64(line.CategoryId),
+			Outflow:       int64(line.Outflow),
+			Inflow:        int64(line.Inflow),
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	// Re-read and return the updated transaction detail.
+	rows, err := s.queries.ListExpenseShareTrxDetails(ctx, data.ListExpenseShareTrxDetailsParams{
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       sql.NullInt64{Int64: int64(budgetID), Valid: true},
+		LoginID:        loginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, detail := range groupExpenseShareTrx(int64(budgetID), members, rows) {
+		if detail.Id == trxID {
+			return PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdLines200JSONResponse(detail), nil
+		}
+	}
+	return nil, fmt.Errorf("Expense share transaction not found")
 }
 
 func findExpenseShareSplit(splits []ExpenseShareTrxSplit, budgetID int64) *ExpenseShareTrxSplit {

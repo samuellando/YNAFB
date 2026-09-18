@@ -1302,10 +1302,30 @@ paths:
                     type: string
 
   /budget/{budgetId}/expense-share/{expenseShareId}:
-    # get: 
-    #   summary: |
-    #     Get the expense share summary for this budget
-    #     Similar to the account summary, showing the details and all the transactions
+    get:
+      summary: |
+        Get the expense share summary for this budget with its transactions
+        Similar to the account summary, showing the details and all the transactions
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The expense share summary and its transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseShareDetail"
     put: 
       summary: Update an expense share for this budget
       parameters:
@@ -1362,30 +1382,6 @@ paths:
           description: Successfully deleted
 
   /budget/{budgetId}/expense-share/{expenseShareId}/trx:
-    get:
-      summary: List the transactions published to an expense share with their splits
-      parameters:
-      - name: budgetId
-        in: path
-        description: the budget id
-        required: true
-        schema:
-          type: string
-      - name: expenseShareId
-        in: path
-        description: the expense share id
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          description: The transactions in the expense share
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ExpenseShareTrxDetail"
     post:
       summary: Publish a transaction to the expense share for others to see
       parameters:
@@ -1423,12 +1419,120 @@ paths:
     #   summary: Update transaction in the expense share for all users
     # delete:
     #   summary: Delete transaction in the expense share for all users
+
+  /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/splits:
+    put:
+      summary: Replace the per-budget splits of a published expense share transaction (the publishing budget keeps the remainder automatically and is not submitted)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: trxId
+        in: path
+        description: the published expense share transaction id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - splits
+              properties:
+                splits:
+                  type: array
+                  description: One split per non-publisher member; amounts must sum to the requested amount
+                  items:
+                    type: object
+                    required:
+                      - budgetId
+                      - outflow
+                      - inflow
+                    properties:
+                      budgetId:
+                        type: integer
+                        description: The budget this split belongs to
+                      outflow:
+                        type: integer
+                        description: This budget's share (outflow)
+                      inflow:
+                        type: integer
+                        description: This budget's share (inflow)
+      responses:
+        "200":
+          description: The updated splits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseShareTrxDetail"
   #
-  # /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/split:
-  #   put:
-  #
-  # /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/split/{splitId}/line:
-  #   post:
+  /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/lines:
+    put:
+      summary: Replace how this budget categorizes its split of a published expense share transaction
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: trxId
+        in: path
+        description: the published expense share transaction id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - lines
+              properties:
+                lines:
+                  type: array
+                  description: How this budget categorizes its split (an empty list clears it)
+                  items:
+                    type: object
+                    required:
+                      - outflow
+                      - inflow
+                    properties:
+                      categoryId:
+                        type: integer
+                        description: The category for this line (exactly one of categoryId or destAccountId)
+                      destAccountId:
+                        type: integer
+                        description: The destination account for a transfer line (exactly one of categoryId or destAccountId)
+                      outflow:
+                        type: integer
+                      inflow:
+                        type: integer
+      responses:
+        "200":
+          description: The updated transaction with this budget's lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseShareTrxDetail"
   #
   # /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/split/{splitId}/line/{lineId}:
   #   post:
@@ -1949,6 +2053,65 @@ components:
         note:
           type: string
 
+    ExpenseShareDetail:
+      type: object
+      required:
+        - summary
+        - transactions
+      properties:
+        summary:
+          $ref: "#/components/schemas/ExpenseShareSummary"
+        transactions:
+          type: array
+          description: The share's transactions, each with its splits
+          items:
+            $ref: "#/components/schemas/ExpenseShareTrxDetail"
+
+    ExpenseShareSummary:
+      type: object
+      required:
+        - id
+        - name
+        - displayName
+        - memberCount
+        - transactionCount
+        - balances
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          description: "The name for the expense share in this budget"
+        displayName:
+          type: string
+          description: "The name this budget shows as to other members of the expense share"
+        memberCount:
+          type: integer
+        transactionCount:
+          type: integer
+        balances:
+          type: array
+          description: "Per-member net balances, computed in SQL. Positive means others owe this member; negative means this member owes."
+          items:
+            $ref: "#/components/schemas/ExpenseShareBalance"
+
+    ExpenseShareBalance:
+      type: object
+      required:
+        - budgetId
+        - displayName
+        - balance
+      properties:
+        budgetId:
+          type: integer
+          description: "The budget this balance belongs to"
+        displayName:
+          type: string
+          description: "The display name of the budget this balance belongs to"
+        balance:
+          type: integer
+          description: "Net balance in cents. Positive means others owe this member; negative means this member owes."
+
     ExpenseShareTrxDetail:
       type: object
       required:
@@ -1973,6 +2136,9 @@ components:
         trxId:
           type: integer
           description: "The source local transaction id"
+        accountId:
+          type: integer
+          description: "The source account id (absent if the source transaction was deleted)"
         publisherBudgetId:
           type: integer
           description: "The budget that published the transaction (absent if that budget was deleted)"
@@ -1996,7 +2162,7 @@ components:
           type: string
         splits:
           type: array
-          description: "One split per share member other than the publisher (stored, or defaulted)"
+          description: "One split per share member (stored, or defaulted)"
           items:
             $ref: "#/components/schemas/ExpenseShareTrxSplit"
 

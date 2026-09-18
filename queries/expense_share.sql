@@ -100,6 +100,19 @@ WHERE
   b.id = @budget_id
   AND b.login_id = @login_id;
 
+-- name: GetBudgetExpenseShare :one
+SELECT
+  bes.expense_share_id,
+  bes.name,
+  bes.display_name
+FROM
+  budget_expense_share AS bes
+  JOIN budget as b ON b.id = bes.budget_id
+WHERE
+  bes.expense_share_id = @expense_share_id
+  AND b.id = @budget_id
+  AND b.login_id = @login_id;
+
 -- name: PublishExpenseShareTrx :one
 INSERT INTO
   expense_share_trx (
@@ -171,6 +184,7 @@ SELECT
   est.requested_inflow,
   est.note,
   pub_bes.display_name AS publisher_display_name,
+  src.account_id AS source_account_id,
   ess_all.id AS split_id,
   ess_all.budget_id AS split_budget_id,
   split_bes.display_name AS split_display_name,
@@ -190,6 +204,8 @@ FROM
   JOIN expense_share_trx AS est ON est.expense_share_id = @expense_share_id
   LEFT JOIN budget_expense_share AS pub_bes ON pub_bes.budget_id = est.budget_id
   AND pub_bes.expense_share_id = @expense_share_id
+  LEFT JOIN trx AS src ON src.id = est.trx_id
+  AND src.budget_id = est.budget_id
   LEFT JOIN expense_share_trx_split AS ess_all ON ess_all.expense_share_trx_id = est.id
   LEFT JOIN budget_expense_share AS split_bes ON split_bes.budget_id = ess_all.budget_id
   AND split_bes.expense_share_id = @expense_share_id
@@ -206,3 +222,163 @@ ORDER BY
   est.id DESC,
   ess_all.budget_id,
   esl.id;
+
+-- name: ListExpenseShareBalances :many
+-- Per-member net balances for an expense share, computed in SQL.
+-- Positive = others owe this member; negative = this member owes.
+-- Replicates the read-path default-split rule from groupExpenseShareTrx:
+-- members without a stored split share the requested amount evenly in
+-- budget-id order (leading members absorb leftover cents); the publisher,
+-- while still a member, keeps total - requested. Stored splits of departed
+-- or deleted budgets are ignored.
+WITH gate AS (
+  SELECT 1 AS ok
+  FROM budget AS b
+  JOIN budget_expense_share AS mine ON mine.budget_id = b.id AND mine.expense_share_id = @expense_share_id
+  WHERE b.id = @budget_id AND b.login_id = @login_id
+),
+members AS (
+  SELECT bes.budget_id, bes.display_name
+  FROM gate
+  JOIN budget_expense_share AS bes ON bes.expense_share_id = @expense_share_id
+),
+trx AS (
+  SELECT
+    est.id,
+    est.budget_id AS publisher_budget_id,
+    est.total_outflow,
+    est.total_inflow,
+    est.requested_outflow,
+    est.requested_inflow
+  FROM gate
+  JOIN expense_share_trx AS est ON est.expense_share_id = @expense_share_id
+),
+stored AS (
+  SELECT s.expense_share_trx_id AS trx_id, s.budget_id, s.split_outflow, s.split_inflow
+  FROM expense_share_trx_split AS s
+  JOIN members AS m ON m.budget_id = s.budget_id
+  WHERE s.expense_share_id = @expense_share_id
+),
+owing AS (
+  SELECT t.id AS trx_id, m.budget_id
+  FROM trx AS t
+  CROSS JOIN members AS m
+  WHERE NOT EXISTS (
+    SELECT 1 FROM stored AS s WHERE s.trx_id = t.id AND s.budget_id = m.budget_id
+  )
+),
+sharing AS (
+  SELECT o.trx_id, o.budget_id,
+    ROW_NUMBER() OVER (PARTITION BY o.trx_id ORDER BY o.budget_id) AS rn
+  FROM owing AS o
+  JOIN trx AS t ON t.id = o.trx_id
+  LEFT JOIN members AS pm ON pm.budget_id = t.publisher_budget_id
+  WHERE t.publisher_budget_id IS NULL OR pm.budget_id IS NULL OR o.budget_id != t.publisher_budget_id
+),
+stats AS (
+  SELECT
+    t.id AS trx_id,
+    CASE WHEN t.total_inflow = 0 THEN 1 ELSE 0 END AS outflow,
+    CASE WHEN t.total_inflow = 0 THEN t.requested_outflow ELSE t.requested_inflow END AS requested,
+    CASE WHEN t.total_inflow = 0 THEN t.total_outflow ELSE t.total_inflow END AS total,
+    t.publisher_budget_id AS publisher_budget_id,
+    CASE WHEN pm.budget_id IS NOT NULL THEN 1 ELSE 0 END AS pub_is_member
+  FROM trx AS t
+  LEFT JOIN members AS pm ON pm.budget_id = t.publisher_budget_id
+),
+counts AS (
+  SELECT trx_id, COUNT(*) AS n FROM sharing GROUP BY trx_id
+),
+eff AS (
+  SELECT
+    t.trx_id,
+    m.budget_id,
+    COALESCE(
+      CASE WHEN t.outflow = 1 THEN st.split_outflow ELSE st.split_inflow END,
+      CASE WHEN t.pub_is_member = 1 AND m.budget_id = t.publisher_budget_id THEN t.total - t.requested END,
+      CASE WHEN sh.rn IS NOT NULL
+        THEN t.requested / c.n + CASE WHEN sh.rn <= t.requested % c.n THEN 1 ELSE 0 END
+      END,
+      0
+    ) AS share
+  FROM stats AS t
+  CROSS JOIN members AS m
+  LEFT JOIN stored AS st ON st.trx_id = t.trx_id AND st.budget_id = m.budget_id
+  LEFT JOIN sharing AS sh ON sh.trx_id = t.trx_id AND sh.budget_id = m.budget_id
+  LEFT JOIN counts AS c ON c.trx_id = t.trx_id
+)
+SELECT
+  m.budget_id AS budget_id,
+  m.display_name AS display_name,
+  CAST(COALESCE(SUM(
+    CASE WHEN st.outflow = 1
+      THEN (CASE WHEN st.publisher_budget_id = m.budget_id THEN st.total ELSE 0 END) - sh.share
+      ELSE sh.share - (CASE WHEN st.publisher_budget_id = m.budget_id THEN st.total ELSE 0 END)
+    END
+  ), 0) AS INTEGER) AS balance
+FROM members AS m
+LEFT JOIN eff AS sh ON sh.budget_id = m.budget_id
+LEFT JOIN stats AS st ON st.trx_id = sh.trx_id
+GROUP BY m.budget_id, m.display_name
+ORDER BY balance DESC, m.budget_id;
+
+-- name: GetExpenseShareTrxById :one
+SELECT
+  est.*
+FROM
+  budget AS b
+  JOIN budget_expense_share AS mine ON mine.budget_id = b.id
+  AND mine.expense_share_id = @expense_share_id
+  JOIN expense_share_trx AS est ON est.expense_share_id = @expense_share_id
+  AND est.id = @trx_id
+WHERE
+  b.id = @budget_id
+  AND b.login_id = @login_id;
+
+-- name: DeleteExpenseShareSplits :exec
+DELETE FROM expense_share_trx_split
+WHERE
+  expense_share_trx_id = @trx_id;
+
+-- name: CreateExpenseShareSplit :one
+INSERT INTO
+  expense_share_trx_split (
+    expense_share_trx_id,
+    expense_share_id,
+    budget_id,
+    split_outflow,
+    split_inflow
+  )
+VALUES
+  (@trx_id, @expense_share_id, @budget_id, @split_outflow, @split_inflow)
+RETURNING
+  *;
+
+-- name: GetExpenseShareSplit :one
+SELECT
+  *
+FROM
+  expense_share_trx_split
+WHERE
+  expense_share_trx_id = @trx_id
+  AND budget_id = @budget_id;
+
+-- name: DeleteExpenseShareSplitLines :exec
+DELETE FROM expense_share_trx_split_line
+WHERE
+  expense_share_trx_split_id = @split_id;
+
+-- name: CreateExpenseShareSplitLine :one
+INSERT INTO
+  expense_share_trx_split_line (
+    budget_id,
+    expense_share_trx_split_id,
+    dest_account_id,
+    category_id,
+    outflow,
+    inflow
+  )
+VALUES
+  (@budget_id, @split_id, @dest_account_id, @category_id, @outflow, @inflow)
+RETURNING
+  *;

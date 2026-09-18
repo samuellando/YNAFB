@@ -1,12 +1,21 @@
 import { useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { getExpenseShareCode, listExpenseShares } from '../lib/api/budget'
+import {
+  getExpenseShareCode,
+  getExpenseShareDetail,
+  listExpenseShares,
+  type ExpenseShareTrx,
+} from '../lib/api/budget'
 import { parseIdParam } from '../lib/params'
 import ExpenseShareDialog, {
   type ExpenseShareDialogState,
 } from '../components/ExpenseShareDialog'
 import BudgetMonthError from '../components/budget/BudgetMonthError'
+import ExpenseShareCategorizeDialog from '../components/expense-share/ExpenseShareCategorizeDialog'
+import ExpenseShareSplitDialog from '../components/expense-share/ExpenseShareSplitDialog'
+import ExpenseShareSummary from '../components/expense-share/ExpenseShareSummary'
+import ExpenseShareTrxTable from '../components/expense-share/ExpenseShareTrxTable'
 import { PencilIcon } from '../components/icons'
 import { OUTLINE_BUTTON } from '../components/ui/buttons'
 
@@ -24,6 +33,8 @@ export default function ExpenseShare() {
   })
 
   const [rename, setRename] = useState<ExpenseShareDialogState | null>(null)
+  const [editingTrx, setEditingTrx] = useState<ExpenseShareTrx | null>(null)
+  const [categorizingTrx, setCategorizingTrx] = useState<ExpenseShareTrx | null>(null)
   const [codeOpen, setCodeOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -31,6 +42,12 @@ export default function ExpenseShare() {
     queryKey: ['expense-share-code', budget, id],
     queryFn: () => getExpenseShareCode(budget ?? 0, id ?? 0),
     enabled: valid && codeOpen,
+  })
+
+  const detail = useQuery({
+    queryKey: ['expense-share', budget, id],
+    queryFn: () => getExpenseShareDetail(budget ?? 0, id ?? 0),
+    enabled: valid,
   })
 
   if (!valid) {
@@ -127,6 +144,24 @@ export default function ExpenseShare() {
             </p>
           </div>
         )}
+
+        {detail.isPending && <div className="mt-6 min-h-80" />}
+
+        {detail.isError && (
+          <BudgetMonthError message={detail.error.message} onRetry={() => detail.refetch()} />
+        )}
+
+        {detail.isSuccess && (
+          <>
+            <ExpenseShareSummary summary={detail.data.summary} ownBudgetId={budget} />
+            <ExpenseShareTrxTable
+              transactions={detail.data.transactions}
+              ownBudgetId={budget}
+              onSelect={setEditingTrx}
+              onCategorize={setCategorizingTrx}
+            />
+          </>
+        )}
       </div>
 
       {rename && (
@@ -137,6 +172,29 @@ export default function ExpenseShare() {
           onClose={() => setRename(null)}
           onDone={() => setRename(null)}
           onDeleted={() => navigate(`/budget/${budget}`)}
+        />
+      )}
+
+      {editingTrx && (
+        <ExpenseShareSplitDialog
+          key={`splits-${editingTrx.id}`}
+          budgetId={budget}
+          expenseShareId={id ?? 0}
+          ownBudgetId={budget}
+          dialog={{ transaction: editingTrx }}
+          onClose={() => setEditingTrx(null)}
+          onDone={() => setEditingTrx(null)}
+        />
+      )}
+
+      {categorizingTrx && (
+        <ExpenseShareCategorizeDialog
+          key={`categorize-${categorizingTrx.id}`}
+          budgetId={budget}
+          expenseShareId={id ?? 0}
+          dialog={{ transaction: categorizingTrx }}
+          onClose={() => setCategorizingTrx(null)}
+          onDone={() => setCategorizingTrx(null)}
         />
       )}
     </>
