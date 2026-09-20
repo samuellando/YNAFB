@@ -1793,6 +1793,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete transaction in the expense share for all users */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                    /** @description the published expense share transaction id */
+                    trxId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successfully deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/splits": {
         parameters: {
             query?: never;

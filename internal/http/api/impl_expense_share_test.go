@@ -113,6 +113,81 @@ func TestPutExpenseShareTrxSplits(t *testing.T) {
 		map[string]any{"lines": []map[string]any{{"categoryId": carolCategory.ID, "outflow": 100, "inflow": 0}}}, 500)
 }
 
+func TestDeleteExpenseShareTrx(t *testing.T) {
+	ts := setupTestServer(t)
+	budgetA := ts.newBudget(t, "Alice")
+	budgetB := ts.newBudget(t, "Bob")
+	share := ts.newExpenseShare(t, budgetA, "Trip")
+	if _, err := ts.queries.JoinExpenseShare(ts.ctx, data.JoinExpenseShareParams{
+		ExpenseShareID: share.ExpenseShareID,
+		LoginID:        budgetB.LoginID,
+		BudgetID:       budgetB.ID,
+		DisplayName:    "Bob",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	account := ts.newAccount(t, budgetA, "Chequing")
+	payee := ts.newPayee(t, budgetA, "Store")
+	trx := ts.newTrx(t, budgetA, account, payee)
+	if _, err := ts.queries.CreateTrxLine(ts.ctx, data.CreateTrxLineParams{
+		TrxID:          trx.ID,
+		ExpenseShareID: sql.NullInt64{Int64: share.ExpenseShareID, Valid: true},
+		Income:         false,
+		Outflow:        1000,
+		Inflow:         0,
+		BudgetID:       budgetA.ID,
+		LoginID:        budgetA.LoginID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var published api.ExpenseShareTrx
+	w := ts.doReq(t, "POST",
+		"/api/v1/budget/"+strconv.Itoa(int(budgetA.ID))+
+			"/expense-share/"+strconv.Itoa(int(share.ExpenseShareID))+"/trx",
+		map[string]any{"trxId": trx.ID}, 201)
+	decodeJSON(t, w, &published)
+
+	// Unknown ids are rejected.
+	bobTrxPath := func(id any) string {
+		return "/api/v1/budget/" + strconv.Itoa(int(budgetB.ID)) +
+			"/expense-share/" + strconv.Itoa(int(share.ExpenseShareID)) +
+			"/trx/" + strconv.Itoa(id.(int))
+	}
+	ts.doReq(t, "DELETE", bobTrxPath(9999), nil, 500)
+
+	// Any member may delete, including a non-publisher.
+	ts.doReq(t, "DELETE", bobTrxPath(published.Id), nil, 204)
+
+	// The published trx is gone from the share.
+	var reread api.ExpenseShareDetail
+	w = ts.doReq(t, "GET",
+		"/api/v1/budget/"+strconv.Itoa(int(budgetA.ID))+
+			"/expense-share/"+strconv.Itoa(int(share.ExpenseShareID)),
+		nil, 200)
+	decodeJSON(t, w, &reread)
+	if len(reread.Transactions) != 0 {
+		t.Fatalf("transactions after delete = %+v, want empty", reread.Transactions)
+	}
+	if reread.Summary.TransactionCount != 0 {
+		t.Fatalf("transactionCount = %d, want 0", reread.Summary.TransactionCount)
+	}
+
+	// Deleting again fails: the row no longer exists.
+	ts.doReq(t, "DELETE", bobTrxPath(published.Id), nil, 500)
+
+	// The source local transaction survives the share delete.
+	trxs, err := ts.queries.ListTrxs(ts.ctx, data.ListTrxsParams{
+		LoginID:  budgetA.LoginID,
+		BudgetID: budgetA.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trxs) != 1 || trxs[0].ID != trx.ID {
+		t.Fatalf("source trxs = %+v, want the original trx %d", trxs, trx.ID)
+	}
+}
+
 func TestPutExpenseShareTrxLines(t *testing.T) {
 	ts := setupTestServer(t)
 	budgetA := ts.newBudget(t, "Alice")

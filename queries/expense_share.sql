@@ -335,6 +335,20 @@ WHERE
   b.id = @budget_id
   AND b.login_id = @login_id;
 
+-- name: DeleteExpenseShareTrx :exec
+DELETE FROM expense_share_trx
+WHERE
+  expense_share_trx.id = @trx_id
+  AND expense_share_trx.expense_share_id = @expense_share_id
+  AND EXISTS (
+    SELECT 1
+    FROM budget AS b
+    JOIN budget_expense_share AS mine ON mine.budget_id = b.id
+    AND mine.expense_share_id = @expense_share_id
+    WHERE b.id = @budget_id
+    AND b.login_id = @login_id
+  );
+
 -- name: DeleteExpenseShareSplits :exec
 DELETE FROM expense_share_trx_split
 WHERE

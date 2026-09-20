@@ -774,3 +774,25 @@ export async function publishExpenseShareTrx(
   }
   return data
 }
+
+export async function deleteExpenseShareTrx(
+  budgetId: number,
+  expenseShareId: number,
+  trxId: number,
+): Promise<void> {
+  const { error, response } = await client.DELETE(
+    '/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}',
+    {
+      params: {
+        path: {
+          budgetId: String(budgetId),
+          expenseShareId: String(expenseShareId),
+          trxId: String(trxId),
+        },
+      },
+    },
+  )
+  if (!response.ok) {
+    throw apiError(error, 'Failed to delete transaction', response.status)
+  }
+}

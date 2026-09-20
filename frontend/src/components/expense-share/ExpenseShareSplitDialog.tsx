@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
+  deleteExpenseShareTrx,
   updateExpenseShareSplits,
   type ExpenseShareTrx,
 } from '../../lib/api/budget'
@@ -8,7 +9,7 @@ import { centsFromInput, centsToInput, formatMoney } from '../../lib/money'
 import { WarningIcon } from '../icons'
 import AmountInput from '../ui/AmountInput'
 import DialogShell from '../ui/DialogShell'
-import { CANCEL_BUTTON, PRIMARY_BUTTON } from '../ui/buttons'
+import { CANCEL_BUTTON, DANGER_BUTTON, PRIMARY_BUTTON } from '../ui/buttons'
 
 export type ExpenseShareSplitDialogState = {
   transaction: ExpenseShareTrx
@@ -65,6 +66,8 @@ export default function ExpenseShareSplitDialog({
   const balanced = total === requested
   const canSave = allValid && balanced
 
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+
   const save = useMutation({
     mutationFn: () => {
       for (const { cents } of parsed) {
@@ -81,6 +84,16 @@ export default function ExpenseShareSplitDialog({
         })),
       )
     },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['expense-share', budgetId, expenseShareId],
+      })
+      onDone()
+    },
+  })
+
+  const remove = useMutation({
+    mutationFn: () => deleteExpenseShareTrx(budgetId, expenseShareId, transaction.id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['expense-share', budgetId, expenseShareId],
@@ -137,9 +150,21 @@ export default function ExpenseShareSplitDialog({
         </p>
       )}
 
-      {save.isError && <p className="mt-3 text-sm text-red-400">{save.error.message}</p>}
+      {(save.isError || remove.isError) && (
+        <p className="mt-3 text-sm text-red-400">
+          {save.isError ? save.error.message : remove.isError ? remove.error.message : ''}
+        </p>
+      )}
 
       <div className="mt-6 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => (confirmingDelete ? remove.mutate() : setConfirmingDelete(true))}
+          disabled={remove.isPending}
+          className={DANGER_BUTTON}
+        >
+          {remove.isPending ? 'Deleting…' : confirmingDelete ? 'Confirm delete' : 'Delete'}
+        </button>
         <button type="button" onClick={onClose} className={CANCEL_BUTTON}>
           Cancel
         </button>

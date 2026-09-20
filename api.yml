@@ -1415,10 +1415,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExpenseShareTrx"
-    # put:
-    #   summary: Update transaction in the expense share for all users
-    # delete:
-    #   summary: Delete transaction in the expense share for all users
+
+  /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}:
+    delete:
+      summary: Delete transaction in the expense share for all users
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: expenseShareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: trxId
+        in: path
+        description: the published expense share transaction id
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Successfully deleted
 
   /budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/splits:
     put:

@@ -824,6 +824,47 @@ func (s ApiServer) PutBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdLines(ctx 
 	return nil, fmt.Errorf("Expense share transaction not found")
 }
 
+func (s ApiServer) DeleteBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxId(ctx context.Context, request DeleteBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdRequestObject) (DeleteBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxIdResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetID, err := strconv.Atoi(request.BudgetId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	expenseShareID, err := strconv.Atoi(request.ExpenseShareId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid expenseShare id: %w", err)
+	}
+	trxID, err := strconv.Atoi(request.TrxId)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid trx id: %w", err)
+	}
+	// Any member may delete; GetExpenseShareTrxById is gated on membership
+	// so a missing row means not your budget / not a member / unknown trx.
+	if _, err := s.queries.GetExpenseShareTrxById(ctx, data.GetExpenseShareTrxByIdParams{
+		ExpenseShareID: int64(expenseShareID),
+		TrxID:          int64(trxID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	}); err != nil {
+		return nil, err
+	}
+	// Splits and split lines cascade off expense_share_trx; the source local
+	// trx is left intact (its FK is ON DELETE SET NULL).
+	if err := s.queries.DeleteExpenseShareTrx(ctx, data.DeleteExpenseShareTrxParams{
+		TrxID:          int64(trxID),
+		ExpenseShareID: int64(expenseShareID),
+		BudgetID:       int64(budgetID),
+		LoginID:        loginID,
+	}); err != nil {
+		return nil, err
+	}
+	return DeleteBudgetBudgetIdExpenseShareExpenseShareIdTrxTrxId204Response{}, nil
+}
+
 func findExpenseShareSplit(splits []ExpenseShareTrxSplit, budgetID int64) *ExpenseShareTrxSplit {
 	for i := range splits {
 		if splits[i].BudgetId == int(budgetID) {
