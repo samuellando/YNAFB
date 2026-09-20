@@ -315,7 +315,7 @@ SELECT
       COALESCE(
         (
           SELECT
-            sum(total_inflow + total_outflow)
+            sum(split_inflow + split_outflow)
           FROM
             expense_share_trx_split AS ess
             JOIN expense_share_trx AS est ON ess.expense_share_trx_id = est.id
