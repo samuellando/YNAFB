@@ -627,6 +627,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The outflow of this line */
@@ -686,6 +688,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The outflow of this line */
@@ -1415,6 +1419,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The percent of the transaction this line accounts for */
@@ -1470,6 +1476,8 @@ export interface paths {
                         destAccountId?: number;
                         /** @description The category id (for spend lines) */
                         categoryId?: number;
+                        /** @description The expense share id (for spend lines) */
+                        expenseShareId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
                         /** @description The percent of the transaction this line accounts for */
@@ -1516,6 +1524,425 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the expense shares this budget is linked to */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BudgetExpenseShare"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a new empty expense share and link it to this budget
+         *     If an expesne share code is passed in, it will join an existing expense share
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description The defualt name, only applicable when creating an expense share */
+                        defaultName?: string;
+                        /** @description The code of an existing expense share to join */
+                        code?: string;
+                        /** @description The name this budget shows as to other members of the expense share */
+                        displayName: string;
+                    };
+                };
+            };
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseShare"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a new expense share code to share with others */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the budget id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share/{expenseShareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the expense share summary for this budget with its transactions
+         *     Similar to the account summary, showing the details and all the transactions
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The expense share summary and its transactions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseShareDetail"];
+                    };
+                };
+            };
+        };
+        /** Update an expense share for this budget */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the budget id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description The name for the expense share in this budget */
+                        name: string;
+                        /** @description The name this budget shows as to other members of the expense share */
+                        displayName: string;
+                    };
+                };
+            };
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BudgetExpenseShare"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Delete an expense share from this budget */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the budget id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successfully deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/trx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a transaction to the expense share for others to see */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description The local transaction id to publish */
+                        trxId: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successfully published */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseShareTrx"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete transaction in the expense share for all users */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                    /** @description the published expense share transaction id */
+                    trxId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successfully deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the per-budget splits of a published expense share transaction (the publishing budget keeps the remainder automatically and is not submitted) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                    /** @description the published expense share transaction id */
+                    trxId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description One split per non-publisher member; amounts must sum to the requested amount */
+                        splits: {
+                            /** @description The budget this split belongs to */
+                            budgetId: number;
+                            /** @description This budget's share (outflow) */
+                            outflow: number;
+                            /** @description This budget's share (inflow) */
+                            inflow: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The updated splits */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseShareTrxDetail"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/budget/{budgetId}/expense-share/{expenseShareId}/trx/{trxId}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace how this budget categorizes its split of a published expense share transaction */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description the budget id */
+                    budgetId: string;
+                    /** @description the expense share id */
+                    expenseShareId: string;
+                    /** @description the published expense share transaction id */
+                    trxId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @description How this budget categorizes its split (an empty list clears it) */
+                        lines: {
+                            /** @description The category for this line (exactly one of categoryId or destAccountId) */
+                            categoryId?: number;
+                            /** @description The destination account for a transfer line (exactly one of categoryId or destAccountId) */
+                            destAccountId?: number;
+                            outflow: number;
+                            inflow: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description The updated transaction with this budget's lines */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseShareTrxDetail"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1628,6 +2055,8 @@ export interface components {
             destAccountName?: string;
             categoryId?: number;
             categoryName?: string;
+            expenseShareId?: number;
+            expenseShareName?: string;
             income: boolean;
             outflow: number;
             inflow: number;
@@ -1692,6 +2121,10 @@ export interface components {
             categoryId?: number;
             /** @description The category name (present on list responses) */
             categoryName?: string;
+            /** @description The expense share id (for spend lines) */
+            expenseShareId?: number;
+            /** @description The expense share name (for spend lines) */
+            expenseShareName?: string;
             /** @description Whether this is an income line */
             income: boolean;
             /** @description The percent of the transaction this line accounts for */
@@ -1722,11 +2155,114 @@ export interface components {
             destAccountId?: number;
             /** @description The category id (present on spend lines) */
             categoryId?: number;
+            /** @description The expense share id (for spend lines) */
+            expenseShareId?: number;
             /** @description Whether this is an income line */
             income: boolean;
             /** @description The outflow of this line */
             outflow: number;
             /** @description The inflow of this line */
+            inflow: number;
+        };
+        BudgetExpenseShare: {
+            id: number;
+            name: string;
+            /** @description The name this budget shows as to other members of the expense share */
+            displayName: string;
+        };
+        ExpenseShare: {
+            id: number;
+            name: string;
+            defaultName: string;
+            /** @description The name this budget shows as to other members of the expense share */
+            displayName: string;
+        };
+        ExpenseShareTrx: {
+            /** @description The published expense share transaction id */
+            id: number;
+            /** @description The expense share this transaction was published to */
+            expenseShareId: number;
+            /** @description The source local transaction id */
+            trxId: number;
+            payeeName: string;
+            /** @description The transaction date (RFC3339) */
+            date: string;
+            totalOutflow: number;
+            totalInflow: number;
+            /** @description The sum of this transaction's lines pointing at the expense share (outflow) */
+            requestedOutflow: number;
+            /** @description The sum of this transaction's lines pointing at the expense share (inflow) */
+            requestedInflow: number;
+            note: string;
+        };
+        ExpenseShareDetail: {
+            summary: components["schemas"]["ExpenseShareSummary"];
+            /** @description The share's transactions, each with its splits */
+            transactions: components["schemas"]["ExpenseShareTrxDetail"][];
+        };
+        ExpenseShareSummary: {
+            id: number;
+            /** @description The name for the expense share in this budget */
+            name: string;
+            /** @description The name this budget shows as to other members of the expense share */
+            displayName: string;
+            memberCount: number;
+            transactionCount: number;
+            /** @description Per-member net balances, computed in SQL. Positive means others owe this member; negative means this member owes. */
+            balances: components["schemas"]["ExpenseShareBalance"][];
+        };
+        ExpenseShareBalance: {
+            /** @description The budget this balance belongs to */
+            budgetId: number;
+            /** @description The display name of the budget this balance belongs to */
+            displayName: string;
+            /** @description Net balance in cents. Positive means others owe this member; negative means this member owes. */
+            balance: number;
+        };
+        ExpenseShareTrxDetail: {
+            /** @description The published expense share transaction id */
+            id: number;
+            /** @description The expense share this transaction was published to */
+            expenseShareId: number;
+            /** @description The source local transaction id */
+            trxId: number;
+            /** @description The source account id (absent if the source transaction was deleted) */
+            accountId?: number;
+            /** @description The budget that published the transaction (absent if that budget was deleted) */
+            publisherBudgetId?: number;
+            /** @description The publisher's display name (absent if that budget was deleted or left) */
+            publisherDisplayName?: string;
+            payeeName: string;
+            /** @description The transaction date (RFC3339) */
+            date: string;
+            totalOutflow: number;
+            totalInflow: number;
+            requestedOutflow: number;
+            requestedInflow: number;
+            note: string;
+            /** @description One split per share member (stored, or defaulted) */
+            splits: components["schemas"]["ExpenseShareTrxSplit"][];
+        };
+        ExpenseShareTrxSplit: {
+            /** @description The budget this split belongs to */
+            budgetId: number;
+            /** @description The display name of the budget this split belongs to */
+            displayName: string;
+            splitOutflow: number;
+            splitInflow: number;
+            /** @description True when no split was stored and the amount was defaulted */
+            isDefault: boolean;
+            /** @description How this budget categorizes its split (only populated for the requesting budget) */
+            lines?: components["schemas"]["ExpenseShareTrxSplitLine"][];
+        };
+        ExpenseShareTrxSplitLine: {
+            /** @description The split line id */
+            id: number;
+            categoryId?: number;
+            categoryName?: string;
+            destAccountId?: number;
+            destAccountName?: string;
+            outflow: number;
             inflow: number;
         };
     };

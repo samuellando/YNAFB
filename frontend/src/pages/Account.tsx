@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { getAccountDetail, type AccountTransaction } from '../lib/api/budget'
 import { needsCategorize, uncategorizedAmount } from '../lib/accountView'
@@ -31,6 +31,20 @@ export default function Account() {
   const uncategorized = useMemo(() => uncategorizedAmount(transactions), [transactions])
 
   const [selected, setSelected] = useState<AccountTransaction | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkId = parseIdParam(searchParams.get('trx') ?? undefined)
+  const deepLinked =
+    deepLinkId === null
+      ? null
+      : (transactions.find((t) => t.id === deepLinkId) ?? null)
+  const shown = selected ?? deepLinked
+
+  function closeSelected() {
+    setSelected(null)
+    if (deepLinkId !== null) {
+      setSearchParams({})
+    }
+  }
   const [adding, setAdding] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [reconcileOpen, setReconcileOpen] = useState(false)
@@ -140,19 +154,23 @@ export default function Account() {
               reconciledBalance={summary.reconciledBalance}
               uncategorized={uncategorized}
             />
-            <TransactionTable transactions={transactions} onSelectTransaction={setSelected} />
+            <TransactionTable
+              budgetId={budget}
+              transactions={transactions}
+              onSelectTransaction={setSelected}
+            />
           </>
         )}
       </div>
 
-      {selected && (
+      {shown && (
         <TransactionDialog
-          key={selected.id}
+          key={shown.id}
           budgetId={budget}
           accountId={id}
-          dialog={{ transaction: selected }}
-          onCancel={() => setSelected(null)}
-          onDone={() => setSelected(null)}
+          dialog={{ transaction: shown }}
+          onCancel={closeSelected}
+          onDone={closeSelected}
         />
       )}
 

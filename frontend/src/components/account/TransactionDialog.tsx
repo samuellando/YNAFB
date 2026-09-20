@@ -11,6 +11,7 @@ import {
   deleteTransactionLine,
   getBudgetMonth,
   listAccounts,
+  listExpenseShares,
   listPayeeDefaultLines,
   listPayees,
   updateTransaction,
@@ -46,7 +47,7 @@ type TransactionDialogProps = {
   onSkip?: () => void
 }
 
-type LineKind = 'income' | 'spending' | 'transfer'
+type LineKind = 'income' | 'spending' | 'transfer' | 'share'
 
 type LineDraft = {
   key: string
@@ -60,6 +61,7 @@ type LineDraft = {
 function lineKindOf(line: AccountTransactionLine): LineKind {
   if (line.destAccountId !== undefined) return 'transfer'
   if (line.income) return 'income'
+  if (line.expenseShareId !== undefined) return 'share'
   return 'spending'
 }
 
@@ -68,7 +70,7 @@ function draftFromLine(line: AccountTransactionLine): LineDraft {
     key: `line-${line.lineId}`,
     lineId: line.lineId,
     kind: lineKindOf(line),
-    targetId: line.destAccountId ?? line.categoryId ?? null,
+    targetId: line.destAccountId ?? line.categoryId ?? line.expenseShareId ?? null,
     outflow: centsToInput(line.outflow),
     inflow: centsToInput(line.inflow),
   }
@@ -85,6 +87,9 @@ function draftToInput(draft: LineDraft, outflow: number, inflow: number): Transa
       : {}),
     ...(draft.kind === 'spending' && draft.targetId !== null
       ? { categoryId: draft.targetId }
+      : {}),
+    ...(draft.kind === 'share' && draft.targetId !== null
+      ? { expenseShareId: draft.targetId }
       : {}),
     income: draft.kind === 'income',
     outflow,
@@ -110,12 +115,18 @@ function draftsFromDefaults(
   const amounts = defaultLineAmounts(defaults, total)
   return defaults.map((d, i) => {
     const kind: LineKind =
-      d.destAccountId !== undefined ? 'transfer' : d.income ? 'income' : 'spending'
+      d.destAccountId !== undefined
+        ? 'transfer'
+        : d.income
+          ? 'income'
+          : d.expenseShareId !== undefined
+            ? 'share'
+            : 'spending'
     return {
       key: newKey(),
       lineId: null,
       kind,
-      targetId: d.destAccountId ?? d.categoryId ?? null,
+      targetId: d.destAccountId ?? d.categoryId ?? d.expenseShareId ?? null,
       outflow: useOutflow ? centsToInput(amounts[i]) : centsToInput(0),
       inflow: useOutflow ? centsToInput(0) : centsToInput(amounts[i]),
     }
@@ -129,6 +140,9 @@ function defaultLineInput(draft: LineDraft, percent: number): PayeeDefaultLineIn
       : {}),
     ...(draft.kind === 'spending' && draft.targetId !== null
       ? { categoryId: draft.targetId }
+      : {}),
+    ...(draft.kind === 'share' && draft.targetId !== null
+      ? { expenseShareId: draft.targetId }
       : {}),
     income: draft.kind === 'income',
     percent,
@@ -168,6 +182,10 @@ export default function TransactionDialog({
     queryKey: ['budget-month', budgetId, current],
     queryFn: () => getBudgetMonth(budgetId, current),
   })
+  const expenseSharesQuery = useQuery({
+    queryKey: ['expense-shares', budgetId],
+    queryFn: () => listExpenseShares(budgetId),
+  })
   const payeeOptions: EntityOption[] = useMemo(
     () => (payeesQuery.data ?? []).map((payee) => ({ id: payee.id, name: payee.name })),
     [payeesQuery.data],
@@ -191,6 +209,10 @@ export default function TransactionDialog({
         ...(category.groupName ? { subtext: category.groupName } : {}),
       })),
     [categoryOpts],
+  )
+  const expenseShareOptions: EntityOption[] = useMemo(
+    () => (expenseSharesQuery.data ?? []).map((share) => ({ id: share.id, name: share.name })),
+    [expenseSharesQuery.data],
   )
 
   const [payeeId, setPayeeId] = useState<number | null>(transaction?.payeeId ?? null)
@@ -273,7 +295,7 @@ export default function TransactionDialog({
   const lineStates = lines.map((draft) => {
     const lineOut = parseAmount(draft.outflow)
     const lineIn = parseAmount(draft.inflow)
-    const needsTarget = draft.kind === 'spending' || draft.kind === 'transfer'
+    const needsTarget = draft.kind === 'spending' || draft.kind === 'transfer' || draft.kind === 'share'
     const valid = lineOut !== null && lineIn !== null && (!needsTarget || draft.targetId !== null)
     return { draft, out: lineOut ?? 0, in: lineIn ?? 0, valid }
   })
@@ -422,8 +444,16 @@ export default function TransactionDialog({
     return { id: category.id, name: category.name }
   }
 
-  const loading = payeesQuery.isPending || accountsQuery.isPending || monthQuery.isPending
-  const loadError = payeesQuery.isError || accountsQuery.isError || monthQuery.isError
+  const loading =
+    payeesQuery.isPending ||
+    accountsQuery.isPending ||
+    monthQuery.isPending ||
+    expenseSharesQuery.isPending
+  const loadError =
+    payeesQuery.isError ||
+    accountsQuery.isError ||
+    monthQuery.isError ||
+    expenseSharesQuery.isError
 
   return (
     <DialogShell wide onClose={onCancel}>
@@ -449,6 +479,7 @@ export default function TransactionDialog({
               payeesQuery.refetch()
               accountsQuery.refetch()
               monthQuery.refetch()
+              expenseSharesQuery.refetch()
             }}
             className="mt-4 rounded-lg border border-red-800 px-3 py-1.5 text-sm font-medium text-red-400 transition hover:bg-red-900/50"
           >
@@ -524,7 +555,8 @@ export default function TransactionDialog({
             )}
 
             {lines.map((draft, index) => {
-              const needsTarget = draft.kind === 'spending' || draft.kind === 'transfer'
+              const needsTarget =
+                draft.kind === 'spending' || draft.kind === 'transfer' || draft.kind === 'share'
               const missingTarget = needsTarget && draft.targetId === null
               const badOut = parseAmount(draft.outflow) === null
               const badIn = parseAmount(draft.inflow) === null
@@ -541,10 +573,22 @@ export default function TransactionDialog({
                   >
                     <option value="income">Income</option>
                     <option value="spending">Spending</option>
+                    <option value="share">Expense share</option>
                     <option value="transfer">Transfer</option>
                   </select>
                   {draft.kind === 'income' ? (
                     <span className="truncate px-3 py-2 text-sm text-slate-500">Income</span>
+                  ) : draft.kind === 'share' ? (
+                    <EntityPicker
+                      hideLabel
+                      label="Expense share"
+                      options={expenseShareOptions}
+                      value={draft.targetId}
+                      onChange={(id) => updateDraft(draft.key, { targetId: id })}
+                      placeholder="Select share"
+                      invalid={missingTarget}
+                      onEnter={() => focusLineOutflow(draft.key)}
+                    />
                   ) : draft.kind === 'spending' ? (
                     <EntityPicker
                       hideLabel

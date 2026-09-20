@@ -1,8 +1,8 @@
 -- name: CreateTrxLine :one
 INSERT INTO
-  trx_line (budget_id, trx_id, dest_account_id, category_id, income, outflow, inflow)
+  trx_line (budget_id, trx_id, dest_account_id, category_id, expense_share_id, income, outflow, inflow)
 SELECT
-  b.id, ?, ?, ?, ?, ?, ?
+  b.id, ?, ?, ?, ?, ?, ?, ?
 FROM
   budget AS b
 WHERE
@@ -13,7 +13,7 @@ RETURNING
 -- name: UpdateTrxLine :one
 UPDATE trx_line
 SET
-  trx_id = ?, dest_account_id = ?, category_id = ?, income = ?, outflow = ?, inflow = ?
+  trx_id = ?, dest_account_id = ?, category_id = ?, expense_share_id=?, income = ?, outflow = ?, inflow = ?
 WHERE
   trx_line.id = @id
   AND trx_line.budget_id IN (

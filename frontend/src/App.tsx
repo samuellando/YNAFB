@@ -6,6 +6,7 @@ import Signup from './pages/Signup'
 import Budget from './pages/Budget'
 import MonthlyBudget from './pages/MonthlyBudget'
 import Account from './pages/Account'
+import ExpenseShare from './pages/ExpenseShare'
 import AppLayout from './components/AppLayout'
 import RequireSession from './components/RequireSession'
 
@@ -25,6 +26,7 @@ function App() {
               <Route index element={<MonthlyBudget />} />
               <Route path=":month" element={<MonthlyBudget />} />
               <Route path="account/:accountId" element={<Account />} />
+              <Route path="expense-share/:expenseShareId" element={<ExpenseShare />} />
             </Route>
           </Route>
         </Routes>

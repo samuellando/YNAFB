@@ -1,8 +1,8 @@
 -- name: CreatePayeeDefaultLine :one
 INSERT INTO
-  payee_default_line (budget_id, payee_id, dest_account_id, category_id, income, percent)
+  payee_default_line (budget_id, payee_id, dest_account_id, category_id, expense_share_id, income, percent)
 SELECT
-  b.id, ?, ?, ?, ?, ?
+  b.id, ?, ?, ?, ?, ?, ?
 FROM
   budget AS b
 WHERE
@@ -13,7 +13,7 @@ RETURNING
 -- name: UpdatePayeeDefaultLine :one
 UPDATE payee_default_line
 SET
-  payee_id = ?, dest_account_id = ?, category_id = ?, income = ?, percent = ?
+  payee_id = ?, dest_account_id = ?, category_id = ?, expense_share_id = ?, income = ?, percent = ?
 WHERE
   payee_default_line.id = @id
   AND payee_default_line.budget_id IN (
@@ -61,11 +61,14 @@ SELECT
   ao.name AS dest_account_name,
   pdl.category_id,
   c.name AS category_name,
+  pdl.expense_share_id,
+  es.name AS expense_share_name,
   pdl.income,
   pdl.percent
 FROM payee_default_line AS pdl
 JOIN budget AS b ON pdl.budget_id = b.id
 LEFT JOIN account AS ao ON ao.id = pdl.dest_account_id
 LEFT JOIN category AS c ON c.id = pdl.category_id
+LEFT JOIN budget_expense_share AS es ON es.expense_share_id = pdl.expense_share_id AND es.budget_id = @budget_id
 WHERE b.login_id = @login_id AND pdl.payee_id = @payee_id AND pdl.budget_id = @budget_id
 ORDER BY pdl.id;

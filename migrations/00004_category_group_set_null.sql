@@ -40,6 +40,7 @@ DROP TABLE category_old;
 PRAGMA legacy_alter_table = OFF;
 PRAGMA foreign_keys = ON;
 
+-- +goose NO TRANSACTION
 -- +goose Down
 -- Restore ON DELETE CASCADE (same rebuild in reverse).
 PRAGMA foreign_keys = OFF;
