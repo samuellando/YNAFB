@@ -17,7 +17,7 @@ func NewService(repo Repository) *Service {
 }
 
 func (s *Service) List(ctx context.Context,  loginID, budgetID int) ([]*Allocation, error) {
-	return cache.Result(ctx, fmt.Sprint("allocationServiceList-%d-%d", loginID, budgetID), func() ([]*Allocation, error) {
+	return cache.Result(ctx, fmt.Sprintf("allocationServiceList-%d-%d", loginID, budgetID), func() ([]*Allocation, error) {
 		return s.list(ctx, loginID, budgetID)
 	})
 } 

@@ -14,14 +14,14 @@ type Allocation struct {
 }
 
 func (s *Service) FromRow(ctx context.Context, row data.Allocation) *Allocation {
-	if cached, ok := cache.Get[*Allocation](ctx, "categoryGroup", row.ID); ok {
+	if cached, ok := cache.Get[*Allocation](ctx, row.ID); ok {
 		return cached
 	}
 	group := &Allocation{
 		service: s,
 		row: row,
 	}
-	cache.Store(ctx, "allocation", row.ID, group)
+	cache.Store(ctx, row.ID, group)
 	return group
 }
 

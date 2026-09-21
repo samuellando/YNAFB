@@ -16,7 +16,7 @@ type Goal struct {
 }
 
 func (s *Service) fromRow(ctx context.Context, row data.Goal) *Goal {
-	if v, ok := cache.Get[*Goal](ctx, "goal", row.ID); ok {
+	if v, ok := cache.Get[*Goal](ctx, row.ID); ok {
 		return v
 	}
 	goal := &Goal{
@@ -24,7 +24,7 @@ func (s *Service) fromRow(ctx context.Context, row data.Goal) *Goal {
 		allocationService: s.allocationService,
 		row:               row,
 	}
-	cache.Store(ctx, "goal", row.ID, goal)
+	cache.Store(ctx, row.ID, goal)
 	return goal
 }
 

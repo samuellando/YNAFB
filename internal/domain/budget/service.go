@@ -70,7 +70,7 @@ func (s *Service) Create(ctx context.Context, loginID int, name string) (*Budget
 }
 
 func (s *Service) Get(ctx context.Context, loginID, budgetID int) (*Budget, error) {
-	if v, ok := cache.Get[*Budget](ctx, "budget", int64(budgetID)); ok {
+	if v, ok := cache.Get[*Budget](ctx, int64(budgetID)); ok {
 		return v, nil
 	}
 	row, err := s.repo.GetBudget(ctx, data.GetBudgetParams{

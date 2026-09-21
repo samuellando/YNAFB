@@ -13,13 +13,13 @@ type Account struct {
 }
 
 func (s *Service) FromRow(ctx context.Context, row data.Account) *Account {
-	if cached, ok := cache.Get[*Account](ctx, "account", row.ID); ok {
+	if cached, ok := cache.Get[*Account](ctx, row.ID); ok {
 		return cached
 	}
 	account := &Account{
 		service: s,
 		row: row,
 	}
-	cache.Store(ctx, "account", row.ID, account)
+	cache.Store(ctx, row.ID, account)
 	return account
 }

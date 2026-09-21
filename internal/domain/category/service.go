@@ -17,7 +17,7 @@ func NewService(repo Repository) *Service {
 }
 
 func (s *Service) List(ctx context.Context, loginID, budgetID int) ([]*Category, error) {
-	return cache.Result(ctx, fmt.Sprint("categoryServiceList-%d-%d", loginID, budgetID), func() ([]*Category, error) {
+	return cache.Result(ctx, fmt.Sprintf("categoryServiceList-%d-%d", loginID, budgetID), func() ([]*Category, error) {
 		return s.list(ctx, loginID, budgetID)
 	})
 }

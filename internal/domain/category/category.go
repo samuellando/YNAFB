@@ -39,19 +39,19 @@ func (g *Group) Name() string {
 }
 
 func (s *Service) GroupFromRow(ctx context.Context, row data.CategoryGroup) *Group {
-	if cached, ok := cache.Get[*Group](ctx, "categoryGroup", row.ID); ok {
+	if cached, ok := cache.Get[*Group](ctx, row.ID); ok {
 		return cached
 	}
 	group := &Group{
 		service: s,
 		row: row,
 	}
-	cache.Store(ctx, "categoryGroup", row.ID, group)
+	cache.Store(ctx, row.ID, group)
 	return group
 }
 
 func (s *Service) FromRow(ctx context.Context, row data.Category, group *Group) *Category {
-	if cached, ok := cache.Get[*Category](ctx, "category", row.ID); ok {
+	if cached, ok := cache.Get[*Category](ctx, row.ID); ok {
 		return cached
 	}
 	category := &Category{
@@ -59,6 +59,6 @@ func (s *Service) FromRow(ctx context.Context, row data.Category, group *Group) 
 		row:   row,
 		group: group,
 	}
-	cache.Store(ctx, "category", row.ID, category)
+	cache.Store(ctx, row.ID, category)
 	return category
 }

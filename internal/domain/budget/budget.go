@@ -21,7 +21,7 @@ type Budget struct {
 }
 
 func (s *Service) fromRow(ctx context.Context, row data.Budget) *Budget {
-	if v, ok := cache.Get[*Budget](ctx, "budget", row.ID); ok {
+	if v, ok := cache.Get[*Budget](ctx, row.ID); ok {
 		return v
 	}
 	budget := &Budget{
@@ -32,7 +32,7 @@ func (s *Service) fromRow(ctx context.Context, row data.Budget) *Budget {
 		categoryService:   s.categoryService,
 		row:               row,
 	}
-	cache.Store(ctx, "budget", row.ID, budget)
+	cache.Store(ctx, row.ID, budget)
 	return budget
 }
 
@@ -50,8 +50,11 @@ func (b *Budget) Update(ctx context.Context, name string) error {
 		ID:      b.row.ID,
 		Name:    name,
 	})
+	if err != nil {
+		return err
+	}
 	b.row = row
-	return err
+	return nil
 }
 
 func (b *Budget) Delete(ctx context.Context) error {

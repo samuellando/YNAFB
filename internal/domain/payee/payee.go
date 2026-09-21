@@ -12,12 +12,12 @@ type Payee struct {
 }
 
 func (s *Service) FromRow(ctx context.Context, row data.Payee) *Payee {
-	if cached, ok := cache.Get[*Payee](ctx, "payee", row.ID); ok {
+	if cached, ok := cache.Get[*Payee](ctx, row.ID); ok {
 		return cached
 	}
 	payee := &Payee{
 		row: row,
 	}
-	cache.Store(ctx, "payee", row.ID, payee)
+	cache.Store(ctx, row.ID, payee)
 	return payee
 }

@@ -58,7 +58,7 @@ func (s *Service) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) 
 	if len(rows) == 0 {
 		return 0, nil
 	}
-	if trx, ok := cache.Get[*Trx](ctx, "trx", rows[0].Trx.ID); ok {
+	if trx, ok := cache.Get[*Trx](ctx, rows[0].Trx.ID); ok {
 		for i, row := range rows {
 			if row.Trx.ID != trx.row.ID {
 				return i, trx
@@ -122,5 +122,6 @@ func (s *Service) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) 
 			trx.lines = append(trx.lines, &line)
 		}
 	}
+	cache.Store(ctx, trx.row.ID, trx)
 	return len(rows), &trx
 }
