@@ -9,9 +9,13 @@ import (
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/db/types"
+	"samuellando.com/YNAFB/internal/domain/budget"
+	"samuellando.com/YNAFB/internal/domain/trx"
+	"samuellando.com/YNAFB/internal/domain/allocation"
 )
 
 type ApiServer struct {
+	service *budget.Service
 	queries *data.Queries
 	db      *sql.DB
 }
@@ -19,7 +23,9 @@ type ApiServer struct {
 var _ StrictServerInterface = (*ApiServer)(nil)
 
 func NewServer(db *sql.DB) ApiServer {
+	queries := data.New(db)
 	return ApiServer{
+		service: budget.NewService(queries, trx.NewService(queries), allocation.NewService(queries)),
 		queries: data.New(db),
 		db:      db,
 	}
@@ -32,10 +38,7 @@ func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject
 		return nil, err
 	}
 	// Query the DB
-	params := data.ListBudgetsParams{
-		LoginID: id,
-	}
-	budgets, err := s.queries.ListBudgets(ctx, params)
+	budgets, err := s.service.List(ctx, int(id))
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +49,8 @@ func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject
 			Id   int    `json:"id"`
 			Name string `json:"name"`
 		}{
-			Id:   int(budget.ID),
-			Name: budget.Name,
+			Id:   budget.ID(),
+			Name: budget.Name(),
 		})
 	}
 	return resp, nil
@@ -64,18 +67,70 @@ func (s ApiServer) PostBudget(ctx context.Context, request PostBudgetRequestObje
 	}
 	name := request.Body.Name
 	// Query the DB
-	budget, err := s.queries.CreateBudget(ctx, data.CreateBudgetParams{
-		LoginID: loginID,
-		Name:    name,
-	})
+	budget, err := s.service.Create(ctx, int(loginID), name)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PostBudget201JSONResponse{
-		Id:   int(budget.ID),
-		Name: budget.Name,
+		Id:   budget.ID(),
+		Name: budget.Name(),
 	}, nil
+}
+
+func (s ApiServer) PutBudgetBudgetId(ctx context.Context, request PutBudgetBudgetIdRequestObject) (PutBudgetBudgetIdResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	if request.Body == nil || request.Body.Name == "" {
+		return nil, fmt.Errorf("`name` is required in request body")
+	}
+	name := request.Body.Name
+	// Query the DB
+	budget, err := s.service.Get(ctx, int(loginID), int(budgetID))
+	if err != nil {
+		return nil, err
+	}
+	err = budget.Update(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	// Send response
+	return PutBudgetBudgetId200JSONResponse{
+		Id:   budget.ID(),
+		Name: budget.Name(),
+	}, nil
+}
+
+func (s ApiServer) DeleteBudgetBudgetId(ctx context.Context, request DeleteBudgetBudgetIdRequestObject) (DeleteBudgetBudgetIdResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	// Query the DB
+	budget, err := s.service.Get(ctx, int(loginID), int(budgetID))
+	if err != nil {
+		return nil, err
+	}
+	err = budget.Delete(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Send the response
+	return DeleteBudgetBudgetId204Response{}, nil
 }
 
 func (s ApiServer) GetBudgetBudgetId(ctx context.Context, request GetBudgetBudgetIdRequestObject) (GetBudgetBudgetIdResponseObject, error) {
@@ -115,11 +170,11 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 		return nil, fmt.Errorf("Invalid month: %w", err)
 	}
 	// Query the database
-	summary, err := s.queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{
-		LoginID: loginID,
-		Month:   types.UnixTime{Time: month},
-		ID:      int64(budgetID),
-	})
+	budget, err := s.service.Get(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := budget.GetMonthSummary(ctx, month)
 	if err != nil {
 		return nil, err
 	}
@@ -180,66 +235,14 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 	return &BudgetMonth{
 		Month: month.Format(time.RFC3339),
 		Summary: BudgetMonthSummary{
-			Allocated:     int(summary.Allocated),
-			Available:     int(summary.Available),
-			Income:        int(summary.Income),
-			ReadyToAssign: int(summary.ReadyToAssign),
-			Spent:         int(summary.Spent),
-			Uncategorized: int(summary.Uncategorized),
+			Allocated:     summary.Allocated,
+			Available:     summary.Available,
+			Income:        summary.Income,
+			ReadyToAssign: summary.ReadyToAssign,
+			Spent:         summary.Spent,
+			Uncategorized: summary.Uncategorized,
 		},
 		Categories: respCategories,
 	}, nil
 }
 
-func (s ApiServer) PutBudgetBudgetId(ctx context.Context, request PutBudgetBudgetIdRequestObject) (PutBudgetBudgetIdResponseObject, error) {
-	// Collect params
-	loginID, err := getLoginID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	budgetString := request.BudgetId
-	budgetID, err := strconv.Atoi(budgetString)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid budget id: %w", err)
-	}
-	if request.Body == nil || request.Body.Name == "" {
-		return nil, fmt.Errorf("`name` is required in request body")
-	}
-	name := request.Body.Name
-	// Query the DB
-	budget, err := s.queries.UpdateBudget(ctx, data.UpdateBudgetParams{
-		LoginID: loginID,
-		ID:      int64(budgetID),
-		Name:    name,
-	})
-	if err != nil {
-		return nil, err
-	}
-	// Send response
-	return PutBudgetBudgetId200JSONResponse{
-		Id:   int(budget.ID),
-		Name: budget.Name,
-	}, nil
-}
-
-func (s ApiServer) DeleteBudgetBudgetId(ctx context.Context, request DeleteBudgetBudgetIdRequestObject) (DeleteBudgetBudgetIdResponseObject, error) {
-	// Collect params
-	loginID, err := getLoginID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	budgetString := request.BudgetId
-	budgetID, err := strconv.Atoi(budgetString)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid budget id: %w", err)
-	}
-	// Query the DB
-	err = s.queries.DeleteBudget(ctx, data.DeleteBudgetParams{
-		LoginID: loginID,
-		ID:      int64(budgetID),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return DeleteBudgetBudgetId204Response{}, nil
-}

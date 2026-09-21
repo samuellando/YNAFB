@@ -7,3 +7,9 @@ SELECT
     WHERE b.id = @budget_id AND b.login_id = @login_id
 RETURNING
   *;
+
+-- name: ListAllocations :many
+SELECT a.*
+FROM allocation AS a
+JOIN budget AS b ON b.id = a.budget_id
+WHERE b.id = @budget_id AND b.login_id = @login_id

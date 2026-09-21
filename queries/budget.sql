@@ -8,6 +8,11 @@ INSERT INTO budget (
 )
 RETURNING *;
 
+-- name: GetBudget :one
+SELECT * 
+FROM budget
+WHERE id = @id AND login_id = @login_id;
+
 -- name: UpdateBudget :one
 UPDATE budget
 SET

@@ -23,7 +23,7 @@ export default function ReadyToAssign({ summary }: ReadyToAssignProps) {
         </p>
       </div>
       <div className="flex flex-1 justify-start pl-10">
-        {summary.uncategorized > 0 && <UncategorizedChip amount={summary.uncategorized} />}
+        {summary.uncategorized != 0 && <UncategorizedChip amount={summary.uncategorized} />}
       </div>
     </div>
   )
