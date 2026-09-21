@@ -11,7 +11,7 @@ type Trx struct {
 	service *Service
 	row data.Trx
 	lines []*Line
-	payee payee.Payee
+	payee *payee.Payee
 }
 
 func (t *Trx) Date() time.Time {

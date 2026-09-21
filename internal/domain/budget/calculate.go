@@ -2,7 +2,12 @@ package budget
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
+
+	"samuellando.com/YNAFB/internal/domain/category"
+	"samuellando.com/YNAFB/internal/domain/goal"
 )
 
 type MonthSummary struct {
@@ -22,18 +27,26 @@ type MonthSummary struct {
 	Uncategorized int
 }
 
+type MonthCategory struct {
+	ID        int
+	Name      string
+	Group     *category.Group
+	Allocated int
+	Spent     int
+	CarryOver int
+	Available int
+	Goal      *goal.Goal
+}
+
 func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSummary, error) {
-	startOfMonth := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, month.Location())
-	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-1 * time.Nanosecond)
+	startOfMonth, endOfMonth := getStartAndEndOfMonth(month)
 	summary := MonthSummary{}
-	trxs, err := b.trxService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	fetchedData, err := b.getCalculationData(ctx)
 	if err != nil {
 		return summary, err
 	}
-	allocations, err := b.allocationService.List(ctx, int(b.row.LoginID), int(b.row.ID))
-	if err != nil {
-		return summary, err
-	}
+	trxs := fetchedData.trxs
+	allocations := fetchedData.allocations
 	for _, trx := range trxs {
 		categorized := 0
 		for _, line := range trx.Lines() {
@@ -64,6 +77,70 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 	return summary, nil
 }
 
-func timeInsideMonth(t, start, end time.Time) bool {
-	return t.Equal(start) || t.Equal(end) || (t.After(start) && t.Before(end))
+func (b *Budget) GetMonthCategories(ctx context.Context, month time.Time) ([]*MonthCategory, error) {
+	startOfMonth, endOfMonth := getStartAndEndOfMonth(month)
+	futureMonth := time.Now().Before(startOfMonth)
+	data, err := b.getCalculationData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	categoriesMap := make(map[int]*MonthCategory)
+	for _, category := range data.categories {
+		categoriesMap[category.ID()] = &MonthCategory{
+			ID:    category.ID(),
+			Name:  category.Name(),
+			Group: category.Group(),
+		}
+	}
+	for _, trx := range data.trxs {
+		for _, line := range trx.Lines() {
+			if category, err := line.Category(); err == nil {
+				if timeInsideMonth(trx.Date(), startOfMonth, endOfMonth) {
+					categoriesMap[category.ID()].Spent += line.Inflow() - line.Outflow()
+					categoriesMap[category.ID()].Available += line.Inflow() - line.Outflow()
+				} else if !futureMonth && trx.Date().Before(endOfMonth) {
+					categoriesMap[category.ID()].Available += line.Inflow() - line.Outflow()
+					categoriesMap[category.ID()].CarryOver += line.Inflow() - line.Outflow()
+				}
+			}
+		}
+	}
+	for _, allocation := range data.allocations {
+		if timeInsideMonth(allocation.Month(), startOfMonth, endOfMonth) {
+			categoriesMap[allocation.Category()].Allocated = allocation.Amount()
+			categoriesMap[allocation.Category()].Available += allocation.Amount()
+		} else if !futureMonth && allocation.Month().Before(endOfMonth) {
+			categoriesMap[allocation.Category()].Available += allocation.Amount()
+			categoriesMap[allocation.Category()].CarryOver += allocation.Amount()
+		}
+	}
+	for _, goal := range data.goals {
+		if goal.StartDate().Before(startOfMonth) || goal.StartDate().Equal(startOfMonth) {
+			if goal.EndDate() == nil || goal.EndDate().After(startOfMonth) || goal.EndDate().Equal(startOfMonth) {
+				categoriesMap[goal.Category()].Goal = goal
+			}
+		}
+	}
+	categories := make([]*MonthCategory, 0)
+	for _, cat := range categoriesMap {
+		categories = append(categories, cat)
+	}
+	slices.SortFunc(categories, func(a, b *MonthCategory) int {
+		o := strings.Compare(a.Name, b.Name)
+		if a.Group == nil && b.Group == nil {
+			return o
+		}
+		if a.Group == nil {
+			return -1
+		} else if b.Group == nil {
+			return 1
+		} else {
+			if og := strings.Compare(a.Group.Name(), b.Group.Name()); og != 0 {
+				return og
+			} else {
+				return o
+			}
+		}
+	})
+	return categories, nil
 }

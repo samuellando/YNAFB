@@ -40,20 +40,10 @@ WHERE
   AND goal.category_id = @category_id;
 
 -- name: ListGoals :many
-SELECT
-  g.id,
-  g.budget_id,
-  g.type,
-  g.start_date,
-  g.end_date,
-  g.category_id,
-  c.name AS category_name,
-  g.amount
+SELECT g.*
 FROM goal AS g
-JOIN category AS c ON c.id = g.category_id
 JOIN budget AS b ON g.budget_id = b.id
-WHERE b.login_id = @login_id AND g.budget_id = @budget_id
-ORDER BY c.name;
+WHERE b.login_id = @login_id AND g.budget_id = @budget_id;
 
 -- name: GetGoalByCategory :one
 SELECT

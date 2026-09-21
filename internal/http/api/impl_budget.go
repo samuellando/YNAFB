@@ -8,14 +8,17 @@ import (
 	"time"
 
 	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/db/types"
-	"samuellando.com/YNAFB/internal/domain/budget"
-	"samuellando.com/YNAFB/internal/domain/trx"
+	"samuellando.com/YNAFB/internal/domain/account"
 	"samuellando.com/YNAFB/internal/domain/allocation"
+	"samuellando.com/YNAFB/internal/domain/budget"
+	"samuellando.com/YNAFB/internal/domain/category"
+	"samuellando.com/YNAFB/internal/domain/goal"
+	"samuellando.com/YNAFB/internal/domain/payee"
+	"samuellando.com/YNAFB/internal/domain/trx"
 )
 
 type ApiServer struct {
-	service *budget.Service
+	budgetService *budget.Service
 	queries *data.Queries
 	db      *sql.DB
 }
@@ -24,8 +27,20 @@ var _ StrictServerInterface = (*ApiServer)(nil)
 
 func NewServer(db *sql.DB) ApiServer {
 	queries := data.New(db)
+	allocationService := allocation.NewService(queries)
+	categoryService := category.NewService(queries)
+	payeeService := payee.NewService(queries)
+	accountService := account.NewService(queries)
+	trxService := trx.NewService(queries, categoryService, payeeService, accountService) 
+	goalService := goal.NewService(queries, allocationService)
 	return ApiServer{
-		service: budget.NewService(queries, trx.NewService(queries), allocation.NewService(queries)),
+		budgetService: budget.NewService(
+			queries, 
+			trxService,
+			allocationService,
+			goalService,
+			categoryService,
+		),
 		queries: data.New(db),
 		db:      db,
 	}
@@ -38,7 +53,15 @@ func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject
 		return nil, err
 	}
 	// Query the DB
-	budgets, err := s.service.List(ctx, int(id))
+	budgets, err := s.budgetService.List(ctx, int(id))
+	if err != nil {
+		return nil, err
+	}
+	budgets, err = s.budgetService.List(ctx, int(id))
+	if err != nil {
+		return nil, err
+	}
+	budgets, err = s.budgetService.List(ctx, int(id))
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +90,7 @@ func (s ApiServer) PostBudget(ctx context.Context, request PostBudgetRequestObje
 	}
 	name := request.Body.Name
 	// Query the DB
-	budget, err := s.service.Create(ctx, int(loginID), name)
+	budget, err := s.budgetService.Create(ctx, int(loginID), name)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +117,7 @@ func (s ApiServer) PutBudgetBudgetId(ctx context.Context, request PutBudgetBudge
 	}
 	name := request.Body.Name
 	// Query the DB
-	budget, err := s.service.Get(ctx, int(loginID), int(budgetID))
+	budget, err := s.budgetService.Get(ctx, int(loginID), int(budgetID))
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +144,7 @@ func (s ApiServer) DeleteBudgetBudgetId(ctx context.Context, request DeleteBudge
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	// Query the DB
-	budget, err := s.service.Get(ctx, int(loginID), int(budgetID))
+	budget, err := s.budgetService.Get(ctx, int(loginID), int(budgetID))
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +193,7 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 		return nil, fmt.Errorf("Invalid month: %w", err)
 	}
 	// Query the database
-	budget, err := s.service.Get(ctx, int(loginID), budgetID)
+	budget, err := s.budgetService.Get(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
@@ -178,53 +201,42 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 	if err != nil {
 		return nil, err
 	}
-	categories, err := s.queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		LoginID: loginID,
-		Month:   types.UnixTime{Time: month},
-		ID:      int64(budgetID),
-	})
-	if err != nil {
-		return nil, err
-	}
-	goals, err := s.queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		LoginID: loginID,
-		Month:   types.UnixTime{Time: month},
-		ID:      int64(budgetID),
-	})
+	categories, err := budget.GetMonthCategories(ctx, month)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
-	goalsMap := make(map[int64]data.ListGoalsValuesRow)
-	for _, goal := range goals {
-		goalsMap[goal.CategoryID] = goal
-	}
 	respCategories := make([]BudgetMonthCategory, 0)
 	for _, category := range categories {
-		categoryGroupName := &category.CategoryGroupName.String
-		if !category.CategoryGroupName.Valid {
-			categoryGroupName = nil
+		var categoryGroupName *string = nil
+		if category.Group != nil {
+			groupName := category.Group.Name()
+			categoryGroupName = &groupName
 		}
 		var goal *BudgetMonthGoal = nil
-		if goalRow, ok := goalsMap[category.ID]; ok {
+		if g := category.Goal; g != nil {
 			var endMonth *string = nil
-			if goalRow.EndDate.Valid {
-				endMonthString := goalRow.EndDate.Time.Format(time.RFC3339)
+			if g.EndDate() != nil {
+				endMonthString := g.EndDate().Format(time.RFC3339)
 				endMonth = &endMonthString
 			}
+			values, err := g.GoalValues(ctx, int(loginID), month)
+			if err != nil {
+				return nil, err
+			}
 			goal = &BudgetMonthGoal{
-				Type: BudgetMonthGoalType(goalRow.Type),
-				Allocated:      int(goalRow.Allocated),
-				Amount:         int(goalRow.Amount),
-				AmountForMonth: int(goalRow.AmountForMonth),
-				Gap:            int(goalRow.Gap),
-				StartMonth:     goalRow.StartDate.Format(time.RFC3339),
+				Type: BudgetMonthGoalType(g.Type()),
+				Allocated:      int(values.AllocatedToDate),
+				Amount:         int(g.Amount()),
+				AmountForMonth: int(values.NeededForMonth),
+				Gap:            int(values.Gap),
+				StartMonth:     g.StartDate().Format(time.RFC3339),
 				EndMonth:       endMonth,
 			}
 		}
 		respCategories = append(respCategories, BudgetMonthCategory{
 			CategoryId:        int(category.ID),
-			CategoryName:      category.CategoryName,
+			CategoryName:      category.Name,
 			CategoryGroupName: categoryGroupName,
 			Allocated:         int(category.Allocated),
 			Available:         int(category.Available),

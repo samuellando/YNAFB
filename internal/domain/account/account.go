@@ -1,11 +1,25 @@
 package account
 
-import "samuellando.com/YNAFB/data"
+import (
+	"context"
+
+	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/cache"
+)
 
 type Account struct {
+	service *Service
 	row data.Account
 }
 
-func FromRow(row data.Account) *Account {
-	return &Account{row: row}
+func (s *Service) FromRow(ctx context.Context, row data.Account) *Account {
+	if cached, ok := cache.Get[*Account](ctx, "account", row.ID); ok {
+		return cached
+	}
+	account := &Account{
+		service: s,
+		row: row,
+	}
+	cache.Store(ctx, "account", row.ID, account)
+	return account
 }

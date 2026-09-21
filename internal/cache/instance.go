@@ -8,9 +8,9 @@ import (
 
 var instanceCache sync.Map
 
-func Get[R any](ctx context.Context, collection string, id int64) (R, bool) {
-	key := fmt.Sprint("%s-%d", collection, id)
+func Get[R any](ctx context.Context, id int64) (R, bool) {
 	var zero R
+	key := fmt.Sprintf("%T-%d", zero, id)
 	ctxCache, ok := instanceCache.Load(ctx)
 	if !ok {
 		return zero, false
@@ -22,8 +22,9 @@ func Get[R any](ctx context.Context, collection string, id int64) (R, bool) {
 	}
 }
 
-func Store[R any](ctx context.Context, collection string, id int64, value R) {
-	key := fmt.Sprint("%s-%d", collection, id)
+func Store[R any](ctx context.Context, id int64, value R) {
+	var zero R
+	key := fmt.Sprintf("%T-%d", zero, id)
 	ctxCache, ok := instanceCache.Load(ctx)
 	if !ok {
 		ctxCache = &sync.Map{}

@@ -2,22 +2,38 @@ package trx
 
 import (
 	"context"
+	"fmt"
 
 	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/cache"
 	"samuellando.com/YNAFB/internal/domain/account"
 	"samuellando.com/YNAFB/internal/domain/category"
 	"samuellando.com/YNAFB/internal/domain/payee"
 )
 
 type Service struct {
-	repo Repository
+	repo            Repository
+	categoryService *category.Service
+	payeeService    *payee.Service
+	accountService  *account.Service
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, catcategoryService *category.Service, payeeService *payee.Service, accountService *account.Service) *Service {
+	return &Service{
+		repo: repo,
+		categoryService: catcategoryService,
+		payeeService: payeeService,
+		accountService: accountService,
+	}
 }
 
 func (s *Service) List(ctx context.Context, loginID, budgetID int) ([]*Trx, error) {
+	return cache.Result(ctx, fmt.Sprintf("trxServiceList-%d-%d", loginID, budgetID), func() ([]*Trx, error) {
+		return s.list(ctx, loginID, budgetID)
+	})
+}
+
+func (s *Service) list(ctx context.Context, loginID, budgetID int) ([]*Trx, error) {
 	rows, err := s.repo.ListTrxsAndLines(ctx, data.ListTrxsAndLinesParams{
 		LoginID:  int64(loginID),
 		BudgetID: int64(budgetID),
@@ -30,22 +46,29 @@ func (s *Service) List(ctx context.Context, loginID, budgetID int) ([]*Trx, erro
 	}
 	trxs := make([]*Trx, 0)
 	n := 0
-	for ; n < len(rows); {
-		consumed, trx := loadTrx(s, rows[n:])
+	for n < len(rows) {
+		consumed, trx := s.loadTrx(ctx, rows[n:])
 		trxs = append(trxs, trx)
 		n += consumed
 	}
 	return trxs, nil
 }
 
-func loadTrx(s *Service, rows []data.ListTrxsAndLinesRow) (int, *Trx) {
+func (s *Service) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) (int, *Trx) {
 	if len(rows) == 0 {
 		return 0, nil
+	}
+	if trx, ok := cache.Get[*Trx](ctx, "trx", rows[0].Trx.ID); ok {
+		for i, row := range rows {
+			if row.Trx.ID != trx.row.ID {
+				return i, trx
+			}
+		}
 	}
 	trx := Trx{
 		service: s,
 		row:     rows[0].Trx,
-		payee: *payee.FromRow(
+		payee: s.payeeService.FromRow(ctx,
 			data.Payee{
 				ID:       rows[0].PayeeID,
 				BudgetID: rows[0].Trx.BudgetID,
@@ -74,13 +97,13 @@ func loadTrx(s *Service, rows []data.ListTrxsAndLinesRow) (int, *Trx) {
 			if row.CategoryID.Valid {
 				var group *category.Group
 				if row.CategoryGroupID.Valid {
-					group = category.GroupFromRow(data.CategoryGroup{
+					group = s.categoryService.GroupFromRow(ctx, data.CategoryGroup{
 						ID:       row.CategoryGroupID.Int64,
 						BudgetID: row.Trx.BudgetID,
 						Name:     row.CategoryGroupName.String,
 					})
 				}
-				line.category = category.FromRow(data.Category{
+				line.category = s.categoryService.FromRow(ctx, data.Category{
 					ID:              row.CategoryID.Int64,
 					BudgetID:        row.Trx.BudgetID,
 					Name:            row.CategoryName.String,
@@ -90,7 +113,7 @@ func loadTrx(s *Service, rows []data.ListTrxsAndLinesRow) (int, *Trx) {
 				)
 			}
 			if row.DestAccountID.Valid {
-				line.destinationAccount = account.FromRow(data.Account{
+				line.destinationAccount = s.accountService.FromRow(ctx, data.Account{
 					ID:       row.DestAccountID.Int64,
 					BudgetID: row.Trx.BudgetID,
 					Name:     row.DestAccountName.String,
