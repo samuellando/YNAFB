@@ -2,6 +2,7 @@ package domain
 
 import (
 	"time"
+	"database/sql"
 )
 
 func getStartAndEndOfMonth(month time.Time) (time.Time, time.Time) {
@@ -13,3 +14,11 @@ func getStartAndEndOfMonth(month time.Time) (time.Time, time.Time) {
 func timeInsideMonth(t, start, end time.Time) bool {
 	return t.Equal(start) || t.Equal(end) || (t.After(start) && t.Before(end))
 }
+
+func nullInt64FromInt(id *int) sql.NullInt64 {
+	if id == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*id), Valid: true}
+}
+

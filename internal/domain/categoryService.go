@@ -107,3 +107,51 @@ func (s *CategoryService) GetGroup(ctx context.Context, loginID, budgetID, group
 	cache.Store(ctx, group.row.ID, group)
 	return group, nil
 }
+
+func (s *CategoryService) resolveGroup(ctx context.Context, loginID, budgetID int, groupID sql.NullInt64) (*Group, error) {
+	if !groupID.Valid {
+		return nil, nil
+	}
+	return s.GetGroup(ctx, loginID, budgetID, int(groupID.Int64))
+}
+
+func (s *CategoryService) Create(ctx context.Context, loginID, budgetID int, name string, groupID *int) (*Category, error) {
+	defer cache.InvalidateResults(ctx)
+	row, err := s.repo.CreateCategory(ctx, data.CreateCategoryParams{
+		Name:            name,
+		CategoryGroupID: nullInt64FromInt(groupID),
+		BudgetID:        int64(budgetID),
+		LoginID:         int64(loginID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	group, err := s.resolveGroup(ctx, loginID, budgetID, row.CategoryGroupID)
+	if err != nil {
+		return nil, err
+	}
+	category := s.fromRow(ctx, row, group)
+	cache.Store(ctx, category.row.ID, category)
+	return category, nil
+}
+
+func (s *CategoryService) Get(ctx context.Context, loginID, budgetID, categoryID int) (*Category, error) {
+	if v, ok := cache.Get[*Category](ctx, int64(categoryID)); ok {
+		return v, nil
+	}
+	row, err := s.repo.GetCategory(ctx, data.GetCategoryParams{
+		LoginID:  int64(loginID),
+		BudgetID: int64(budgetID),
+		ID:       int64(categoryID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	group, err := s.resolveGroup(ctx, loginID, budgetID, row.CategoryGroupID)
+	if err != nil {
+		return nil, err
+	}
+	category := s.fromRow(ctx, row, group)
+	cache.Store(ctx, category.row.ID, category)
+	return category, nil
+}

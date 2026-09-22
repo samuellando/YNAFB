@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-
-	"samuellando.com/YNAFB/data"
 )
 
 func (s ApiServer) GetBudgetBudgetIdCategory(ctx context.Context, request GetBudgetBudgetIdCategoryRequestObject) (GetBudgetBudgetIdCategoryResponseObject, error) {
@@ -20,10 +18,7 @@ func (s ApiServer) GetBudgetBudgetIdCategory(ctx context.Context, request GetBud
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	// Query the database
-	categories, err := s.queries.ListCategories(ctx, data.ListCategoriesParams{
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-	})
+	categories, err := s.categoryService.List(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
@@ -31,8 +26,8 @@ func (s ApiServer) GetBudgetBudgetIdCategory(ctx context.Context, request GetBud
 	resp := GetBudgetBudgetIdCategory200JSONResponse{}
 	for _, category := range categories {
 		resp = append(resp, Category{
-			Id:   int(category.ID),
-			Name: category.Name,
+			Id:   category.ID(),
+			Name: category.Name(),
 		})
 	}
 	return resp, nil
@@ -53,20 +48,15 @@ func (s ApiServer) PostBudgetBudgetIdCategory(ctx context.Context, request PostB
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
 	// Query the database
-	category, err := s.queries.CreateCategory(ctx, data.CreateCategoryParams{
-		Name:            request.Body.Name,
-		CategoryGroupID: intToNullInt64(request.Body.CategoryGroupId),
-		BudgetID:        int64(budgetID),
-		LoginID:         loginID,
-	})
+	category, err := s.categoryService.Create(ctx, int(loginID), budgetID, request.Body.Name, request.Body.CategoryGroupId)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PostBudgetBudgetIdCategory200JSONResponse{
-		Id:              int(category.ID),
-		Name:            category.Name,
-		CategoryGroupId: nullInt64ToInt(category.CategoryGroupID),
+		Id:              category.ID(),
+		Name:            category.Name(),
+		CategoryGroupId: category.GroupID(),
 	}, nil
 }
 
@@ -90,21 +80,19 @@ func (s ApiServer) PutBudgetBudgetIdCategoryId(ctx context.Context, request PutB
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
 	// Query the database
-	category, err := s.queries.UpdateCategory(ctx, data.UpdateCategoryParams{
-		Name:            request.Body.Name,
-		CategoryGroupID: intToNullInt64(request.Body.CategoryGroupId),
-		ID:              int64(id),
-		BudgetID:        int64(budgetID),
-		LoginID:         loginID,
-	})
+	category, err := s.categoryService.Get(ctx, int(loginID), budgetID, id)
+	if err != nil {
+		return nil, err
+	}
+	err = category.Update(ctx, int(loginID), request.Body.Name, request.Body.CategoryGroupId)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PutBudgetBudgetIdCategoryId200JSONResponse{
-		Id:              int(category.ID),
-		Name:            category.Name,
-		CategoryGroupId: nullInt64ToInt(category.CategoryGroupID),
+		Id:              category.ID(),
+		Name:            category.Name(),
+		CategoryGroupId: category.GroupID(),
 	}, nil
 }
 
@@ -125,11 +113,11 @@ func (s ApiServer) DeleteBudgetBudgetIdCategoryId(ctx context.Context, request D
 		return nil, fmt.Errorf("Invalid category id: %w", err)
 	}
 	// Query the database
-	err = s.queries.DeleteCategory(ctx, data.DeleteCategoryParams{
-		ID:       int64(id),
-		BudgetID: int64(budgetID),
-		LoginID:  loginID,
-	})
+	category, err := s.categoryService.Get(ctx, int(loginID), budgetID, id)
+	if err != nil {
+		return nil, err
+	}
+	err = category.Delete(ctx, int(loginID))
 	if err != nil {
 		return nil, err
 	}

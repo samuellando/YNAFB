@@ -47,6 +47,17 @@ WHERE
 ORDER BY
   c.name;
 
+-- name: GetCategory :one
+SELECT
+  c.*
+FROM
+  category AS c
+JOIN budget AS b ON c.budget_id = b.id
+WHERE
+  b.login_id = @login_id
+  AND c.budget_id = @budget_id
+  AND c.id = @id;
+
 -- name: GetCategoryByName :one
 SELECT
   c.id,
