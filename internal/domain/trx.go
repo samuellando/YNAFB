@@ -16,6 +16,10 @@ type Trx struct {
 	reconciled bool
 }
 
+func (t *Trx) ID() int {
+	return int(t.row.ID)
+}
+
 func (t *Trx) Date() time.Time {
 	return t.row.Date.Time
 }
@@ -36,3 +40,10 @@ func (t *Trx) Lines() []*TrxLine {
 	return t.lines
 }
 
+func (t *Trx) Payee() *Payee {
+	return t.payee
+}
+
+func (t *Trx) Note() string {
+	return t.row.Note
+}

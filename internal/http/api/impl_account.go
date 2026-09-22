@@ -13,6 +13,7 @@ import (
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/db/types"
 	"samuellando.com/YNAFB/internal/importer"
+	"samuellando.com/YNAFB/internal/domain"
 )
 
 func (s ApiServer) GetBudgetBudgetIdAccount(ctx context.Context, request GetBudgetBudgetIdAccountRequestObject) (GetBudgetBudgetIdAccountResponseObject, error) {
@@ -68,18 +69,14 @@ func (s ApiServer) PostBudgetBudgetIdAccount(ctx context.Context, request PostBu
 	}
 	name := request.Body.Name
 	// Query the database
-	account, err := s.queries.CreateAccount(ctx, data.CreateAccountParams{
-		Name:     name,
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-	})
+	account, err := s.accountService.Create(ctx, int(loginID), budgetID, name)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PostBudgetBudgetIdAccount200JSONResponse{
-		Id:   int(account.ID),
-		Name: account.Name,
+		Id:   account.ID(),
+		Name: account.Name(),
 	}, nil
 }
 
@@ -100,110 +97,80 @@ func (s ApiServer) GetBudgetBudgetIdAccountId(ctx context.Context, request GetBu
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
 	// Query the database
-	summary, err := s.queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-		ID:       int64(id),
-	})
+	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id) 
 	if err != nil {
 		return nil, err
 	}
-	transactions, err := s.queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-		ID:       int64(id),
-	})
+	transactions, err := account.ListTransactions(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
+	balance, err := account.Balance(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reconciledBalance, err := account.ReconciledBalance(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return GetBudgetBudgetIdAccountId200JSONResponse{
 		Summary: AccountSummaryDetail{
-			Id:                int(summary.ID),
-			Name:              summary.Name,
-			Balance:           int(summary.Balance),
-			ReconciledBalance: int(summary.ReconciledBalance),
+			Id:                account.ID(),
+			Name:              account.Name(),
+			Balance:           balance,
+			ReconciledBalance: reconciledBalance,
 		},
-		Transactions: groupAccountTransactions(transactions),
+		Transactions: marshalTrxs(transactions),
 	}, nil
 }
 
-func groupAccountTransactions(rows []data.ListAccountTransactionsRow) []AccountTransaction {
-	transactions := make([]AccountTransaction, 0)
-	for _, row := range rows {
-		if len(transactions) == 0 || transactions[len(transactions)-1].Id != int(row.TrxID) {
-			var sourceAccountID *int
-			if row.SourceAccountID.Valid {
-				sourceID := int(row.SourceAccountID.Int64)
-				sourceAccountID = &sourceID
-			}
-			var sourceAccountName *string
-			if row.SourceAccountName.Valid {
-				name := row.SourceAccountName.String
-				sourceAccountName = &name
-			}
-			var payeeName string
-			if row.PayeeName.Valid {
-				payeeName = row.PayeeName.String
-			}
-			transactions = append(transactions, AccountTransaction{
-				Id:                int(row.TrxID),
-				Date:              row.Date.Format(time.RFC3339),
-				PayeeId:           int(row.PayeeID),
-				PayeeName:         payeeName,
-				Outflow:           int(row.Outflow),
-				Inflow:            int(row.Inflow),
-				Note:              row.Note,
-				Reconciled:        row.Reconciled,
-				SourceAccountId:   sourceAccountID,
-				SourceAccountName: sourceAccountName,
-				TransactionLines:  make([]AccountTransactionLine, 0),
-			})
+func marshalTrxs(trxs []*domain.Trx) []AccountTransaction {
+	res := make([]AccountTransaction, 0)
+	for _, trx := range trxs {
+		accountTransaction := AccountTransaction{
+			Id: trx.ID(),
+			Date: trx.Date().Format(time.RFC3339),
+			PayeeId: trx.Payee().ID(),
+			PayeeName: trx.Payee().Name(),
+
+			Outflow: trx.TotalOutflow(),
+			Inflow: trx.TotalInflow(),
+
+			TransactionLines: marshalTrxLines(trx.Lines()),
+
+			Note: trx.Note(),
+			Reconciled: trx.Reconciled(),
 		}
-		tx := &transactions[len(transactions)-1]
-		if !row.TrxLineID.Valid {
-			continue
-		}
-		var destAccountID *int
-		if row.DestAccountID.Valid {
-			destID := int(row.DestAccountID.Int64)
-			destAccountID = &destID
-		}
-		var destAccountName *string
-		if row.DestAccountName.Valid {
-			name := row.DestAccountName.String
-			destAccountName = &name
-		}
-		var categoryID *int
-		if row.CategoryID.Valid {
-			catID := int(row.CategoryID.Int64)
-			categoryID = &catID
-		}
-		var categoryName *string
-		if row.CategoryName.Valid {
-			name := row.CategoryName.String
-			categoryName = &name
-		}
-		lineOutflow := 0
-		if row.LineOutflow.Valid {
-			lineOutflow = int(row.LineOutflow.Int64)
-		}
-		lineInflow := 0
-		if row.LineInflow.Valid {
-			lineInflow = int(row.LineInflow.Int64)
-		}
-		tx.TransactionLines = append(tx.TransactionLines, AccountTransactionLine{
-			LineId:          int(row.TrxLineID.Int64),
-			DestAccountId:   destAccountID,
-			DestAccountName: destAccountName,
-			CategoryId:      categoryID,
-			CategoryName:    categoryName,
-			Income:          row.Income,
-			Outflow:         lineOutflow,
-			Inflow:          lineInflow,
-		})
+		res = append(res, accountTransaction)
 	}
-	return transactions
+	return res
+}
+
+func marshalTrxLines(lines []*domain.TrxLine) []AccountTransactionLine {
+	res := make([]AccountTransactionLine, 0)
+	for _, line := range lines {
+		accountTransactionLine := AccountTransactionLine{
+			LineId: line.ID(),
+			Inflow: line.Inflow(),
+			Outflow: line.Outflow(),
+			Income: line.IsIncome(),
+		}
+		if category, err := line.Category(); err == nil {
+			id := category.ID()
+			name := category.Name()
+			accountTransactionLine.CategoryId = &id
+			accountTransactionLine.CategoryName = &name
+		}
+		if destAccount, err := line.DestinationAccount(); err == nil {
+			id := destAccount.ID()
+			name := destAccount.Name()
+			accountTransactionLine.DestAccountId = &id
+			accountTransactionLine.DestAccountName = &name
+		}
+		res = append(res, accountTransactionLine)
+	}
+	return res
 }
 
 func (s ApiServer) PutBudgetBudgetIdAccountId(ctx context.Context, request PutBudgetBudgetIdAccountIdRequestObject) (PutBudgetBudgetIdAccountIdResponseObject, error) {
@@ -227,19 +194,18 @@ func (s ApiServer) PutBudgetBudgetIdAccountId(ctx context.Context, request PutBu
 	}
 	name := request.Body.Name
 	// Query the database
-	account, err := s.queries.UpdateAccount(ctx, data.UpdateAccountParams{
-		Name:     name,
-		ID:       int64(id),
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-	})
+	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id) 
+	if err != nil {
+		return nil, err
+	}
+	err = account.Update(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PutBudgetBudgetIdAccountId200JSONResponse{
-		Id:   int(account.ID),
-		Name: account.Name,
+		Id:   account.ID(),
+		Name: account.Name(),
 	}, nil
 }
 
@@ -260,14 +226,15 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountId(ctx context.Context, request De
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
 	// Query the database
-	err = s.queries.DeleteAccount(ctx, data.DeleteAccountParams{
-		ID:       int64(id),
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-	})
+	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id) 
 	if err != nil {
 		return nil, err
 	}
+	err = account.Delete(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Send the response
 	return DeleteBudgetBudgetIdAccountId200Response{}, nil
 }
 

@@ -21,3 +21,11 @@ func (s *PayeeService) fromRow(ctx context.Context, row data.Payee) *Payee {
 	cache.Store(ctx, row.ID, payee)
 	return payee
 }
+
+func (p *Payee) ID() int {
+	return int(p.row.ID)
+}
+
+func (p *Payee) Name() string {
+	return p.row.Name
+}

@@ -13,6 +13,10 @@ type TrxLine struct {
 	destinationAccount *Account
 }
 
+func (l *TrxLine) ID() int {
+	return int(l.row.ID)
+}
+
 func (l *TrxLine) IsIncome() bool {
 	return l.row.Income
 }
@@ -38,3 +42,4 @@ func (l *TrxLine) Inflow() int {
 func (l *TrxLine) Outflow() int {
 	return int(l.row.Outflow)
 }
+
