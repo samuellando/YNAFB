@@ -43,7 +43,7 @@ type fetchedData struct {
 }
 
 func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
-	trxs, err := b.trxService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	trxs, err := b.ListTransactions(ctx)
 	if err != nil {
 		return nil, err
 	}

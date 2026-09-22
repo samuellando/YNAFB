@@ -36,8 +36,16 @@ func (b *Budget) ID() int {
 	return int(b.row.ID)
 }
 
+func (b *Budget) LoginID() int {
+	return int(b.row.LoginID)
+}
+
 func (b *Budget) Name() string {
 	return b.row.Name
+}
+
+func (b *Budget) ListTransactions(ctx context.Context) ([]*Trx, error) {
+	return b.trxService.list(ctx, int(b.row.LoginID), int(b.row.ID))
 }
 
 func (b *Budget) Update(ctx context.Context, name string) error {

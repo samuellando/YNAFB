@@ -11,10 +11,17 @@ type Trx struct {
 	row data.Trx
 	lines []*TrxLine
 	payee *Payee
+	budget *Budget
+	account *Account
+	reconciled bool
 }
 
 func (t *Trx) Date() time.Time {
 	return t.row.Date.Time
+}
+
+func (t *Trx) Reconciled() bool {
+	return t.reconciled
 }
 
 func (t *Trx) TotalOutflow() int {

@@ -13,7 +13,7 @@ type Allocation struct {
 	row     data.Allocation
 }
 
-func (s *AllocationService) FromRow(ctx context.Context, row data.Allocation) *Allocation {
+func (s *AllocationService) fromRow(ctx context.Context, row data.Allocation) *Allocation {
 	if cached, ok := cache.Get[*Allocation](ctx, row.ID); ok {
 		return cached
 	}

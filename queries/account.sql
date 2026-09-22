@@ -3,14 +3,30 @@ INSERT INTO
   account (budget_id, name)
 SELECT
   b.id,
-  ?
+  @name
 FROM
   budget AS b
 WHERE
   b.login_id = @login_id
   AND b.id = @budget_id
 RETURNING
-  *;
+  id, budget_id, name,
+  (
+    SELECT
+      login_id
+    FROM
+      budget AS b
+    WHERE
+      b.id = @budget_id
+  ),
+  (
+    SELECT
+      name AS budget_name
+    FROM
+      budget AS b
+    WHERE
+      b.id = @budget_id
+  );
 
 -- name: UpdateAccount :one
 UPDATE account
@@ -27,7 +43,8 @@ WHERE
       b.login_id = @login_id
       AND b.id = @budget_id
   )
-RETURNING *;
+RETURNING
+  *;
 
 -- name: DeleteAccount :exec
 DELETE FROM account
@@ -58,7 +75,9 @@ WHERE
 
 -- name: GetAccount :one
 SELECT
-    account.*
+  b.login_id AS login_id,
+  b.name AS budget_name,
+  account.*
 FROM
   account
   JOIN budget as b ON account.budget_id = b.id
@@ -69,14 +88,17 @@ WHERE
 
 -- name: ListAccounts :many
 SELECT
-    account.*
+  b.login_id AS login_id,
+  b.name AS budget_name,
+  account.*
 FROM
   account
   JOIN budget as b ON account.budget_id = b.id
 WHERE
   b.login_id = @login_id
   AND account.budget_id = @budget_id
-ORDER BY account.name;
+ORDER BY
+  account.name;
 
 -- name: ListAccountsBalances :many
 SELECT

@@ -2,44 +2,10 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
-
-	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/domain"
 )
-
-type ApiServer struct {
-	budgetService *domain.BudgetService
-	queries *data.Queries
-	db      *sql.DB
-}
-
-var _ StrictServerInterface = (*ApiServer)(nil)
-
-func NewServer(db *sql.DB) ApiServer {
-	queries := data.New(db)
-	allocationService := domain.NewAllocationService(queries)
-	categoryService := domain.NewCategoryService(queries)
-	payeeService := domain.NewPayeeService(queries)
-	accountService := domain.NewAccountService(queries, nil)
-	trxService := domain.NewTrxService(queries, categoryService, payeeService, accountService) 
-	accountService.SetTrxService(trxService)
-	goalService := domain.NewGoalService(queries, allocationService)
-	return ApiServer{
-		budgetService: domain.NewBudgetService(
-			queries, 
-			trxService,
-			allocationService,
-			goalService,
-			categoryService,
-		),
-		queries: data.New(db),
-		db:      db,
-	}
-}
 
 func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject) (GetBudgetResponseObject, error) {
 	// Collect params
@@ -220,7 +186,7 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 				return nil, err
 			}
 			goal = &BudgetMonthGoal{
-				Type: BudgetMonthGoalType(g.Type()),
+				Type:           BudgetMonthGoalType(g.Type()),
 				Allocated:      int(values.AllocatedToDate),
 				Amount:         int(g.Amount()),
 				AmountForMonth: int(values.NeededForMonth),
@@ -252,4 +218,3 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 		Categories: respCategories,
 	}, nil
 }
-

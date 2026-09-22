@@ -32,7 +32,7 @@ func (s *AllocationService) list(ctx context.Context, loginID, budgetID int) ([]
 	}
 	allocations := make([]*Allocation, len(rows))
 	for i, row := range rows {
-		allocations[i] = s.FromRow(ctx, row)
+		allocations[i] = s.fromRow(ctx, row)
 	}
 	return allocations, nil
 }

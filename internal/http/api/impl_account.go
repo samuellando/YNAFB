@@ -27,21 +27,26 @@ func (s ApiServer) GetBudgetBudgetIdAccount(ctx context.Context, request GetBudg
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	// Query the database
-	accounts, err := s.queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-	})
+	accounts, err := s.accountService.List(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	resp := GetBudgetBudgetIdAccount200JSONResponse{}
 	for _, account := range accounts {
+		balance, err := account.Balance(ctx)
+		if err != nil {
+			return nil, err
+		}
+		reconciledBalance, err := account.ReconciledBalance(ctx)
+		if err != nil {
+			return nil, err
+		}
 		resp = append(resp, AccountSummaryDetail{
-			Id:                int(account.ID),
-			Name:              account.Name,
-			Balance:           int(account.Balance),
-			ReconciledBalance: int(account.ReconciledBalance),
+			Id:                account.ID(),
+			Name:              account.Name(),
+			Balance:           balance,
+			ReconciledBalance: reconciledBalance,
 		})
 	}
 	return resp, nil

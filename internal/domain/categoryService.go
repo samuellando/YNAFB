@@ -34,13 +34,13 @@ func (s *CategoryService) list(ctx context.Context, loginID, budgetID int) ([]*C
 	for i, row := range rows {
 		var group *Group
 		if row.GroupID.Valid {
-			group = s.GroupFromRow(ctx, data.CategoryGroup{
+			group = s.groupFromRow(ctx, data.CategoryGroup{
 				ID:       row.GroupID.Int64,
 				BudgetID: row.BudgetID,
 				Name:     row.GroupName.String,
 			})
 		}
-		categories[i] = s.FromRow(ctx, data.Category{
+		categories[i] = s.fromRow(ctx, data.Category{
 			ID:              row.ID,
 			BudgetID:        row.BudgetID,
 			Name:            row.Name,

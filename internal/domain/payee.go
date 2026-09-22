@@ -11,7 +11,7 @@ type Payee struct {
 	row data.Payee
 }
 
-func (s *PayeeService) FromRow(ctx context.Context, row data.Payee) *Payee {
+func (s *PayeeService) fromRow(ctx context.Context, row data.Payee) *Payee {
 	if cached, ok := cache.Get[*Payee](ctx, row.ID); ok {
 		return cached
 	}
