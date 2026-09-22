@@ -62,3 +62,29 @@ func (g *Group) ID() int {
 func (g *Group) Name() string {
 	return g.row.Name
 }
+
+// Update renames the group. loginID is passed explicitly because,
+// unlike Account, Group holds no budget reference to derive it from.
+func (g *Group) Update(ctx context.Context, loginID int, name string) error {
+	row, err := g.service.repo.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
+		Name:     name,
+		ID:       g.row.ID,
+		BudgetID: g.row.BudgetID,
+		LoginID:  int64(loginID),
+	})
+	if err != nil {
+		return err
+	}
+	g.row = row
+	return nil
+}
+
+// Delete removes the group. loginID is passed explicitly, see Update.
+func (g *Group) Delete(ctx context.Context, loginID int) error {
+	defer cache.InvalidateResults(ctx)
+	return g.service.repo.DeleteCategoryGroup(ctx, data.DeleteCategoryGroupParams{
+		ID:       g.row.ID,
+		BudgetID: g.row.BudgetID,
+		LoginID:  int64(loginID),
+	})
+}

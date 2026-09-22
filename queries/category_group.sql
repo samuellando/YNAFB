@@ -52,6 +52,19 @@ WHERE
 ORDER BY
   cg.name;
 
+-- name: GetCategoryGroup :one
+SELECT
+  cg.id,
+  cg.budget_id,
+  cg.name
+FROM
+  category_group AS cg
+  JOIN budget AS b ON cg.budget_id = b.id
+WHERE
+  b.login_id = @login_id
+  AND cg.budget_id = @budget_id
+  AND cg.id = @id;
+
 -- name: GetCategoryGroupByName :one
 SELECT
   cg.id,
