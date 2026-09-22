@@ -2,9 +2,14 @@ package domain
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/db/types"
+	"samuellando.com/YNAFB/internal/importer/statement"
 )
 
 type Account struct {
@@ -62,6 +67,59 @@ func (a *Account) ReconciledBalance(ctx context.Context) (int, error) {
 		}
 	}
 	return balance, nil
+}
+
+func (a *Account) BalanceAsOf(ctx context.Context, asOf time.Time) (int, error) {
+	trxs, err := a.ListTransactions(ctx)
+	if err != nil {
+		return 0, err
+	}
+	balance := 0
+	for _, trx := range trxs {
+		if trx.Date().After(asOf) {
+			continue
+		}
+		balance += trx.TotalInflow() - trx.TotalOutflow()
+	}
+	return balance, nil
+}
+
+func (a *Account) Reconcile(ctx context.Context, date time.Time, expectedBalance int) error {
+	defer cache.InvalidateResults(ctx)
+	balance, err := a.BalanceAsOf(ctx, date)
+	if err != nil {
+		return err
+	}
+	if balance != expectedBalance {
+		return fmt.Errorf("balance mismatch: statement %d != calculated %d", expectedBalance, balance)
+	}
+	_, err = a.service.repo.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID: a.row.BudgetID,
+		ID:       a.row.ID,
+		LoginID:  int64(a.budget.LoginID()),
+		Date:     types.UnixTime{Time: date},
+	})
+	return err
+}
+
+func (a *Account) ImportStatement(ctx context.Context, stmt statement.Statement) (int, error) {
+	defer cache.InvalidateResults(ctx)
+	loginID := a.budget.LoginID()
+	budgetID := int(a.row.BudgetID)
+	for _, entry := range stmt.Entries {
+		payeeName := strings.TrimSpace(entry.Payee)
+		if payeeName == "" {
+			payeeName = "unknown"
+		}
+		payee, err := a.service.payeeService.GetOrCreate(ctx, loginID, budgetID, payeeName)
+		if err != nil {
+			return 0, err
+		}
+		if _, err := a.service.trxService.create(ctx, a, payee, entry.TransDate, entry.Outflow, entry.Inflow, entry.Note); err != nil {
+			return 0, err
+		}
+	}
+	return len(stmt.Entries), nil
 }
 
 func (a *Account) ListTransactions(ctx context.Context) ([]*Trx, error) {

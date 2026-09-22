@@ -3,9 +3,11 @@ package domain
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/db/types"
 )
 
 type TrxService struct {
@@ -24,6 +26,14 @@ func NewTrxService(repo TrxRepository, catcategoryService *CategoryService, paye
 		accountService:  accountService,
 		budgetService:   budgetSerivce,
 	}
+}
+
+// WithRepo returns a copy of the service bound to the given repo,
+// for use inside a transaction.
+func (s *TrxService) WithRepo(repo TrxRepository) *TrxService {
+	cp := *s
+	cp.repo = repo
+	return &cp
 }
 
 func (s *TrxService) list(ctx context.Context, loginID, budgetID int) ([]*Trx, error) {
@@ -47,6 +57,32 @@ func (s *TrxService) list(ctx context.Context, loginID, budgetID int) ([]*Trx, e
 		}
 		return trxs, nil
 	})
+}
+
+func (s *TrxService) create(ctx context.Context, account *Account, payee *Payee, date time.Time, outflow, inflow int64, note string) (*Trx, error) {
+	defer cache.InvalidateResults(ctx)
+	row, err := s.repo.CreateTrx(ctx, data.CreateTrxParams{
+		LoginID:      int64(account.budget.LoginID()),
+		BudgetID:     account.row.BudgetID,
+		Date:         types.UnixTime{Time: date},
+		AccountID:    account.row.ID,
+		PayeeID:      int64(payee.ID()),
+		TotalOutflow: outflow,
+		TotalInflow:  inflow,
+		Note:         note,
+	})
+	if err != nil {
+		return nil, err
+	}
+	trx := &Trx{
+		service: s,
+		row:     row,
+		budget:  account.budget,
+		account: account,
+		payee:   payee,
+	}
+	cache.Store(ctx, row.ID, trx)
+	return trx, nil
 }
 
 func (s *TrxService) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) (int, *Trx) {

@@ -12,4 +12,5 @@ type AccountRepository interface {
    CreateAccount(context.Context, data.CreateAccountParams) (data.CreateAccountRow, error)
    DeleteAccount(context.Context, data.DeleteAccountParams) error 
    UpdateAccount(context.Context, data.UpdateAccountParams) (data.Account, error)
+   ReconcileAccountTransactions(context.Context, data.ReconcileAccountTransactionsParams) (int64, error)
 }

@@ -107,7 +107,7 @@ func (ts *testServer) newAccount(t *testing.T, budget data.Budget, name string) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return a
+	return data.Account{ID: a.ID, BudgetID: a.BudgetID, Name: a.Name}
 }
 
 func (ts *testServer) newPayee(t *testing.T, budget data.Budget, name string) data.Payee {

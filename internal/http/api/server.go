@@ -23,7 +23,7 @@ func NewServer(db *sql.DB) ApiServer {
 	allocationService := domain.NewAllocationService(queries)
 	categoryService := domain.NewCategoryService(queries)
 	payeeService := domain.NewPayeeService(queries)
-	accountService := domain.NewAccountService(queries, nil, nil)
+	accountService := domain.NewAccountService(queries, nil, nil, payeeService)
 	trxService := domain.NewTrxService(queries, categoryService, payeeService, accountService, nil)
 	accountService.SetTrxService(trxService)
 	goalService := domain.NewGoalService(queries, allocationService)

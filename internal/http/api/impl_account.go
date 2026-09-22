@@ -2,18 +2,13 @@ package api
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 	"time"
 
-	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/db/types"
-	"samuellando.com/YNAFB/internal/importer"
 	"samuellando.com/YNAFB/internal/domain"
+	"samuellando.com/YNAFB/internal/importer"
 )
 
 func (s ApiServer) GetBudgetBudgetIdAccount(ctx context.Context, request GetBudgetBudgetIdAccountRequestObject) (GetBudgetBudgetIdAccountResponseObject, error) {
@@ -262,37 +257,11 @@ func (s ApiServer) PostBudgetBudgetIdAccountIdReconcile(ctx context.Context, req
 		return nil, fmt.Errorf("Invalid date: %w", err)
 	}
 	// Query the database
-	tx, err := s.db.BeginTx(ctx, nil)
+	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
-	txQueries := s.queries.WithTx(tx)
-
-	balance, err := txQueries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
-		LoginID:  loginID,
-		BudgetID: int64(budgetID),
-		ID:       int64(id),
-		Date:     types.UnixTime{Time: date},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if int(balance) != request.Body.Balance {
-		return nil, fmt.Errorf("balance mismatch: statement %d != calculated %d", request.Body.Balance, balance)
-	}
-
-	_, err = txQueries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID: int64(budgetID),
-		ID:       int64(id),
-		LoginID:  loginID,
-		Date:     types.UnixTime{Time: date},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
+	if err := account.Reconcile(ctx, date, request.Body.Balance); err != nil {
 		return nil, err
 	}
 	return PostBudgetBudgetIdAccountIdReconcile200Response{}, nil
@@ -339,69 +308,24 @@ func (s ApiServer) PostBudgetBudgetIdAccountIdImport(ctx context.Context, reques
 	if err != nil {
 		return nil, err
 	}
-	// Query the database
+	// Query the database inside a transaction so the import is atomic.
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-
-	txQueries := s.queries.WithTx(tx)
-	for _, entry := range stmt.Entries {
-		payeeName := strings.TrimSpace(entry.Payee)
-		if payeeName == "" {
-			payeeName = "unknown"
-		}
-
-		payeeID, err := resolveOrCreatePayeeID(ctx, txQueries, loginID, int64(budgetID), payeeName)
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = txQueries.CreateTrx(ctx, data.CreateTrxParams{
-			LoginID:      loginID,
-			BudgetID:     int64(budgetID),
-			Date:         types.UnixTime{Time: entry.TransDate},
-			AccountID:    int64(id),
-			PayeeID:      payeeID,
-			TotalOutflow: entry.Outflow,
-			TotalInflow:  entry.Inflow,
-			Note:         entry.Note,
-		})
-		if err != nil {
-			return nil, err
-		}
+	txAccountService := s.accountService.WithRepo(s.queries.WithTx(tx))
+	account, err := txAccountService.Get(ctx, int(loginID), budgetID, id)
+	if err != nil {
+		return nil, err
 	}
-
+	n, err := account.ImportStatement(ctx, stmt)
+	if err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	// Send response
-	return PostBudgetBudgetIdAccountIdImport200TextResponse(len(stmt.Entries)), nil
-}
-
-func resolveOrCreatePayeeID(ctx context.Context, queries *data.Queries, loginID, budgetID int64, payeeName string) (int64, error) {
-	payee, err := queries.GetPayeeByName(ctx, data.GetPayeeByNameParams{
-		BudgetID: budgetID,
-		LoginID:  loginID,
-		Name:     payeeName,
-	})
-	if err == nil {
-		return payee.ID, nil
-	}
-
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, err
-	}
-
-	created, createErr := queries.CreatePayee(ctx, data.CreatePayeeParams{
-		BudgetID: budgetID,
-		LoginID:  loginID,
-		Name:     payeeName,
-	})
-	if createErr != nil {
-		return 0, createErr
-	}
-
-	return created.ID, nil
+	return PostBudgetBudgetIdAccountIdImport200TextResponse(n), nil
 }

@@ -12,13 +12,15 @@ type AccountService struct {
 	repo          AccountRepository
 	trxService    *TrxService
 	budgetService *BudgetService
+	payeeService  *PayeeService
 }
 
-func NewAccountService(repo AccountRepository, trxService *TrxService, budgetService *BudgetService) *AccountService {
+func NewAccountService(repo AccountRepository, trxService *TrxService, budgetService *BudgetService, payeeService *PayeeService) *AccountService {
 	return &AccountService{
 		repo:          repo,
 		trxService:    trxService,
 		budgetService: budgetService,
+		payeeService:  payeeService,
 	}
 }
 
@@ -28,6 +30,32 @@ func (s *AccountService) SetTrxService(trxService *TrxService) {
 
 func (s *AccountService) SetBudgetService(budgetService *BudgetService) {
 	s.budgetService = budgetService
+}
+
+func (s *AccountService) SetPayeeService(payeeService *PayeeService) {
+	s.payeeService = payeeService
+}
+
+// AccountRepos is the set of repos an AccountService needs. *data.Queries
+// satisfies it, including tx-scoped copies from Queries.WithTx.
+type AccountRepos interface {
+	AccountRepository
+	TrxRepository
+	PayeeRepository
+}
+
+// WithRepo returns a copy of the service (including its payee and trx
+// services) bound to the given repos, for use inside a transaction.
+func (s *AccountService) WithRepo(repos AccountRepos) *AccountService {
+	cp := *s
+	cp.repo = repos
+	if s.payeeService != nil {
+		cp.payeeService = s.payeeService.WithRepo(repos)
+	}
+	if s.trxService != nil {
+		cp.trxService = s.trxService.WithRepo(repos)
+	}
+	return &cp
 }
 
 func (s *AccountService) List(ctx context.Context, loginID, budgetID int) ([]*Account, error) {
