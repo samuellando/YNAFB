@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-
-	"samuellando.com/YNAFB/data"
 )
 
 func (s ApiServer) GetBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context, request GetBudgetBudgetIdPayeePayeeIdDefaultLineRequestObject) (GetBudgetBudgetIdPayeePayeeIdDefaultLineResponseObject, error) {
@@ -25,11 +23,7 @@ func (s ApiServer) GetBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context,
 		return nil, fmt.Errorf("Invalid payee id: %w", err)
 	}
 	// Query the database
-	lines, err := s.queries.ListPayeeDefaultLinesByPayee(ctx, data.ListPayeeDefaultLinesByPayeeParams{
-		LoginID:  loginID,
-		PayeeID:  int64(payeeID),
-		BudgetID: int64(budgetID),
-	})
+	lines, err := s.payeeService.ListDefaultLinesByPayee(ctx, int(loginID), budgetID, payeeID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,26 +64,18 @@ func (s ApiServer) PostBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context
 		return nil, fmt.Errorf("`percent` is required in request body")
 	}
 	// Query the database
-	line, err := s.queries.CreatePayeeDefaultLine(ctx, data.CreatePayeeDefaultLineParams{
-		PayeeID:       int64(payeeID),
-		DestAccountID: intToNullInt64(request.Body.DestAccountId),
-		CategoryID:    intToNullInt64(request.Body.CategoryId),
-		Income:        BoolPtrToBool(request.Body.Income),
-		Percent:       int64(request.Body.Percent),
-		BudgetID:      int64(budgetID),
-		LoginID:       loginID,
-	})
+	line, err := s.payeeService.CreateDefaultLine(ctx, int(loginID), budgetID, payeeID, request.Body.DestAccountId, request.Body.CategoryId, BoolPtrToBool(request.Body.Income), request.Body.Percent)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PostBudgetBudgetIdPayeePayeeIdDefaultLine200JSONResponse{
-		Id:            int(line.ID),
-		PayeeId:       int(line.PayeeID),
-		DestAccountId: nullInt64ToInt(line.DestAccountID),
-		CategoryId:    nullInt64ToInt(line.CategoryID),
-		Income:        line.Income,
-		Percent:       int(line.Percent),
+		Id:            line.ID(),
+		PayeeId:       line.PayeeID(),
+		DestAccountId: line.DestAccountID(),
+		CategoryId:    line.CategoryID(),
+		Income:        line.Income(),
+		Percent:       line.Percent(),
 	}, nil
 }
 
@@ -118,27 +104,22 @@ func (s ApiServer) PutBudgetBudgetIdPayeePayeeIdDefaultLineId(ctx context.Contex
 		return nil, fmt.Errorf("`percent` is required in request body")
 	}
 	// Query the database
-	line, err := s.queries.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
-		PayeeID:       int64(payeeID),
-		DestAccountID: intToNullInt64(request.Body.DestAccountId),
-		CategoryID:    intToNullInt64(request.Body.CategoryId),
-		Income:        BoolPtrToBool(request.Body.Income),
-		Percent:       int64(request.Body.Percent),
-		ID:            int64(id),
-		BudgetID:      int64(budgetID),
-		LoginID:       loginID,
-	})
+	line, err := s.payeeService.GetDefaultLine(ctx, int(loginID), budgetID, id)
+	if err != nil {
+		return nil, err
+	}
+	err = line.Update(ctx, int(loginID), payeeID, request.Body.DestAccountId, request.Body.CategoryId, BoolPtrToBool(request.Body.Income), request.Body.Percent)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PutBudgetBudgetIdPayeePayeeIdDefaultLineId200JSONResponse{
-		Id:            int(line.ID),
-		PayeeId:       int(line.PayeeID),
-		DestAccountId: nullInt64ToInt(line.DestAccountID),
-		CategoryId:    nullInt64ToInt(line.CategoryID),
-		Income:        line.Income,
-		Percent:       int(line.Percent),
+		Id:            line.ID(),
+		PayeeId:       line.PayeeID(),
+		DestAccountId: line.DestAccountID(),
+		CategoryId:    line.CategoryID(),
+		Income:        line.Income(),
+		Percent:       line.Percent(),
 	}, nil
 }
 
@@ -164,11 +145,11 @@ func (s ApiServer) DeleteBudgetBudgetIdPayeePayeeIdDefaultLineId(ctx context.Con
 		return nil, fmt.Errorf("Invalid default line id: %w", err)
 	}
 	// Query the database
-	err = s.queries.DeletePayeeDefaultLine(ctx, data.DeletePayeeDefaultLineParams{
-		ID:       int64(id),
-		BudgetID: int64(budgetID),
-		LoginID:  loginID,
-	})
+	line, err := s.payeeService.GetDefaultLine(ctx, int(loginID), budgetID, id)
+	if err != nil {
+		return nil, err
+	}
+	err = line.Delete(ctx, int(loginID))
 	if err != nil {
 		return nil, err
 	}

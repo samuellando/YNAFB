@@ -99,3 +99,49 @@ func (s *PayeeService) Get(ctx context.Context, loginID, budgetID, payeeID int) 
 	payee := s.fromRow(ctx, row)
 	return payee, nil
 }
+
+func (s *PayeeService) ListDefaultLinesByPayee(ctx context.Context, loginID, budgetID, payeeID int) ([]data.ListPayeeDefaultLinesByPayeeRow, error) {
+	return cache.Result(ctx, fmt.Sprintf("payeeServiceListDefaultLinesByPayee-%d-%d-%d", loginID, budgetID, payeeID), func() ([]data.ListPayeeDefaultLinesByPayeeRow, error) {
+		return s.repo.ListPayeeDefaultLinesByPayee(ctx, data.ListPayeeDefaultLinesByPayeeParams{
+			LoginID:  int64(loginID),
+			BudgetID: int64(budgetID),
+			PayeeID:  int64(payeeID),
+		})
+	})
+}
+
+func (s *PayeeService) CreateDefaultLine(ctx context.Context, loginID, budgetID, payeeID int, destAccountID, categoryID *int, income bool, percent int) (*PayeeDefaultLine, error) {
+	defer cache.InvalidateResults(ctx)
+	row, err := s.repo.CreatePayeeDefaultLine(ctx, data.CreatePayeeDefaultLineParams{
+		PayeeID:       int64(payeeID),
+		DestAccountID: nullInt64FromInt(destAccountID),
+		CategoryID:    nullInt64FromInt(categoryID),
+		Income:        income,
+		Percent:       int64(percent),
+		BudgetID:      int64(budgetID),
+		LoginID:       int64(loginID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	line := s.defaultLineFromRow(ctx, row)
+	cache.Store(ctx, line.row.ID, line)
+	return line, nil
+}
+
+func (s *PayeeService) GetDefaultLine(ctx context.Context, loginID, budgetID, id int) (*PayeeDefaultLine, error) {
+	if v, ok := cache.Get[*PayeeDefaultLine](ctx, int64(id)); ok {
+		return v, nil
+	}
+	row, err := s.repo.GetPayeeDefaultLine(ctx, data.GetPayeeDefaultLineParams{
+		LoginID:  int64(loginID),
+		BudgetID: int64(budgetID),
+		ID:       int64(id),
+	})
+	if err != nil {
+		return nil, err
+	}
+	line := s.defaultLineFromRow(ctx, row)
+	cache.Store(ctx, line.row.ID, line)
+	return line, nil
+}

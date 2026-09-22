@@ -39,6 +39,13 @@ WHERE
       b.id = @budget_id AND b.login_id = @login_id
   );
 
+-- name: GetPayeeDefaultLine :one
+SELECT
+  pdl.*
+FROM payee_default_line AS pdl
+JOIN budget AS b ON pdl.budget_id = b.id
+WHERE b.login_id = @login_id AND pdl.budget_id = @budget_id AND pdl.id = @id;
+
 -- name: DeletePayeeDefaultLinesByPayee :exec
 DELETE FROM payee_default_line
 WHERE
