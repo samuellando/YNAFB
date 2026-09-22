@@ -3,9 +3,11 @@ package domain
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/db/types"
 )
 
 type AllocationService struct {
@@ -35,4 +37,21 @@ func (s *AllocationService) list(ctx context.Context, loginID, budgetID int) ([]
 		allocations[i] = s.fromRow(ctx, row)
 	}
 	return allocations, nil
+}
+
+func (s *AllocationService) Set(ctx context.Context, loginID, budgetID, categoryID int, month time.Time, amount int) (*Allocation, error) {
+	defer cache.InvalidateResults(ctx)
+	row, err := s.repo.SetAllocation(ctx, data.SetAllocationParams{
+		CategoryID: int64(categoryID),
+		Month:      types.UnixTime{Time: month},
+		Amount:     int64(amount),
+		BudgetID:   int64(budgetID),
+		LoginID:    int64(loginID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	allocation := s.fromRow(ctx, row)
+	cache.Store(ctx, allocation.row.ID, allocation)
+	return allocation, nil
 }

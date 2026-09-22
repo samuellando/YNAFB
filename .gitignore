@@ -18,3 +18,4 @@ bin/*
 cmd/ynafb-server/web/
 
 todo.md
+task.md

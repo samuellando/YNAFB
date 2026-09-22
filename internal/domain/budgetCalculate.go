@@ -137,11 +137,11 @@ func (b *Budget) GetMonthCategories(ctx context.Context, month time.Time) ([]*Mo
 	}
 	for _, allocation := range data.allocations {
 		if timeInsideMonth(allocation.Month(), startOfMonth, endOfMonth) {
-			categoriesMap[allocation.Category()].Allocated = allocation.Amount()
-			categoriesMap[allocation.Category()].Available += allocation.Amount()
+			categoriesMap[allocation.CategoryID()].Allocated = allocation.Amount()
+			categoriesMap[allocation.CategoryID()].Available += allocation.Amount()
 		} else if !futureMonth && allocation.Month().Before(endOfMonth) {
-			categoriesMap[allocation.Category()].Available += allocation.Amount()
-			categoriesMap[allocation.Category()].CarryOver += allocation.Amount()
+			categoriesMap[allocation.CategoryID()].Available += allocation.Amount()
+			categoriesMap[allocation.CategoryID()].CarryOver += allocation.Amount()
 		}
 	}
 	for _, goal := range data.goals {

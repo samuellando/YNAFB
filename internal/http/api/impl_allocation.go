@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-
-	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/db/types"
 )
 
 func (s ApiServer) PutBudgetBudgetIdCategoryIdAllocationMonth(ctx context.Context, request PutBudgetBudgetIdCategoryIdAllocationMonthRequestObject) (PutBudgetBudgetIdCategoryIdAllocationMonthResponseObject, error) {
@@ -34,21 +31,15 @@ func (s ApiServer) PutBudgetBudgetIdCategoryIdAllocationMonth(ctx context.Contex
 		return nil, fmt.Errorf("`amount` is required in request body")
 	}
 	// Query the database
-	allocation, err := s.queries.SetAllocation(ctx, data.SetAllocationParams{
-		CategoryID: int64(categoryID),
-		Month:      types.UnixTime{Time: month},
-		Amount:     int64(request.Body.Amount),
-		BudgetID:   int64(budgetID),
-		LoginID:    loginID,
-	})
+	allocation, err := s.allocationService.Set(ctx, int(loginID), budgetID, categoryID, month, request.Body.Amount)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PutBudgetBudgetIdCategoryIdAllocationMonth200JSONResponse{
-		Id:         int(allocation.ID),
-		CategoryId: int(allocation.CategoryID),
-		Month:      allocation.Month.Format(time.RFC3339),
-		Amount:     int(allocation.Amount),
+		Id:         allocation.ID(),
+		CategoryId: allocation.CategoryID(),
+		Month:      allocation.Month().Format(time.RFC3339),
+		Amount:     allocation.Amount(),
 	}, nil
 }

@@ -70,7 +70,7 @@ func (g *Goal) GoalValues(ctx context.Context, loginID int, month time.Time) (*G
 	values := GoalValues{}
 	allocatedThisMonth := 0
 	for _, allocation := range allocations {
-		if allocation.Category() != g.Category() {
+		if allocation.CategoryID() != g.Category() {
 			continue
 		}
 		if allocation.Month().Equal(startOfMonth) {

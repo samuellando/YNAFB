@@ -25,7 +25,11 @@ func (s *AllocationService) fromRow(ctx context.Context, row data.Allocation) *A
 	return group
 }
 
-func (a *Allocation) Category() int {
+func (a *Allocation) ID() int {
+	return int(a.row.ID)
+}
+
+func (a *Allocation) CategoryID() int {
 	return int(a.row.CategoryID)
 }
 
