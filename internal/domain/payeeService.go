@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/cache"
 )
 
 type PayeeService struct {
@@ -45,4 +47,55 @@ func (s *PayeeService) GetOrCreate(ctx context.Context, loginID, budgetID int, n
 		return nil, err
 	}
 	return s.fromRow(ctx, created), nil
+}
+
+func (s *PayeeService) List(ctx context.Context, loginID, budgetID int) ([]*Payee, error) {
+	return cache.Result(ctx, fmt.Sprintf("payeeServiceList-%d-%d", loginID, budgetID), func() ([]*Payee, error) {
+		return s.list(ctx, loginID, budgetID)
+	})
+}
+
+func (s *PayeeService) list(ctx context.Context, loginID, budgetID int) ([]*Payee, error) {
+	rows, err := s.repo.ListPayees(ctx, data.ListPayeesParams{
+		LoginID:  int64(loginID),
+		BudgetID: int64(budgetID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	payees := make([]*Payee, len(rows))
+	for i, row := range rows {
+		payees[i] = s.fromRow(ctx, row)
+	}
+	return payees, nil
+}
+
+func (s *PayeeService) Create(ctx context.Context, loginID, budgetID int, name string) (*Payee, error) {
+	defer cache.InvalidateResults(ctx)
+	row, err := s.repo.CreatePayee(ctx, data.CreatePayeeParams{
+		Name:     name,
+		BudgetID: int64(budgetID),
+		LoginID:  int64(loginID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	payee := s.fromRow(ctx, row)
+	return payee, nil
+}
+
+func (s *PayeeService) Get(ctx context.Context, loginID, budgetID, payeeID int) (*Payee, error) {
+	if v, ok := cache.Get[*Payee](ctx, int64(payeeID)); ok {
+		return v, nil
+	}
+	row, err := s.repo.GetPayee(ctx, data.GetPayeeParams{
+		LoginID:  int64(loginID),
+		BudgetID: int64(budgetID),
+		ID:       int64(payeeID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	payee := s.fromRow(ctx, row)
+	return payee, nil
 }

@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"database/sql"
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"

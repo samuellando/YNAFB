@@ -13,6 +13,7 @@ type ApiServer struct {
 	accountService *domain.AccountService
 	allocationService *domain.AllocationService
 	categoryService *domain.CategoryService
+	payeeService *domain.PayeeService
 	queries       *data.Queries
 	db            *sql.DB
 }
@@ -42,6 +43,7 @@ func NewServer(db *sql.DB) ApiServer {
 		accountService: accountService,
 		allocationService: allocationService,
 		categoryService: categoryService,
+		payeeService: payeeService,
 		queries:       data.New(qdb),
 		db:            db,
 	}
