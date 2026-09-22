@@ -1,4 +1,4 @@
-package allocation
+package domain
 
 import (
 	"context"
@@ -8,21 +8,21 @@ import (
 	"samuellando.com/YNAFB/internal/cache"
 )
 
-type Service struct {
-	repo Repository
+type AllocationService struct {
+	repo AloocationRepository
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewAllocationService(repo AloocationRepository) *AllocationService {
+	return &AllocationService{repo: repo}
 }
 
-func (s *Service) List(ctx context.Context,  loginID, budgetID int) ([]*Allocation, error) {
+func (s *AllocationService) List(ctx context.Context,  loginID, budgetID int) ([]*Allocation, error) {
 	return cache.Result(ctx, fmt.Sprintf("allocationServiceList-%d-%d", loginID, budgetID), func() ([]*Allocation, error) {
 		return s.list(ctx, loginID, budgetID)
 	})
 } 
 
-func (s *Service) list(ctx context.Context, loginID, budgetID int) ([]*Allocation, error) {
+func (s *AllocationService) list(ctx context.Context, loginID, budgetID int) ([]*Allocation, error) {
 	rows, err := s.repo.ListAllocations(ctx, data.ListAllocationsParams{
 		BudgetID: int64(budgetID),
 		LoginID:  int64(loginID),

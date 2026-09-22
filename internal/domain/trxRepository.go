@@ -1,11 +1,11 @@
-package trx
+package domain
 
 import (
 	"context"
 	"samuellando.com/YNAFB/data"
 )
 
-type Repository interface {
+type TrxRepository interface {
 	// Trx Operations
 	ListTrxsAndLines(context.Context, data.ListTrxsAndLinesParams) ([]data.ListTrxsAndLinesRow, error)
 }

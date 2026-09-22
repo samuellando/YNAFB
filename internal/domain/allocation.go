@@ -1,4 +1,4 @@
-package allocation
+package domain
 
 import (
 	"time"
@@ -9,11 +9,11 @@ import (
 )
 
 type Allocation struct {
-	service *Service
+	service *AllocationService
 	row     data.Allocation
 }
 
-func (s *Service) FromRow(ctx context.Context, row data.Allocation) *Allocation {
+func (s *AllocationService) FromRow(ctx context.Context, row data.Allocation) *Allocation {
 	if cached, ok := cache.Get[*Allocation](ctx, row.ID); ok {
 		return cached
 	}

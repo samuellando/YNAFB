@@ -1,4 +1,4 @@
-package category
+package domain
 
 import (
 	"context"
@@ -8,21 +8,21 @@ import (
 	"samuellando.com/YNAFB/internal/cache"
 )
 
-type Service struct {
-	repo Repository
+type CategoryService struct {
+	repo CategoryRepository
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewCategoryService(repo CategoryRepository) *CategoryService {
+	return &CategoryService{repo: repo}
 }
 
-func (s *Service) List(ctx context.Context, loginID, budgetID int) ([]*Category, error) {
+func (s *CategoryService) List(ctx context.Context, loginID, budgetID int) ([]*Category, error) {
 	return cache.Result(ctx, fmt.Sprintf("categoryServiceList-%d-%d", loginID, budgetID), func() ([]*Category, error) {
 		return s.list(ctx, loginID, budgetID)
 	})
 }
 
-func (s *Service) list(ctx context.Context, loginID, budgetID int) ([]*Category, error) {
+func (s *CategoryService) list(ctx context.Context, loginID, budgetID int) ([]*Category, error) {
 	rows, err := s.repo.ListCategories(ctx, data.ListCategoriesParams{
 		BudgetID: int64(budgetID),
 		LoginID:  int64(loginID),

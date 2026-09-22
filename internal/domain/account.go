@@ -1,4 +1,4 @@
-package account
+package domain 
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 )
 
 type Account struct {
-	service *Service
+	service *AccountService
 	row data.Account
 }
 
-func (s *Service) FromRow(ctx context.Context, row data.Account) *Account {
+func (s *AccountService) FromRow(ctx context.Context, row data.Account) *Account {
 	if cached, ok := cache.Get[*Account](ctx, row.ID); ok {
 		return cached
 	}

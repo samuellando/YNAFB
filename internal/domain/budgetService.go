@@ -1,4 +1,4 @@
-package budget
+package domain
 
 import (
 	"context"
@@ -6,28 +6,24 @@ import (
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
-	"samuellando.com/YNAFB/internal/domain/allocation"
-	"samuellando.com/YNAFB/internal/domain/category"
-	"samuellando.com/YNAFB/internal/domain/goal"
-	"samuellando.com/YNAFB/internal/domain/trx"
 )
 
-type Service struct {
-	repo              Repository
-	trxService        *trx.Service
-	allocationService *allocation.Service
-	goalService       *goal.Service
-	categoryService   *category.Service
+type BudgetService struct {
+	repo              BudgetRepository
+	trxService        *TrxService
+	allocationService *AllocationService
+	goalService       *GoalService
+	categoryService   *CategoryService
 }
 
-func NewService(
-	repo Repository,
-	trxService *trx.Service,
-	allocationService *allocation.Service,
-	goalService *goal.Service,
-	categoryService *category.Service,
-) *Service {
-	return &Service{
+func NewBudgetService(
+	repo BudgetRepository,
+	trxService *TrxService,
+	allocationService *AllocationService,
+	goalService *GoalService,
+	categoryService *CategoryService,
+) *BudgetService {
+	return &BudgetService{
 		repo:              repo,
 		trxService:        trxService,
 		allocationService: allocationService,
@@ -36,13 +32,13 @@ func NewService(
 	}
 }
 
-func (s *Service) List(ctx context.Context, loginID int) ([]*Budget, error) {
+func (s *BudgetService) List(ctx context.Context, loginID int) ([]*Budget, error) {
 	return cache.Result(ctx, fmt.Sprintf("busgetServiceList-%d", loginID), func() ([]*Budget, error) {
 		return s.list(ctx, loginID)
 	})
 }
 
-func (s *Service) list(ctx context.Context, loginID int) ([]*Budget, error) {
+func (s *BudgetService) list(ctx context.Context, loginID int) ([]*Budget, error) {
 	rows, err := s.repo.ListBudgets(ctx, data.ListBudgetsParams{
 		LoginID: int64(loginID),
 	})
@@ -56,7 +52,7 @@ func (s *Service) list(ctx context.Context, loginID int) ([]*Budget, error) {
 	return budgets, nil
 }
 
-func (s *Service) Create(ctx context.Context, loginID int, name string) (*Budget, error) {
+func (s *BudgetService) Create(ctx context.Context, loginID int, name string) (*Budget, error) {
 	defer cache.InvalidateResults(ctx)
 	row, err := s.repo.CreateBudget(ctx, data.CreateBudgetParams{
 		LoginID: int64(loginID),
@@ -69,7 +65,7 @@ func (s *Service) Create(ctx context.Context, loginID int, name string) (*Budget
 	return budget, nil
 }
 
-func (s *Service) Get(ctx context.Context, loginID, budgetID int) (*Budget, error) {
+func (s *BudgetService) Get(ctx context.Context, loginID, budgetID int) (*Budget, error) {
 	if v, ok := cache.Get[*Budget](ctx, int64(budgetID)); ok {
 		return v, nil
 	}

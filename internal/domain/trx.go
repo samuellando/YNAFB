@@ -1,17 +1,16 @@
-package trx
+package domain
 
 import (
 	"time"
 
 	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/domain/payee"
 )
 
 type Trx struct {
-	service *Service
+	service *TrxService
 	row data.Trx
-	lines []*Line
-	payee *payee.Payee
+	lines []*TrxLine
+	payee *Payee
 }
 
 func (t *Trx) Date() time.Time {
@@ -26,7 +25,7 @@ func (t *Trx) TotalInflow() int {
 	return int(t.row.TotalInflow)
 }
 
-func (t *Trx) Lines() []*Line {
+func (t *Trx) Lines() []*TrxLine {
 	return t.lines
 }
 

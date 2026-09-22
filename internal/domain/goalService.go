@@ -1,25 +1,24 @@
-package goal
+package domain
 
 import (
 	"context"
 
 	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/domain/allocation"
 )
 
-type Service struct {
-	repo Repository
-	allocationService *allocation.Service
+type GoalService struct {
+	repo GoalRepository
+	allocationService *AllocationService
 }
 
-func NewService(repo Repository, allocationService *allocation.Service) *Service {
-	return &Service{
+func NewGoalService(repo GoalRepository, allocationService *AllocationService) *GoalService {
+	return &GoalService{
 		repo: repo,
 		allocationService: allocationService,
 	}
 }
 
-func (s *Service) List(ctx context.Context, loginID, budgetID int) ([]*Goal, error) {
+func (s *GoalService) List(ctx context.Context, loginID, budgetID int) ([]*Goal, error) {
 	rows, err := s.repo.ListGoals(ctx, data.ListGoalsParams{
 		BudgetID: int64(budgetID),
 		LoginID:  int64(loginID),

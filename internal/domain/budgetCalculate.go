@@ -1,13 +1,10 @@
-package budget
+package domain
 
 import (
 	"context"
 	"slices"
 	"strings"
 	"time"
-
-	"samuellando.com/YNAFB/internal/domain/category"
-	"samuellando.com/YNAFB/internal/domain/goal"
 )
 
 type MonthSummary struct {
@@ -30,13 +27,46 @@ type MonthSummary struct {
 type MonthCategory struct {
 	ID        int
 	Name      string
-	Group     *category.Group
+	Group     *Group
 	Allocated int
 	Spent     int
 	CarryOver int
 	Available int
-	Goal      *goal.Goal
+	Goal      *Goal
 }
+
+type fetchedData struct {
+	trxs        []*Trx
+	allocations []*Allocation
+	goals       []*Goal
+	categories  []*Category
+}
+
+func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
+	trxs, err := b.trxService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	if err != nil {
+		return nil, err
+	}
+	allocations, err := b.allocationService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	if err != nil {
+		return nil, err
+	}
+	goals, err := b.goalService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	if err != nil {
+		return nil, err
+	}
+	categories, err := b.categoryService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	if err != nil {
+		return nil, err
+	}
+	return &fetchedData{
+		trxs:        trxs,
+		allocations: allocations,
+		goals:       goals,
+		categories: categories,
+	}, nil
+}
+
 
 func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSummary, error) {
 	startOfMonth, endOfMonth := getStartAndEndOfMonth(month)

@@ -1,26 +1,22 @@
-package budget
+package domain
 
 import (
 	"context"
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
-	"samuellando.com/YNAFB/internal/domain/allocation"
-	"samuellando.com/YNAFB/internal/domain/category"
-	"samuellando.com/YNAFB/internal/domain/goal"
-	"samuellando.com/YNAFB/internal/domain/trx"
 )
 
 type Budget struct {
-	repo Repository
-	trxService *trx.Service
-	allocationService *allocation.Service
-	goalService *goal.Service
-	categoryService *category.Service
+	repo BudgetRepository
+	trxService *TrxService
+	allocationService *AllocationService
+	goalService *GoalService
+	categoryService *CategoryService
 	row  data.Budget
 }
 
-func (s *Service) fromRow(ctx context.Context, row data.Budget) *Budget {
+func (s *BudgetService) fromRow(ctx context.Context, row data.Budget) *Budget {
 	if v, ok := cache.Get[*Budget](ctx, row.ID); ok {
 		return v
 	}

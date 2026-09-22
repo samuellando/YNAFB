@@ -1,10 +1,10 @@
-package category
+package domain
 
 import (
 	"context"
 	"samuellando.com/YNAFB/data"
 )
 
-type Repository interface {
+type CategoryRepository interface {
 	ListCategories(context.Context, data.ListCategoriesParams) ([]data.ListCategoriesRow, error)
 }

@@ -1,4 +1,4 @@
-package category
+package domain
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 )
 
 type Category struct {
-	service *Service
+	service *CategoryService
 	row     data.Category
 	group   *Group
 }
@@ -26,7 +26,7 @@ func (c *Category) Group() *Group {
 }
 
 type Group struct {
-	service *Service
+	service *CategoryService
 	row     data.CategoryGroup
 }
 
@@ -38,7 +38,7 @@ func (g *Group) Name() string {
 	return g.row.Name
 }
 
-func (s *Service) GroupFromRow(ctx context.Context, row data.CategoryGroup) *Group {
+func (s *CategoryService) GroupFromRow(ctx context.Context, row data.CategoryGroup) *Group {
 	if cached, ok := cache.Get[*Group](ctx, row.ID); ok {
 		return cached
 	}
@@ -50,7 +50,7 @@ func (s *Service) GroupFromRow(ctx context.Context, row data.CategoryGroup) *Gro
 	return group
 }
 
-func (s *Service) FromRow(ctx context.Context, row data.Category, group *Group) *Category {
+func (s *CategoryService) FromRow(ctx context.Context, row data.Category, group *Group) *Category {
 	if cached, ok := cache.Get[*Category](ctx, row.ID); ok {
 		return cached
 	}

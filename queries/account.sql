@@ -56,6 +56,28 @@ WHERE
   AND account.budget_id = @budget_id
   AND account.name = ?;
 
+-- name: GetAccount :one
+SELECT
+    account.*
+FROM
+  account
+  JOIN budget as b ON account.budget_id = b.id
+WHERE
+  b.login_id = @login_id
+  AND account.budget_id = @budget_id
+  AND account.id = @id;
+
+-- name: ListAccounts :many
+SELECT
+    account.*
+FROM
+  account
+  JOIN budget as b ON account.budget_id = b.id
+WHERE
+  b.login_id = @login_id
+  AND account.budget_id = @budget_id
+ORDER BY account.name;
+
 -- name: ListAccountsBalances :many
 SELECT
   a.id,

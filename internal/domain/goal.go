@@ -1,4 +1,4 @@
-package goal
+package domain
 
 import (
 	"context"
@@ -6,16 +6,15 @@ import (
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
-	"samuellando.com/YNAFB/internal/domain/allocation"
 )
 
 type Goal struct {
-	service           *Service
-	allocationService *allocation.Service
+	service           *GoalService
+	allocationService *AllocationService
 	row               data.Goal
 }
 
-func (s *Service) fromRow(ctx context.Context, row data.Goal) *Goal {
+func (s *GoalService) fromRow(ctx context.Context, row data.Goal) *Goal {
 	if v, ok := cache.Get[*Goal](ctx, row.ID); ok {
 		return v
 	}

@@ -1,11 +1,11 @@
-package budget
+package domain
 
 import (
 	"context"
 	"samuellando.com/YNAFB/data"
 )
 
-type Repository interface {
+type BudgetRepository interface {
 	// Budget Operations
 	CreateBudget(context.Context, data.CreateBudgetParams) (data.Budget, error)
 	GetBudget(context.Context, data.GetBudgetParams) (data.Budget, error)

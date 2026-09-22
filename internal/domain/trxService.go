@@ -1,4 +1,4 @@
-package trx
+package domain
 
 import (
 	"context"
@@ -6,20 +6,17 @@ import (
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
-	"samuellando.com/YNAFB/internal/domain/account"
-	"samuellando.com/YNAFB/internal/domain/category"
-	"samuellando.com/YNAFB/internal/domain/payee"
 )
 
-type Service struct {
-	repo            Repository
-	categoryService *category.Service
-	payeeService    *payee.Service
-	accountService  *account.Service
+type TrxService struct {
+	repo            TrxRepository
+	categoryService *CategoryService
+	payeeService    *PayeeService
+	accountService  *AccountService
 }
 
-func NewService(repo Repository, catcategoryService *category.Service, payeeService *payee.Service, accountService *account.Service) *Service {
-	return &Service{
+func NewTrxService(repo TrxRepository, catcategoryService *CategoryService, payeeService *PayeeService, accountService *AccountService) *TrxService {
+	return &TrxService{
 		repo: repo,
 		categoryService: catcategoryService,
 		payeeService: payeeService,
@@ -27,13 +24,13 @@ func NewService(repo Repository, catcategoryService *category.Service, payeeServ
 	}
 }
 
-func (s *Service) List(ctx context.Context, loginID, budgetID int) ([]*Trx, error) {
+func (s *TrxService) List(ctx context.Context, loginID, budgetID int) ([]*Trx, error) {
 	return cache.Result(ctx, fmt.Sprintf("trxServiceList-%d-%d", loginID, budgetID), func() ([]*Trx, error) {
 		return s.list(ctx, loginID, budgetID)
 	})
 }
 
-func (s *Service) list(ctx context.Context, loginID, budgetID int) ([]*Trx, error) {
+func (s *TrxService) list(ctx context.Context, loginID, budgetID int) ([]*Trx, error) {
 	rows, err := s.repo.ListTrxsAndLines(ctx, data.ListTrxsAndLinesParams{
 		LoginID:  int64(loginID),
 		BudgetID: int64(budgetID),
@@ -54,7 +51,7 @@ func (s *Service) list(ctx context.Context, loginID, budgetID int) ([]*Trx, erro
 	return trxs, nil
 }
 
-func (s *Service) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) (int, *Trx) {
+func (s *TrxService) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) (int, *Trx) {
 	if len(rows) == 0 {
 		return 0, nil
 	}
@@ -81,7 +78,7 @@ func (s *Service) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) 
 			return i, &trx
 		}
 		if row.LineID.Valid {
-			line := Line{
+			line := TrxLine{
 				service: s,
 				row: data.TrxLine{
 					ID:            row.LineID.Int64,
@@ -95,7 +92,7 @@ func (s *Service) loadTrx(ctx context.Context, rows []data.ListTrxsAndLinesRow) 
 				},
 			}
 			if row.CategoryID.Valid {
-				var group *category.Group
+				var group *Group
 				if row.CategoryGroupID.Valid {
 					group = s.categoryService.GroupFromRow(ctx, data.CategoryGroup{
 						ID:       row.CategoryGroupID.Int64,

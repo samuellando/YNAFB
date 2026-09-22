@@ -8,17 +8,11 @@ import (
 	"time"
 
 	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/domain/account"
-	"samuellando.com/YNAFB/internal/domain/allocation"
-	"samuellando.com/YNAFB/internal/domain/budget"
-	"samuellando.com/YNAFB/internal/domain/category"
-	"samuellando.com/YNAFB/internal/domain/goal"
-	"samuellando.com/YNAFB/internal/domain/payee"
-	"samuellando.com/YNAFB/internal/domain/trx"
+	"samuellando.com/YNAFB/internal/domain"
 )
 
 type ApiServer struct {
-	budgetService *budget.Service
+	budgetService *domain.BudgetService
 	queries *data.Queries
 	db      *sql.DB
 }
@@ -27,14 +21,15 @@ var _ StrictServerInterface = (*ApiServer)(nil)
 
 func NewServer(db *sql.DB) ApiServer {
 	queries := data.New(db)
-	allocationService := allocation.NewService(queries)
-	categoryService := category.NewService(queries)
-	payeeService := payee.NewService(queries)
-	accountService := account.NewService(queries)
-	trxService := trx.NewService(queries, categoryService, payeeService, accountService) 
-	goalService := goal.NewService(queries, allocationService)
+	allocationService := domain.NewAllocationService(queries)
+	categoryService := domain.NewCategoryService(queries)
+	payeeService := domain.NewPayeeService(queries)
+	accountService := domain.NewAccountService(queries, nil)
+	trxService := domain.NewTrxService(queries, categoryService, payeeService, accountService) 
+	accountService.SetTrxService(trxService)
+	goalService := domain.NewGoalService(queries, allocationService)
 	return ApiServer{
-		budgetService: budget.NewService(
+		budgetService: domain.NewBudgetService(
 			queries, 
 			trxService,
 			allocationService,
