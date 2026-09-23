@@ -67,23 +67,6 @@ LEFT JOIN reconciliation AS r ON r.account_id = a.id AND r.trx_id = t.id
 WHERE b.login_id = @login_id AND t.budget_id = @budget_id AND t.id = @id AND a.id = @account_id
 ORDER BY t.date DESC, t.id DESC;
 
--- name: ListTrxs :many
-SELECT
-  t.id,
-  t.budget_id,
-  t.date,
-  a.name AS account_name,
-  p.name AS payee_name,
-  t.total_outflow,
-  t.total_inflow,
-  t.note
-FROM trx AS t
-JOIN account AS a ON a.id = t.account_id
-JOIN payee AS p ON p.id = t.payee_id
-JOIN budget AS b ON t.budget_id = b.id
-WHERE b.login_id = @login_id AND t.budget_id = @budget_id
-ORDER BY t.date DESC, t.id DESC;
-
 -- name: ListTrxsAndLines :many
 SELECT
     sqlc.embed(t),

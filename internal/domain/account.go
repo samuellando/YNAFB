@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/cache"
 	"samuellando.com/YNAFB/internal/db/types"
 	"samuellando.com/YNAFB/internal/importer/statement"

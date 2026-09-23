@@ -2,7 +2,7 @@ package domain
 
 import (
 	"context"
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 type DomainRepository interface {

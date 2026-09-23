@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 // Counter tracks how many queries ran for a single request and how long

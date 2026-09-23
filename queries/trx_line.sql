@@ -57,16 +57,3 @@ WHERE
   AND tl.budget_id = @budget_id
   AND tl.id = @id
   AND tl.trx_id = @trx_id;
-
--- name: DeleteTrxLinesByTrx :exec
-DELETE FROM trx_line
-WHERE
-  trx_line.trx_id = @trx_id
-  AND trx_line.budget_id IN (
-    SELECT
-      b.id
-    FROM
-      budget AS b
-    WHERE
-      b.id = @budget_id AND b.login_id = @login_id
-  );

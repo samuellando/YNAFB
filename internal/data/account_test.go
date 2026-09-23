@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 func TestCreateAccount(t *testing.T) {
@@ -91,7 +91,7 @@ func TestDeleteAccount(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	account := newAccount(t, queries, ctx, budget, "testaccount")
-	accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
+	accounts, err := queries.ListAccounts(ctx, data.ListAccountsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestDeleteAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts, err = queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
+	accounts, err = queries.ListAccounts(ctx, data.ListAccountsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestDeleteBudgetCascades(t *testing.T) {
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
 	newAccount(t, queries, ctx, budget, "testaccount")
-	accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
+	accounts, err := queries.ListAccounts(ctx, data.ListAccountsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,50 +127,12 @@ func TestDeleteBudgetCascades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts, err = queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
+	accounts, err = queries.ListAccounts(ctx, data.ListAccountsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(accounts) != 0 {
 		t.Fatal("There should be no account after")
-	}
-}
-
-func TestGetAccountByName(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget, "testaccount")
-	nameAccount, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
-		LoginID:  budget.LoginID,
-		Name:     "testaccount",
-		BudgetID: budget.ID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if account.ID != nameAccount.ID {
-		t.Error("getting account by name, id does not match")
-	}
-	if nameAccount.BudgetID != budget.ID {
-		t.Error("getting account by name, budget id does not match")
-	}
-	if nameAccount.Name != "testaccount" {
-		t.Error("getting account by name, name does not match")
-	}
-}
-
-func TestGetAccountByNameDoesNotExist(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	_, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
-		LoginID:  budget.LoginID,
-		Name:     "testaccount",
-		BudgetID: budget.ID,
-	})
-	if err == nil {
-		t.Fatal("Getting non existent account by name should fail")
 	}
 }
 
@@ -193,17 +155,6 @@ func TestUpdateAccount(t *testing.T) {
 	}
 	if updated.Name != "newName" {
 		t.Error("account name was not updated")
-	}
-	newNameAccount, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
-		LoginID:  budget.LoginID,
-		Name:     "newName",
-		BudgetID: budget.ID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if account.ID != newNameAccount.ID {
-		t.Error("ID changed on update")
 	}
 }
 
@@ -242,23 +193,6 @@ func TestScopingCreateAccountUsesLoginBudget(t *testing.T) {
 	}
 }
 
-func TestScopingGetAccountByNameScopedByLogin(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budgetA := newBudget(t, queries, ctx, "budgetA")
-	budgetB := newBudget(t, queries, ctx, "budgetB")
-	newAccount(t, queries, ctx, budgetB, "shared")
-
-	_, err := queries.GetAccountByName(ctx, data.GetAccountByNameParams{
-		LoginID:  budgetA.LoginID,
-		BudgetID: budgetB.ID,
-		Name:     "shared",
-	})
-	if err != sql.ErrNoRows {
-		t.Fatalf("expected sql.ErrNoRows for another login's account, got %v", err)
-	}
-}
-
 func TestScopingUpdateAccountScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
@@ -294,7 +228,7 @@ func TestScopingDeleteAccountScopedByLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts, err := queries.ListAccountsBalances(ctx, data.ListAccountsBalancesParams{LoginID: budgetB.LoginID, BudgetID: budgetB.ID})
+	accounts, err := queries.ListAccounts(ctx, data.ListAccountsParams{LoginID: budgetB.LoginID, BudgetID: budgetB.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,64 +237,111 @@ func TestScopingDeleteAccountScopedByLogin(t *testing.T) {
 	}
 }
 
-func TestScopingGetAccountBalancesScopedByLogin(t *testing.T) {
+func TestGetAccount(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	got, err := queries.GetAccount(ctx, data.GetAccountParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       account.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != account.ID {
+		t.Error("getting account, id does not match")
+	}
+	if got.BudgetID != budget.ID {
+		t.Error("getting account, budget id does not match")
+	}
+	if got.Name != "testaccount" {
+		t.Error("getting account, name does not match")
+	}
+	if got.LoginID != budget.LoginID {
+		t.Error("getting account, login id does not match")
+	}
+	if got.BudgetName != "testBudget" {
+		t.Error("getting account, budget name does not match")
+	}
+}
+
+func TestGetAccountDoesNotExist(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetAccount(ctx, data.GetAccountParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       99,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("Getting non existent account should return sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestListAccounts(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	budget2 := newBudget(t, queries, ctx, "testBudget2")
+	newAccount(t, queries, ctx, budget, "accountB")
+	newAccount(t, queries, ctx, budget, "accountA")
+	newAccount(t, queries, ctx, budget2, "otherBudgetAccount")
+	accounts, err := queries.ListAccounts(ctx, data.ListAccountsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts) != 2 {
+		t.Fatal("There should be two accounts in the budget")
+	}
+	if accounts[0].Name != "accountA" {
+		t.Error("First account should be accountA (ordered by name)")
+	}
+	if accounts[1].Name != "accountB" {
+		t.Error("Second account should be accountB (ordered by name)")
+	}
+	if accounts[0].LoginID != budget.LoginID {
+		t.Error("listed account login id does not match")
+	}
+	if accounts[0].BudgetName != "testBudget" {
+		t.Error("listed account budget name does not match")
+	}
+}
+
+func TestScopingGetAccountScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budgetA := newBudget(t, queries, ctx, "budgetA")
 	budgetB := newBudget(t, queries, ctx, "budgetB")
 	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
 
-	_, err := queries.GetAccountBalances(ctx, data.GetAccountBalancesParams{
+	_, err := queries.GetAccount(ctx, data.GetAccountParams{
 		LoginID:  budgetA.LoginID,
 		BudgetID: budgetB.ID,
 		ID:       accountB.ID,
 	})
 	if err != sql.ErrNoRows {
-		t.Fatalf("expected sql.ErrNoRows for another login's account balances, got %v", err)
+		t.Fatalf("expected sql.ErrNoRows for another login's account, got %v", err)
 	}
 }
 
-func TestScopingGetAccountBalanceAsOfScopedByLogin(t *testing.T) {
+func TestScopingListAccountsScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budgetA := newBudget(t, queries, ctx, "budgetA")
 	budgetB := newBudget(t, queries, ctx, "budgetB")
-	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
-	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
-	newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 0, 8000, "")
+	newAccount(t, queries, ctx, budgetB, "accountB")
 
-	balance, err := queries.GetAccountBalanceAsOf(ctx, data.GetAccountBalanceAsOfParams{
+	rows, err := queries.ListAccounts(ctx, data.ListAccountsParams{
 		LoginID:  budgetA.LoginID,
 		BudgetID: budgetB.ID,
-		ID:       accountB.ID,
-		Date:     mustTime(t, 2026, 2, 1),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if balance != 0 {
-		t.Fatalf("expected 0 balance for another login's account, got %d", balance)
-	}
-}
-
-func TestScopingListAccountTransactionsScopedByLogin(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budgetA := newBudget(t, queries, ctx, "budgetA")
-	budgetB := newBudget(t, queries, ctx, "budgetB")
-	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
-	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
-	newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
-
-	rows, err := queries.ListAccountTransactions(ctx, data.ListAccountTransactionsParams{
-		LoginID:  budgetA.LoginID,
-		BudgetID: budgetB.ID,
-		ID:       accountB.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 0 {
-		t.Fatalf("expected 0 transactions for another login's account, got %d", len(rows))
+		t.Fatalf("expected 0 accounts for another login's budget, got %d", len(rows))
 	}
 }

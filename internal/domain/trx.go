@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/cache"
 	"samuellando.com/YNAFB/internal/db/types"
 )

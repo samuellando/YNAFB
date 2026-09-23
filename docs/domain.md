@@ -104,10 +104,8 @@ the service-layer refactor — follow them so the package stays consistent.
 
 ## Verification
 
-- `go build ./...` must pass; `go test -count=1 ./internal/...` must pass.
-  (`go test ./data/` is broken independently — stale month-view tests
-  reference view queries that no longer exist since the views moved into
-  `budgetCalculate.go`.)
+- `go build ./...` must pass; `go test -count=1 ./internal/...` must pass;
+  `go test -count=1 ./internal/data/` must pass.
 - Keep `gofmt`-clean any file you touch. New domain behavior should come
   with a regression test in `internal/http/api/` (see
   `trx_regression_test.go`).

@@ -99,7 +99,7 @@ budget. Required so a shared account can be reconciled independently in each bud
 
 ## 4. Query changes
 
-All under `queries/`, followed by `sqlc generate` (the `data/` package is generated;
+All under `queries/`, followed by `sqlc generate` (the `internal/data/` package is generated;
 never hand-edit).
 
 - **`share.sql`** (new): create/delete/list shares, look up the partner budget for an
@@ -190,7 +190,7 @@ cascade logic.
    be relaxed for shared context while staying strict for normal accounts.
 
 10. **Migration backfill.** Both rebuilt tables need correct backfill of existing
-    rows; the `data/` package must be regenerated or the build fails (per AGENTS.md).
+    rows; the `internal/data/` package must be regenerated or the build fails (per AGENTS.md).
 
 ## 7. Testing strategy
 

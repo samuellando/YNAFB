@@ -53,19 +53,6 @@ LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
 LEFT JOIN account AS a ON a.id = pdl.dest_account_id
 WHERE b.login_id = @login_id AND pdl.budget_id = @budget_id AND pdl.id = @id;
 
--- name: DeletePayeeDefaultLinesByPayee :exec
-DELETE FROM payee_default_line
-WHERE
-  payee_default_line.payee_id = @payee_id
-  AND payee_default_line.budget_id IN (
-    SELECT
-      b.id
-    FROM
-      budget AS b
-    WHERE
-      b.id = @budget_id AND b.login_id = @login_id
-  );
-
 -- name: ListPayeeDefaultLinesByPayee :many
 SELECT
   pdl.id,

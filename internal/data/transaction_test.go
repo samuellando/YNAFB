@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 func TestCreateTrx(t *testing.T) {
@@ -140,7 +140,6 @@ func TestUpdateTrxBothInflowAndOutflowRejected(t *testing.T) {
 	_, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
 		LoginID:      budget.LoginID,
 		Date:         mustTime(t, 2026, 1, 1),
-		AccountID:    account.ID,
 		PayeeID:      payee.ID,
 		TotalOutflow: 1000,
 		TotalInflow:  500,
@@ -197,18 +196,17 @@ func TestDeleteAccountCascadesTransactions(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget, "testaccount")
 	payee := newPayee(t, queries, ctx, budget, "testpayee")
 	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
-	if err != nil {
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if len(transactions) != 1 {
+	if count != 1 {
 		t.Fatal("There should be one transaction before")
 	}
-	err = queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: account.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
+	err := queries.DeleteAccount(ctx, data.DeleteAccountParams{ID: account.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
@@ -224,18 +222,17 @@ func TestDeletePayeeCascadesTransactions(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget, "testaccount")
 	payee := newPayee(t, queries, ctx, budget, "testpayee")
 	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
-	if err != nil {
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if len(transactions) != 1 {
+	if count != 1 {
 		t.Fatal("There should be one transaction before")
 	}
-	err = queries.DeletePayee(ctx, data.DeletePayeeParams{ID: payee.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
+	err := queries.DeletePayee(ctx, data.DeletePayeeParams{ID: payee.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +252,6 @@ func TestUpdateTrx(t *testing.T) {
 	updated, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
 		LoginID:      budget.LoginID,
 		Date:         date,
-		AccountID:    account.ID,
 		PayeeID:      payee.ID,
 		TotalOutflow: 2000,
 		TotalInflow:  0,
@@ -278,25 +274,6 @@ func TestUpdateTrx(t *testing.T) {
 	if updated.Note != "newnote" {
 		t.Error("transaction note was not updated")
 	}
-	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(transactions) != 1 {
-		t.Fatal("There should be one transaction")
-	}
-	if transactions[0].ID != transaction.ID {
-		t.Error("ID changed on update")
-	}
-	if transactions[0].Date.Unix() != date.Unix() {
-		t.Error("transaction date was not updated")
-	}
-	if transactions[0].TotalOutflow != 2000 {
-		t.Error("transaction total outflow was not updated")
-	}
-	if transactions[0].Note != "newnote" {
-		t.Error("transaction note was not updated")
-	}
 }
 
 func TestDeleteTrx(t *testing.T) {
@@ -306,78 +283,22 @@ func TestDeleteTrx(t *testing.T) {
 	account := newAccount(t, queries, ctx, budget, "testaccount")
 	payee := newPayee(t, queries, ctx, budget, "testpayee")
 	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
-	if err != nil {
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if len(transactions) != 1 {
+	if count != 1 {
 		t.Fatal("There should be one transaction before")
 	}
-	err = queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: transaction.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
+	err := queries.DeleteTrx(ctx, data.DeleteTrxParams{ID: transaction.ID, BudgetID: budget.ID, LoginID: budget.LoginID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	transactions, err = queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
-	if err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, transaction.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if len(transactions) != 0 {
+	if count != 0 {
 		t.Fatal("There should be no transaction after")
-	}
-}
-
-func TestListTrxs(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	account := newAccount(t, queries, ctx, budget, "testaccount")
-	payee := newPayee(t, queries, ctx, budget, "testpayee")
-	tx1 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "first")
-	newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "second")
-	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget.LoginID, BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(transactions) != 2 {
-		t.Fatal("There should be two transactions")
-	}
-	if transactions[0].ID == tx1.ID {
-		t.Error("First transaction should be the most recent one (ordered by date desc)")
-	}
-	if transactions[0].AccountName != "testaccount" {
-		t.Error("transaction account name does not match")
-	}
-	if transactions[0].PayeeName != "testpayee" {
-		t.Error("transaction payee name does not match")
-	}
-	if transactions[0].TotalOutflow != 2000 {
-		t.Error("first transaction total outflow does not match")
-	}
-	if transactions[1].TotalOutflow != 1000 {
-		t.Error("second transaction total outflow does not match")
-	}
-}
-
-func TestListTrxsScopedToBudget(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget1 := newBudget(t, queries, ctx, "budget1")
-	budget2 := newBudget(t, queries, ctx, "budget2")
-	account1 := newAccount(t, queries, ctx, budget1, "account1")
-	payee1 := newPayee(t, queries, ctx, budget1, "payee1")
-	account2 := newAccount(t, queries, ctx, budget2, "account2")
-	payee2 := newPayee(t, queries, ctx, budget2, "payee2")
-	newTrx(t, queries, ctx, budget1, account1, payee1, mustTime(t, 2026, 1, 1), 1000, 0, "")
-	newTrx(t, queries, ctx, budget2, account2, payee2, mustTime(t, 2026, 1, 2), 2000, 0, "")
-	transactions, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budget1.LoginID, BudgetID: budget1.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(transactions) != 1 {
-		t.Fatalf("There should be one transaction for budget1, got %d", len(transactions))
-	}
-	if transactions[0].AccountName != "account1" {
-		t.Error("budget1 returned the wrong transaction")
 	}
 }
 
@@ -421,16 +342,16 @@ func TestScopingDeleteTrxScopedByLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trxs, err := queries.ListTrxs(ctx, data.ListTrxsParams{LoginID: budgetB.LoginID, BudgetID: budgetB.ID})
-	if err != nil {
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE id = ?`, trxB.ID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if len(trxs) != 1 {
-		t.Fatalf("expected trxB to survive a cross-login delete, got %d transactions", len(trxs))
+	if count != 1 {
+		t.Fatalf("expected trxB to survive a cross-login delete, got %d transactions", count)
 	}
 }
 
-func TestScopingListTrxsScopedByLogin(t *testing.T) {
+func TestScopingListTrxsAndLinesScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budgetA := newBudget(t, queries, ctx, "budgetA")
@@ -439,7 +360,15 @@ func TestScopingListTrxsScopedByLogin(t *testing.T) {
 	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
 	newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
 
-	rows, err := queries.ListTrxs(ctx, data.ListTrxsParams{
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM trx WHERE budget_id = ?`, budgetB.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 transaction for budgetB, got %d", count)
+	}
+
+	rows, err := queries.ListTrxsAndLines(ctx, data.ListTrxsAndLinesParams{
 		LoginID:  budgetA.LoginID,
 		BudgetID: budgetB.ID,
 	})
@@ -462,7 +391,6 @@ func TestScopingUpdateTrxScopedByLogin(t *testing.T) {
 
 	_, err := queries.UpdateTrx(ctx, data.UpdateTrxParams{
 		Date:         mustTime(t, 2026, 2, 1),
-		AccountID:    accountB.ID,
 		PayeeID:      payeeB.ID,
 		TotalOutflow: 5000,
 		TotalInflow:  0,
@@ -473,5 +401,210 @@ func TestScopingUpdateTrxScopedByLogin(t *testing.T) {
 	})
 	if err != sql.ErrNoRows {
 		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
+	}
+}
+
+func TestGetTrxAndLines(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "testnote")
+	newCategoryLine(t, queries, ctx, budget, transaction, category, 600, 0)
+	newTransfer(t, queries, ctx, budget, transaction, otherAccount, 400, 0)
+
+	rows, err := queries.GetTrxAndLines(ctx, data.GetTrxAndLinesParams{
+		LoginID:   budget.LoginID,
+		BudgetID:  budget.ID,
+		ID:        transaction.ID,
+		AccountID: account.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("There should be two rows (one per line), got %d", len(rows))
+	}
+	if rows[0].Trx.ID != transaction.ID {
+		t.Error("trx id does not match")
+	}
+	if rows[0].AccountName != "testaccount" {
+		t.Error("trx account name does not match")
+	}
+	if rows[0].PayeeName != "testpayee" {
+		t.Error("trx payee name does not match")
+	}
+	if rows[0].Trx.Note != "testnote" {
+		t.Error("trx note does not match")
+	}
+	if rows[0].Reconciled {
+		t.Error("trx should not be reconciled")
+	}
+	byCategory := map[bool]data.GetTrxAndLinesRow{}
+	for _, row := range rows {
+		byCategory[row.CategoryID.Valid] = row
+	}
+	categoryRow := byCategory[true]
+	if categoryRow.CategoryName.String != "testcategory" {
+		t.Error("line category name does not match")
+	}
+	if categoryRow.LineOutflow.Int64 != 600 {
+		t.Error("line outflow does not match")
+	}
+	transferRow := byCategory[false]
+	if !transferRow.DestAccountID.Valid || transferRow.DestAccountID.Int64 != otherAccount.ID {
+		t.Error("line dest account id does not match")
+	}
+	if transferRow.DestAccountName.String != "otheraccount" {
+		t.Error("line dest account name does not match")
+	}
+}
+
+func TestGetTrxAndLinesNoLines(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+
+	rows, err := queries.GetTrxAndLines(ctx, data.GetTrxAndLinesParams{
+		LoginID:   budget.LoginID,
+		BudgetID:  budget.ID,
+		ID:        transaction.ID,
+		AccountID: account.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("There should be one row for a transaction without lines, got %d", len(rows))
+	}
+	if rows[0].LineID.Valid {
+		t.Error("line id should be null when the transaction has no lines")
+	}
+}
+
+func TestGetTrxAndLinesWrongAccount(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	otherAccount := newAccount(t, queries, ctx, budget, "otheraccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+
+	rows, err := queries.GetTrxAndLines(ctx, data.GetTrxAndLinesParams{
+		LoginID:   budget.LoginID,
+		BudgetID:  budget.ID,
+		ID:        transaction.ID,
+		AccountID: otherAccount.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected 0 rows when the account does not own the transaction, got %d", len(rows))
+	}
+}
+
+func TestGetTrxAndLinesReconciled(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	transaction := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	if _, err := queries.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID: budget.ID,
+		ID:       account.ID,
+		LoginID:  budget.LoginID,
+		Date:     mustTime(t, 2026, 2, 1),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := queries.GetTrxAndLines(ctx, data.GetTrxAndLinesParams{
+		LoginID:   budget.LoginID,
+		BudgetID:  budget.ID,
+		ID:        transaction.ID,
+		AccountID: account.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("There should be one row, got %d", len(rows))
+	}
+	if !rows[0].Reconciled {
+		t.Error("trx should be reconciled after reconciling the account")
+	}
+}
+
+func TestListTrxsAndLines(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	budget2 := newBudget(t, queries, ctx, "testBudget2")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	otherAccount := newAccount(t, queries, ctx, budget2, "otheraccount")
+	otherPayee := newPayee(t, queries, ctx, budget2, "otherpayee")
+	newTrx(t, queries, ctx, budget2, otherAccount, otherPayee, mustTime(t, 2026, 1, 1), 1000, 0, "")
+	tx1 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 1, 1), 1000, 0, "first")
+	tx2 := newTrx(t, queries, ctx, budget, account, payee, mustTime(t, 2026, 2, 1), 2000, 0, "second")
+	newCategoryLine(t, queries, ctx, budget, tx2, category, 2000, 0)
+
+	rows, err := queries.ListTrxsAndLines(ctx, data.ListTrxsAndLinesParams{LoginID: budget.LoginID, BudgetID: budget.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("There should be two rows (tx1 without lines, tx2 with one line), got %d", len(rows))
+	}
+	if rows[0].Trx.ID != tx2.ID {
+		t.Error("First row should belong to the most recent transaction (ordered by date desc)")
+	}
+	if rows[0].AccountName != "testaccount" {
+		t.Error("row account name does not match")
+	}
+	if rows[0].PayeeName != "testpayee" {
+		t.Error("row payee name does not match")
+	}
+	if rows[0].CategoryName.String != "testcategory" {
+		t.Error("row category name does not match")
+	}
+	if rows[1].Trx.ID != tx1.ID {
+		t.Error("Second row should belong to the older transaction")
+	}
+	if rows[1].LineID.Valid {
+		t.Error("older transaction has no lines, line id should be null")
+	}
+}
+
+func TestScopingGetTrxAndLinesScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	accountB := newAccount(t, queries, ctx, budgetB, "accountB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+	trxB := newTrx(t, queries, ctx, budgetB, accountB, payeeB, mustTime(t, 2026, 1, 1), 1000, 0, "")
+
+	rows, err := queries.GetTrxAndLines(ctx, data.GetTrxAndLinesParams{
+		LoginID:   budgetA.LoginID,
+		BudgetID:  budgetB.ID,
+		ID:        trxB.ID,
+		AccountID: accountB.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected 0 rows for another login's transaction, got %d", len(rows))
 	}
 }

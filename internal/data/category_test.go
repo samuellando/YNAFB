@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 func TestCreateCategory(t *testing.T) {
@@ -219,9 +219,9 @@ func TestUpdateCategory(t *testing.T) {
 	if !updated.CategoryGroupID.Valid || updated.CategoryGroupID.Int64 != groupID {
 		t.Error("category group was not updated")
 	}
-	newNameCategory, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
+	newNameCategory, err := queries.GetCategory(ctx, data.GetCategoryParams{
 		LoginID:  budget.LoginID,
-		Name:     "newName",
+		ID:       category.ID,
 		BudgetID: budget.ID,
 	})
 	if err != nil {
@@ -277,44 +277,6 @@ func TestListCategories(t *testing.T) {
 	}
 	if categories[1].Name != "categoryB" {
 		t.Error("Second category should be categoryB (ordered by name)")
-	}
-}
-
-func TestGetCategoryByName(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	category := newCategory(t, queries, ctx, budget, "testcategory")
-	nameCategory, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
-		LoginID:  budget.LoginID,
-		Name:     "testcategory",
-		BudgetID: budget.ID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if category.ID != nameCategory.ID {
-		t.Error("getting category by name, id does not match")
-	}
-	if nameCategory.BudgetID != budget.ID {
-		t.Error("getting category by name, budget id does not match")
-	}
-	if nameCategory.Name != "testcategory" {
-		t.Error("getting category by name, name does not match")
-	}
-}
-
-func TestGetCategoryByNameDoesNotExist(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	_, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
-		LoginID:  budget.LoginID,
-		Name:     "testcategory",
-		BudgetID: budget.ID,
-	})
-	if err == nil {
-		t.Fatal("Getting non existent category by name should fail")
 	}
 }
 
@@ -383,9 +345,9 @@ func TestCreateCategoryGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
+	group, err := queries.GetCategoryGroup(ctx, data.GetCategoryGroupParams{
 		LoginID:  budget.LoginID,
-		Name:     "testgroup",
+		ID:       groupID,
 		BudgetID: budget.ID,
 	})
 	if err != nil {
@@ -443,9 +405,9 @@ func TestUpdateCategoryGroup(t *testing.T) {
 	if updated.Name != "newName" {
 		t.Error("category group name was not updated")
 	}
-	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
+	group, err := queries.GetCategoryGroup(ctx, data.GetCategoryGroupParams{
 		LoginID:  budget.LoginID,
-		Name:     "newName",
+		ID:       groupID,
 		BudgetID: budget.ID,
 	})
 	if err != nil {
@@ -499,30 +461,6 @@ func TestListCategoryGroups(t *testing.T) {
 	}
 	if groups[1].Name != "groupB" {
 		t.Error("Second category group should be groupB (ordered by name)")
-	}
-}
-
-func TestGetCategoryGroupByName(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID := newCategoryGroup(t, queries, ctx, budget, "testgroup")
-	group, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
-		LoginID:  budget.LoginID,
-		Name:     "testgroup",
-		BudgetID: budget.ID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if group.ID != groupID {
-		t.Error("getting category group by name, id does not match")
-	}
-	if group.BudgetID != budget.ID {
-		t.Error("getting category group by name, budget id does not match")
-	}
-	if group.Name != "testgroup" {
-		t.Error("getting category group by name, name does not match")
 	}
 }
 
@@ -582,23 +520,6 @@ func TestScopingDeleteCategoryScopedByLogin(t *testing.T) {
 	}
 	if len(categories) != 1 {
 		t.Fatalf("expected categoryB to survive a cross-login delete, got %d categories", len(categories))
-	}
-}
-
-func TestScopingGetCategoryByNameScopedByLogin(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budgetA := newBudget(t, queries, ctx, "budgetA")
-	budgetB := newBudget(t, queries, ctx, "budgetB")
-	newCategory(t, queries, ctx, budgetB, "shared")
-
-	_, err := queries.GetCategoryByName(ctx, data.GetCategoryByNameParams{
-		LoginID:  budgetA.LoginID,
-		BudgetID: budgetB.ID,
-		Name:     "shared",
-	})
-	if err != sql.ErrNoRows {
-		t.Fatalf("expected sql.ErrNoRows for another login's category, got %v", err)
 	}
 }
 
@@ -680,23 +601,6 @@ func TestScopingDeleteCategoryGroupScopedByLogin(t *testing.T) {
 	}
 }
 
-func TestScopingGetCategoryGroupByNameScopedByLogin(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budgetA := newBudget(t, queries, ctx, "budgetA")
-	budgetB := newBudget(t, queries, ctx, "budgetB")
-	newCategoryGroup(t, queries, ctx, budgetB, "shared")
-
-	_, err := queries.GetCategoryGroupByName(ctx, data.GetCategoryGroupByNameParams{
-		LoginID:  budgetA.LoginID,
-		BudgetID: budgetB.ID,
-		Name:     "shared",
-	})
-	if err != sql.ErrNoRows {
-		t.Fatalf("expected sql.ErrNoRows for another login's category group, got %v", err)
-	}
-}
-
 func TestScopingUpdateCategoryGroupScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
@@ -712,5 +616,141 @@ func TestScopingUpdateCategoryGroupScopedByLogin(t *testing.T) {
 	})
 	if err != sql.ErrNoRows {
 		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
+	}
+}
+
+func TestGetCategory(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	groupID := newCategoryGroup(t, queries, ctx, budget, "testgroup")
+	category, err := queries.CreateCategory(ctx, data.CreateCategoryParams{
+		LoginID:         budget.LoginID,
+		BudgetID:        budget.ID,
+		Name:            "testcategory",
+		CategoryGroupID: sql.NullInt64{Int64: groupID, Valid: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ungrouped := newCategory(t, queries, ctx, budget, "ungrouped")
+
+	got, err := queries.GetCategory(ctx, data.GetCategoryParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       category.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != category.ID {
+		t.Error("getting category, id does not match")
+	}
+	if got.Name != "testcategory" {
+		t.Error("getting category, name does not match")
+	}
+	if !got.GroupID.Valid || got.GroupID.Int64 != groupID {
+		t.Error("getting category, group id does not match")
+	}
+	if got.GroupName.String != "testgroup" {
+		t.Error("getting category, group name does not match")
+	}
+
+	got, err = queries.GetCategory(ctx, data.GetCategoryParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       ungrouped.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GroupID.Valid {
+		t.Error("getting ungrouped category, group id should be null")
+	}
+}
+
+func TestGetCategoryDoesNotExist(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetCategory(ctx, data.GetCategoryParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       99,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("Getting non existent category should return sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestGetCategoryGroup(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	groupID := newCategoryGroup(t, queries, ctx, budget, "testgroup")
+	group, err := queries.GetCategoryGroup(ctx, data.GetCategoryGroupParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       groupID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if group.ID != groupID {
+		t.Error("getting category group, id does not match")
+	}
+	if group.BudgetID != budget.ID {
+		t.Error("getting category group, budget id does not match")
+	}
+	if group.Name != "testgroup" {
+		t.Error("getting category group, name does not match")
+	}
+}
+
+func TestGetCategoryGroupDoesNotExist(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetCategoryGroup(ctx, data.GetCategoryGroupParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       99,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("Getting non existent category group should return sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestScopingGetCategoryScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+
+	_, err := queries.GetCategory(ctx, data.GetCategoryParams{
+		LoginID:  budgetA.LoginID,
+		BudgetID: budgetB.ID,
+		ID:       categoryB.ID,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows for another login's category, got %v", err)
+	}
+}
+
+func TestScopingGetCategoryGroupScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	groupB := newCategoryGroup(t, queries, ctx, budgetB, "groupB")
+
+	_, err := queries.GetCategoryGroup(ctx, data.GetCategoryGroupParams{
+		LoginID:  budgetA.LoginID,
+		BudgetID: budgetB.ID,
+		ID:       groupB,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows for another login's category group, got %v", err)
 	}
 }

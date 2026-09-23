@@ -3,7 +3,7 @@ package api
 import (
 	"database/sql"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/db/querycount"
 	"samuellando.com/YNAFB/internal/domain"
 )

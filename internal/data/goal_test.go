@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/db/types"
 )
 
