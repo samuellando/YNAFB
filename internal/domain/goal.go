@@ -6,6 +6,7 @@ import (
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/db/types"
 )
 
 type Goal struct {
@@ -25,6 +26,10 @@ func (s *GoalService) fromRow(ctx context.Context, row data.Goal) *Goal {
 	}
 	cache.Store(ctx, row.ID, goal)
 	return goal
+}
+
+func (g *Goal) ID() int {
+	return int(g.row.ID)
 }
 
 func (g *Goal) Category() int {
@@ -49,6 +54,33 @@ func (g *Goal) EndDate() *time.Time {
 
 func (g *Goal) Amount() int {
 	return int(g.row.Amount)
+}
+
+func (g *Goal) Update(ctx context.Context, loginID int, goalType string, start types.UnixTime, end types.NullUnixTime, amount int) error {
+	defer cache.InvalidateResults(ctx)
+	row, err := g.service.repo.UpdateGoal(ctx, data.UpdateGoalParams{
+		Type:       goalType,
+		StartDate:  start,
+		EndDate:    end,
+		Amount:     int64(amount),
+		BudgetID:   g.row.BudgetID,
+		LoginID:    int64(loginID),
+		CategoryID: g.row.CategoryID,
+	})
+	if err != nil {
+		return err
+	}
+	g.row = row
+	return nil
+}
+
+func (g *Goal) Delete(ctx context.Context, loginID int) error {
+	defer cache.InvalidateResults(ctx)
+	return g.service.repo.DeleteGoal(ctx, data.DeleteGoalParams{
+		BudgetID:   g.row.BudgetID,
+		LoginID:    int64(loginID),
+		CategoryID: g.row.CategoryID,
+	})
 }
 
 type GoalValues struct {

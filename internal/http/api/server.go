@@ -9,14 +9,15 @@ import (
 )
 
 type ApiServer struct {
-	budgetService *domain.BudgetService
-	accountService *domain.AccountService
+	budgetService     *domain.BudgetService
+	accountService    *domain.AccountService
 	allocationService *domain.AllocationService
-	categoryService *domain.CategoryService
-	payeeService *domain.PayeeService
-	trxService *domain.TrxService
-	queries       *data.Queries
-	db            *sql.DB
+	categoryService   *domain.CategoryService
+	payeeService      *domain.PayeeService
+	trxService        *domain.TrxService
+	goalService       *domain.GoalService
+	queries           *data.Queries
+	db                *sql.DB
 }
 
 var _ StrictServerInterface = (*ApiServer)(nil)
@@ -41,14 +42,14 @@ func NewServer(db *sql.DB) ApiServer {
 	accountService.SetBudgetService(budgetService)
 	trxService.SetBudgetService(budgetService)
 	return ApiServer{
-		budgetService: budgetService,
-		accountService: accountService,
+		budgetService:     budgetService,
+		accountService:    accountService,
 		allocationService: allocationService,
-		categoryService: categoryService,
-		payeeService: payeeService,
-		trxService: trxService,
-		queries:       data.New(qdb),
-		db:            db,
+		categoryService:   categoryService,
+		payeeService:      payeeService,
+		trxService:        trxService,
+		goalService:       goalService,
+		queries:           data.New(qdb),
+		db:                db,
 	}
 }
-
