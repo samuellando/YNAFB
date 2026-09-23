@@ -3,7 +3,7 @@ package data_test
 import (
 	"testing"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 func TestReconcileAccountTransactions(t *testing.T) {

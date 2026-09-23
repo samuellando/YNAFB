@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 func TestCreatePayeeDefaultLineCategory(t *testing.T) {
@@ -408,35 +408,6 @@ func TestDeletePayeeDefaultLine(t *testing.T) {
 	}
 }
 
-func TestDeletePayeeDefaultLinesByPayee(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	payee := newPayee(t, queries, ctx, budget, "testpayee")
-	category := newCategory(t, queries, ctx, budget, "testcategory")
-	for i := 0; i < 2; i++ {
-		newCategoryDefault(t, queries, ctx, budget, payee, category, 100)
-	}
-	defaults, err := queries.ListPayeeDefaultLinesByPayee(ctx, data.ListPayeeDefaultLinesByPayeeParams{LoginID: budget.LoginID, PayeeID: payee.ID, BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(defaults) != 2 {
-		t.Fatal("There should be two default lines before")
-	}
-	err = queries.DeletePayeeDefaultLinesByPayee(ctx, data.DeletePayeeDefaultLinesByPayeeParams{LoginID: budget.LoginID, PayeeID: payee.ID, BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defaults, err = queries.ListPayeeDefaultLinesByPayee(ctx, data.ListPayeeDefaultLinesByPayeeParams{LoginID: budget.LoginID, PayeeID: payee.ID, BudgetID: budget.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(defaults) != 0 {
-		t.Fatal("There should be no default line after")
-	}
-}
-
 func TestListPayeeDefaultLinesByPayee(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
@@ -555,32 +526,6 @@ func TestScopingDeletePayeeDefaultLineScopedByLogin(t *testing.T) {
 	}
 }
 
-func TestScopingDeletePayeeDefaultLinesByPayeeScopedByLogin(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budgetA := newBudget(t, queries, ctx, "budgetA")
-	budgetB := newBudget(t, queries, ctx, "budgetB")
-	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
-	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
-	newCategoryDefault(t, queries, ctx, budgetB, payeeB, categoryB, 100)
-
-	err := queries.DeletePayeeDefaultLinesByPayee(ctx, data.DeletePayeeDefaultLinesByPayeeParams{
-		PayeeID:  payeeB.ID,
-		BudgetID: budgetB.ID,
-		LoginID:  budgetA.LoginID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines, err := queries.ListPayeeDefaultLinesByPayee(ctx, data.ListPayeeDefaultLinesByPayeeParams{LoginID: budgetB.LoginID, PayeeID: payeeB.ID, BudgetID: budgetB.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(lines) != 1 {
-		t.Fatalf("expected the default line to survive a cross-login delete, got %d lines", len(lines))
-	}
-}
-
 func TestScopingListPayeeDefaultLinesScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
@@ -624,5 +569,91 @@ func TestScopingUpdatePayeeDefaultLineScopedByLogin(t *testing.T) {
 	})
 	if err != sql.ErrNoRows {
 		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
+	}
+}
+
+func TestGetPayeeDefaultLine(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	category := newCategory(t, queries, ctx, budget, "testcategory")
+	account := newAccount(t, queries, ctx, budget, "testaccount")
+	categoryDefault := newCategoryDefault(t, queries, ctx, budget, payee, category, 100)
+	transferDefault := newTransferDefault(t, queries, ctx, budget, payee, account, 50)
+
+	got, err := queries.GetPayeeDefaultLine(ctx, data.GetPayeeDefaultLineParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       categoryDefault.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != categoryDefault.ID {
+		t.Error("getting default line, id does not match")
+	}
+	if got.PayeeID != payee.ID {
+		t.Error("getting default line, payee id does not match")
+	}
+	if !got.CategoryID.Valid || got.CategoryID.Int64 != category.ID {
+		t.Error("getting default line, category id does not match")
+	}
+	if got.CategoryName.String != "testcategory" {
+		t.Error("getting default line, category name does not match")
+	}
+	if got.DestAccountID.Valid {
+		t.Error("getting category default, dest account should be null")
+	}
+
+	got, err = queries.GetPayeeDefaultLine(ctx, data.GetPayeeDefaultLineParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       transferDefault.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.DestAccountID.Valid || got.DestAccountID.Int64 != account.ID {
+		t.Error("getting default line, dest account id does not match")
+	}
+	if got.DestAccountName.String != "testaccount" {
+		t.Error("getting default line, dest account name does not match")
+	}
+	if got.CategoryID.Valid {
+		t.Error("getting transfer default, category should be null")
+	}
+}
+
+func TestGetPayeeDefaultLineDoesNotExist(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetPayeeDefaultLine(ctx, data.GetPayeeDefaultLineParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       99,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("Getting non existent default line should return sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestScopingGetPayeeDefaultLineScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+	categoryB := newCategory(t, queries, ctx, budgetB, "catB")
+	lineB := newCategoryDefault(t, queries, ctx, budgetB, payeeB, categoryB, 100)
+
+	_, err := queries.GetPayeeDefaultLine(ctx, data.GetPayeeDefaultLineParams{
+		LoginID:  budgetA.LoginID,
+		BudgetID: budgetB.ID,
+		ID:       lineB.ID,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows for another login's default line, got %v", err)
 	}
 }

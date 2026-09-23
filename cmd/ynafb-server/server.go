@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/db"
 	"samuellando.com/YNAFB/internal/http/handler"
 	"samuellando.com/YNAFB/internal/http/middleware"

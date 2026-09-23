@@ -52,6 +52,19 @@ WHERE
 ORDER BY
   p.name;
 
+-- name: GetPayee :one
+SELECT
+  p.id,
+  p.budget_id,
+  p.name
+FROM
+  payee AS p
+  JOIN budget AS b ON p.budget_id = b.id
+WHERE
+  b.login_id = @login_id
+  AND p.budget_id = @budget_id
+  AND p.id = @id;
+
 -- name: GetPayeeByName :one
 SELECT
   p.id,

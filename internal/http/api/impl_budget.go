@@ -2,28 +2,10 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
-
-	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/db/types"
 )
-
-type ApiServer struct {
-	queries *data.Queries
-	db      *sql.DB
-}
-
-var _ StrictServerInterface = (*ApiServer)(nil)
-
-func NewServer(db *sql.DB) ApiServer {
-	return ApiServer{
-		queries: data.New(db),
-		db:      db,
-	}
-}
 
 func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject) (GetBudgetResponseObject, error) {
 	// Collect params
@@ -32,10 +14,7 @@ func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject
 		return nil, err
 	}
 	// Query the DB
-	params := data.ListBudgetsParams{
-		LoginID: id,
-	}
-	budgets, err := s.queries.ListBudgets(ctx, params)
+	budgets, err := s.service.ListBudgets(ctx, int(id))
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +25,8 @@ func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject
 			Id   int    `json:"id"`
 			Name string `json:"name"`
 		}{
-			Id:   int(budget.ID),
-			Name: budget.Name,
+			Id:   budget.ID(),
+			Name: budget.Name(),
 		})
 	}
 	return resp, nil
@@ -64,18 +43,70 @@ func (s ApiServer) PostBudget(ctx context.Context, request PostBudgetRequestObje
 	}
 	name := request.Body.Name
 	// Query the DB
-	budget, err := s.queries.CreateBudget(ctx, data.CreateBudgetParams{
-		LoginID: loginID,
-		Name:    name,
-	})
+	budget, err := s.service.CreateBudget(ctx, int(loginID), name)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PostBudget201JSONResponse{
-		Id:   int(budget.ID),
-		Name: budget.Name,
+		Id:   budget.ID(),
+		Name: budget.Name(),
 	}, nil
+}
+
+func (s ApiServer) PutBudgetBudgetId(ctx context.Context, request PutBudgetBudgetIdRequestObject) (PutBudgetBudgetIdResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	if request.Body == nil || request.Body.Name == "" {
+		return nil, fmt.Errorf("`name` is required in request body")
+	}
+	name := request.Body.Name
+	// Query the DB
+	budget, err := s.service.GetBudget(ctx, int(loginID), int(budgetID))
+	if err != nil {
+		return nil, err
+	}
+	err = budget.Update(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	// Send response
+	return PutBudgetBudgetId200JSONResponse{
+		Id:   budget.ID(),
+		Name: budget.Name(),
+	}, nil
+}
+
+func (s ApiServer) DeleteBudgetBudgetId(ctx context.Context, request DeleteBudgetBudgetIdRequestObject) (DeleteBudgetBudgetIdResponseObject, error) {
+	// Collect params
+	loginID, err := getLoginID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	budgetString := request.BudgetId
+	budgetID, err := strconv.Atoi(budgetString)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid budget id: %w", err)
+	}
+	// Query the DB
+	budget, err := s.service.GetBudget(ctx, int(loginID), int(budgetID))
+	if err != nil {
+		return nil, err
+	}
+	err = budget.Delete(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Send the response
+	return DeleteBudgetBudgetId204Response{}, nil
 }
 
 func (s ApiServer) GetBudgetBudgetId(ctx context.Context, request GetBudgetBudgetIdRequestObject) (GetBudgetBudgetIdResponseObject, error) {
@@ -115,61 +146,50 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 		return nil, fmt.Errorf("Invalid month: %w", err)
 	}
 	// Query the database
-	summary, err := s.queries.GetBudgetMonthSummary(ctx, data.GetBudgetMonthSummaryParams{
-		LoginID: loginID,
-		Month:   types.UnixTime{Time: month},
-		ID:      int64(budgetID),
-	})
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	categories, err := s.queries.ListBudgetMonthCategories(ctx, data.ListBudgetMonthCategoriesParams{
-		LoginID: loginID,
-		Month:   types.UnixTime{Time: month},
-		ID:      int64(budgetID),
-	})
+	summary, err := budget.GetMonthSummary(ctx, month)
 	if err != nil {
 		return nil, err
 	}
-	goals, err := s.queries.ListGoalsValues(ctx, data.ListGoalsValuesParams{
-		LoginID: loginID,
-		Month:   types.UnixTime{Time: month},
-		ID:      int64(budgetID),
-	})
+	categories, err := budget.GetMonthCategories(ctx, month)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
-	goalsMap := make(map[int64]data.ListGoalsValuesRow)
-	for _, goal := range goals {
-		goalsMap[goal.CategoryID] = goal
-	}
 	respCategories := make([]BudgetMonthCategory, 0)
 	for _, category := range categories {
-		categoryGroupName := &category.CategoryGroupName.String
-		if !category.CategoryGroupName.Valid {
-			categoryGroupName = nil
+		var categoryGroupName *string = nil
+		if category.Group != nil {
+			groupName := category.Group.Name()
+			categoryGroupName = &groupName
 		}
 		var goal *BudgetMonthGoal = nil
-		if goalRow, ok := goalsMap[category.ID]; ok {
+		if g := category.Goal; g != nil {
 			var endMonth *string = nil
-			if goalRow.EndDate.Valid {
-				endMonthString := goalRow.EndDate.Time.Format(time.RFC3339)
+			if g.EndDate() != nil {
+				endMonthString := g.EndDate().Format(time.RFC3339)
 				endMonth = &endMonthString
 			}
+			values, err := g.GoalValues(ctx, month)
+			if err != nil {
+				return nil, err
+			}
 			goal = &BudgetMonthGoal{
-				Type: BudgetMonthGoalType(goalRow.Type),
-				Allocated:      int(goalRow.Allocated),
-				Amount:         int(goalRow.Amount),
-				AmountForMonth: int(goalRow.AmountForMonth),
-				Gap:            int(goalRow.Gap),
-				StartMonth:     goalRow.StartDate.Format(time.RFC3339),
+				Type:           BudgetMonthGoalType(g.Type()),
+				Allocated:      int(values.AllocatedToDate),
+				Amount:         int(g.Amount()),
+				AmountForMonth: int(values.NeededForMonth),
+				Gap:            int(values.Gap),
+				StartMonth:     g.StartDate().Format(time.RFC3339),
 				EndMonth:       endMonth,
 			}
 		}
 		respCategories = append(respCategories, BudgetMonthCategory{
 			CategoryId:        int(category.ID),
-			CategoryName:      category.CategoryName,
+			CategoryName:      category.Name,
 			CategoryGroupName: categoryGroupName,
 			Allocated:         int(category.Allocated),
 			Available:         int(category.Available),
@@ -180,66 +200,13 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 	return &BudgetMonth{
 		Month: month.Format(time.RFC3339),
 		Summary: BudgetMonthSummary{
-			Allocated:     int(summary.Allocated),
-			Available:     int(summary.Available),
-			Income:        int(summary.Income),
-			ReadyToAssign: int(summary.ReadyToAssign),
-			Spent:         int(summary.Spent),
-			Uncategorized: int(summary.Uncategorized),
+			Allocated:     summary.Allocated,
+			Available:     summary.Available,
+			Income:        summary.Income,
+			ReadyToAssign: summary.ReadyToAssign,
+			Spent:         summary.Spent,
+			Uncategorized: summary.Uncategorized,
 		},
 		Categories: respCategories,
 	}, nil
-}
-
-func (s ApiServer) PutBudgetBudgetId(ctx context.Context, request PutBudgetBudgetIdRequestObject) (PutBudgetBudgetIdResponseObject, error) {
-	// Collect params
-	loginID, err := getLoginID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	budgetString := request.BudgetId
-	budgetID, err := strconv.Atoi(budgetString)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid budget id: %w", err)
-	}
-	if request.Body == nil || request.Body.Name == "" {
-		return nil, fmt.Errorf("`name` is required in request body")
-	}
-	name := request.Body.Name
-	// Query the DB
-	budget, err := s.queries.UpdateBudget(ctx, data.UpdateBudgetParams{
-		LoginID: loginID,
-		ID:      int64(budgetID),
-		Name:    name,
-	})
-	if err != nil {
-		return nil, err
-	}
-	// Send response
-	return PutBudgetBudgetId200JSONResponse{
-		Id:   int(budget.ID),
-		Name: budget.Name,
-	}, nil
-}
-
-func (s ApiServer) DeleteBudgetBudgetId(ctx context.Context, request DeleteBudgetBudgetIdRequestObject) (DeleteBudgetBudgetIdResponseObject, error) {
-	// Collect params
-	loginID, err := getLoginID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	budgetString := request.BudgetId
-	budgetID, err := strconv.Atoi(budgetString)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid budget id: %w", err)
-	}
-	// Query the DB
-	err = s.queries.DeleteBudget(ctx, data.DeleteBudgetParams{
-		LoginID: loginID,
-		ID:      int64(budgetID),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return DeleteBudgetBudgetId204Response{}, nil
 }

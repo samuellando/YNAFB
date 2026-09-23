@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 func TestCreateBudget(t *testing.T) {
@@ -80,7 +80,7 @@ func TestUpdateBudget(t *testing.T) {
 	if updated.Name != "newName" {
 		t.Error("budget name was not updated")
 	}
-	newNameBudget, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{LoginID: budget.LoginID, Name: "newName"})
+	newNameBudget, err := queries.GetBudget(ctx, data.GetBudgetParams{LoginID: budget.LoginID, ID: budget.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,47 +166,6 @@ func TestListBudgetsScopedToLogin(t *testing.T) {
 	}
 }
 
-func TestGetBudgetByName(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budget := newBudget(t, queries, ctx, "testBudget")
-	nameBudget, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{LoginID: budget.LoginID, Name: "testBudget"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if budget.ID != nameBudget.ID {
-		t.Error("getting budget by name, id does not match")
-	}
-	if nameBudget.Name != "testBudget" {
-		t.Error("getting budget by name, name does not match")
-	}
-}
-
-func TestGetBudgetByNameDoesNotExist(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	login := newLogin(t, queries, ctx, "user")
-	_, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{LoginID: login.ID, Name: "testBudget"})
-	if err == nil {
-		t.Fatal("Getting non existent budget by name should fail")
-	}
-}
-
-func TestScopingGetBudgetByNameScopedByLogin(t *testing.T) {
-	db, queries, ctx := setup(t)
-	defer teardown(db)
-	budgetA := newBudget(t, queries, ctx, "budgetA")
-	budgetB := newBudget(t, queries, ctx, "budgetB")
-
-	_, err := queries.GetBudgetByName(ctx, data.GetBudgetByNameParams{
-		LoginID: budgetA.LoginID,
-		Name:    budgetB.Name,
-	})
-	if err != sql.ErrNoRows {
-		t.Fatalf("expected sql.ErrNoRows for another login's budget, got %v", err)
-	}
-}
-
 func TestScopingUpdateBudgetScopedByLogin(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
@@ -242,5 +201,49 @@ func TestScopingDeleteBudgetScopedByLogin(t *testing.T) {
 	}
 	if len(budgets) != 1 {
 		t.Fatalf("expected budgetB to survive a cross-login delete, got %d budgets", len(budgets))
+	}
+}
+
+func TestGetBudget(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	got, err := queries.GetBudget(ctx, data.GetBudgetParams{LoginID: budget.LoginID, ID: budget.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != budget.ID {
+		t.Error("getting budget, id does not match")
+	}
+	if got.LoginID != budget.LoginID {
+		t.Error("getting budget, login id does not match")
+	}
+	if got.Name != "testBudget" {
+		t.Error("getting budget, name does not match")
+	}
+}
+
+func TestGetBudgetDoesNotExist(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetBudget(ctx, data.GetBudgetParams{LoginID: budget.LoginID, ID: 99})
+	if err != sql.ErrNoRows {
+		t.Fatalf("Getting non existent budget should return sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestScopingGetBudgetScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+
+	_, err := queries.GetBudget(ctx, data.GetBudgetParams{
+		LoginID: budgetA.LoginID,
+		ID:      budgetB.ID,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows for another login's budget, got %v", err)
 	}
 }

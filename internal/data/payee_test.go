@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 func TestCreatePayee(t *testing.T) {
@@ -321,5 +321,60 @@ func TestScopingUpdatePayeeScopedByLogin(t *testing.T) {
 	})
 	if err != sql.ErrNoRows {
 		t.Fatalf("expected sql.ErrNoRows when updating across logins, got %v", err)
+	}
+}
+
+func TestGetPayee(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	payee := newPayee(t, queries, ctx, budget, "testpayee")
+	got, err := queries.GetPayee(ctx, data.GetPayeeParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       payee.ID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != payee.ID {
+		t.Error("getting payee, id does not match")
+	}
+	if got.BudgetID != budget.ID {
+		t.Error("getting payee, budget id does not match")
+	}
+	if got.Name != "testpayee" {
+		t.Error("getting payee, name does not match")
+	}
+}
+
+func TestGetPayeeDoesNotExist(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budget := newBudget(t, queries, ctx, "testBudget")
+	_, err := queries.GetPayee(ctx, data.GetPayeeParams{
+		LoginID:  budget.LoginID,
+		BudgetID: budget.ID,
+		ID:       99,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("Getting non existent payee should return sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestScopingGetPayeeScopedByLogin(t *testing.T) {
+	db, queries, ctx := setup(t)
+	defer teardown(db)
+	budgetA := newBudget(t, queries, ctx, "budgetA")
+	budgetB := newBudget(t, queries, ctx, "budgetB")
+	payeeB := newPayee(t, queries, ctx, budgetB, "payeeB")
+
+	_, err := queries.GetPayee(ctx, data.GetPayeeParams{
+		LoginID:  budgetA.LoginID,
+		BudgetID: budgetB.ID,
+		ID:       payeeB.ID,
+	})
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows for another login's payee, got %v", err)
 	}
 }

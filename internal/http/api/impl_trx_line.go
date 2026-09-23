@@ -5,8 +5,23 @@ import (
 	"fmt"
 	"strconv"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/domain"
 )
+
+// lineRefIDs translates a TrxLine's related objects to the nullable wire IDs.
+// The entity exposes objects (not scalar FKs), so the conversion lives here
+// in the API layer.
+func lineRefIDs(line *domain.TrxLine) (destAccountID, categoryID *int) {
+	if dest, err := line.DestinationAccount(); err == nil {
+		id := dest.ID()
+		destAccountID = &id
+	}
+	if category, err := line.Category(); err == nil {
+		id := category.ID()
+		categoryID = &id
+	}
+	return destAccountID, categoryID
+}
 
 func (s ApiServer) PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLine(ctx context.Context, request PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLineRequestObject) (PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLineResponseObject, error) {
 	// Collect params
@@ -20,7 +35,7 @@ func (s ApiServer) PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLine(ctx co
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	accountString := request.AccountId
-	_, err = strconv.Atoi(accountString)
+	accountID, err := strconv.Atoi(accountString)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
@@ -33,28 +48,46 @@ func (s ApiServer) PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLine(ctx co
 		return nil, fmt.Errorf("`outflow` and `inflow` are required in request body")
 	}
 	// Query the database
-	line, err := s.queries.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		TrxID:         int64(trxID),
-		DestAccountID: intToNullInt64(request.Body.DestAccountId),
-		CategoryID:    intToNullInt64(request.Body.CategoryId),
-		Income:        BoolPtrToBool(request.Body.Income),
-		Outflow:       int64(request.Body.Outflow),
-		Inflow:        int64(request.Body.Inflow),
-		BudgetID:      int64(budgetID),
-		LoginID:       loginID,
-	})
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	var dest *domain.Account
+	if request.Body.DestAccountId != nil {
+		dest, err = budget.GetAccount(ctx, *request.Body.DestAccountId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var category *domain.Category
+	if request.Body.CategoryId != nil {
+		category, err = budget.GetCategory(ctx, *request.Body.CategoryId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	trx, err := account.GetTransaction(ctx, trxID)
+	if err != nil {
+		return nil, err
+	}
+	line, err := trx.AddLine(ctx, dest, category, BoolPtrToBool(request.Body.Income), request.Body.Outflow, request.Body.Inflow)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
+	destAccountID, categoryID := lineRefIDs(line)
 	return PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLine200JSONResponse{
-		Id:            int(line.ID),
-		TrxId:         int(line.TrxID),
-		DestAccountId: nullInt64ToInt(line.DestAccountID),
-		CategoryId:    nullInt64ToInt(line.CategoryID),
-		Income:        line.Income,
-		Outflow:       int(line.Outflow),
-		Inflow:        int(line.Inflow),
+		Id:            line.ID(),
+		TrxId:         line.Trx().ID(),
+		DestAccountId: destAccountID,
+		CategoryId:    categoryID,
+		Income:        line.IsIncome(),
+		Outflow:       line.Outflow(),
+		Inflow:        line.Inflow(),
 	}, nil
 }
 
@@ -70,7 +103,7 @@ func (s ApiServer) PutBudgetBudgetIdAccountAccountIdTransactionTrxIdLineId(ctx c
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	accountString := request.AccountId
-	_, err = strconv.Atoi(accountString)
+	accountID, err := strconv.Atoi(accountString)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
@@ -88,29 +121,50 @@ func (s ApiServer) PutBudgetBudgetIdAccountAccountIdTransactionTrxIdLineId(ctx c
 		return nil, fmt.Errorf("`outflow` and `inflow` are required in request body")
 	}
 	// Query the database
-	line, err := s.queries.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
-		TrxID:         int64(trxID),
-		DestAccountID: intToNullInt64(request.Body.DestAccountId),
-		CategoryID:    intToNullInt64(request.Body.CategoryId),
-		Income:        BoolPtrToBool(request.Body.Income),
-		Outflow:       int64(request.Body.Outflow),
-		Inflow:        int64(request.Body.Inflow),
-		ID:            int64(id),
-		BudgetID:      int64(budgetID),
-		LoginID:       loginID,
-	})
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	var dest *domain.Account
+	if request.Body.DestAccountId != nil {
+		dest, err = budget.GetAccount(ctx, *request.Body.DestAccountId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var category *domain.Category
+	if request.Body.CategoryId != nil {
+		category, err = budget.GetCategory(ctx, *request.Body.CategoryId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	trx, err := account.GetTransaction(ctx, trxID)
+	if err != nil {
+		return nil, err
+	}
+	line, err := trx.GetLine(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = line.Update(ctx, dest, category, BoolPtrToBool(request.Body.Income), request.Body.Outflow, request.Body.Inflow)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
+	destAccountID, categoryID := lineRefIDs(line)
 	return PutBudgetBudgetIdAccountAccountIdTransactionTrxIdLineId200JSONResponse{
-		Id:            int(line.ID),
-		TrxId:         int(line.TrxID),
-		DestAccountId: nullInt64ToInt(line.DestAccountID),
-		CategoryId:    nullInt64ToInt(line.CategoryID),
-		Income:        line.Income,
-		Outflow:       int(line.Outflow),
-		Inflow:        int(line.Inflow),
+		Id:            line.ID(),
+		TrxId:         line.Trx().ID(),
+		DestAccountId: destAccountID,
+		CategoryId:    categoryID,
+		Income:        line.IsIncome(),
+		Outflow:       line.Outflow(),
+		Inflow:        line.Inflow(),
 	}, nil
 }
 
@@ -126,12 +180,12 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountAccountIdTransactionTrxIdLineId(ct
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	accountString := request.AccountId
-	_, err = strconv.Atoi(accountString)
+	accountID, err := strconv.Atoi(accountString)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
 	trxString := request.TrxId
-	_, err = strconv.Atoi(trxString)
+	trxID, err := strconv.Atoi(trxString)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid transaction id: %w", err)
 	}
@@ -141,11 +195,23 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountAccountIdTransactionTrxIdLineId(ct
 		return nil, fmt.Errorf("Invalid line id: %w", err)
 	}
 	// Query the database
-	err = s.queries.DeleteTrxLine(ctx, data.DeleteTrxLineParams{
-		ID:       int64(id),
-		BudgetID: int64(budgetID),
-		LoginID:  loginID,
-	})
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	trx, err := account.GetTransaction(ctx, trxID)
+	if err != nil {
+		return nil, err
+	}
+	line, err := trx.GetLine(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = line.Delete(ctx)
 	if err != nil {
 		return nil, err
 	}

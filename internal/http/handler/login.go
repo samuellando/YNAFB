@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"samuellando.com/YNAFB/data"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/auth"
 )
 

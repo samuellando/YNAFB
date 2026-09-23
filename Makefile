@@ -29,7 +29,7 @@ frontend: gen-frontend
 ## Regenerate all generated code: Go (oapi-codegen + sqlc) + frontend (openapi-typescript).
 gen: gen-backend gen-frontend
 
-## Go codegen: internal/http/api/server.gen.go from api.yml, data/ from queries/ + migrations/.
+## Go codegen: internal/http/api/server.gen.go from api.yml, internal/data/ from queries/ + migrations/.
 gen-backend:
 	go generate ./...
 

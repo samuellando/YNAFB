@@ -140,7 +140,7 @@ export default function Account() {
               reconciledBalance={summary.reconciledBalance}
               uncategorized={uncategorized}
             />
-            <TransactionTable transactions={transactions} onSelectTransaction={setSelected} />
+            <TransactionTable key={id} transactions={transactions} onSelectTransaction={setSelected} />
           </>
         )}
       </div>

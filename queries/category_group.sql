@@ -52,7 +52,7 @@ WHERE
 ORDER BY
   cg.name;
 
--- name: GetCategoryGroupByName :one
+-- name: GetCategoryGroup :one
 SELECT
   cg.id,
   cg.budget_id,
@@ -63,4 +63,4 @@ FROM
 WHERE
   b.login_id = @login_id
   AND cg.budget_id = @budget_id
-  AND cg.name = ?;
+  AND cg.id = @id;

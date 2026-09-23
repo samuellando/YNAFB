@@ -1229,7 +1229,6 @@ components:
         - month
         - summary
         - categories
-        - goals
       properties:
         month:
           type: string

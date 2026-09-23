@@ -1,7 +1,7 @@
 # sqlc generated artifacts
-data/*.sql.go
-data/db.go
-data/models.go
+internal/data/*.sql.go
+internal/data/db.go
+internal/data/models.go
 
 # openapi-codegen 
 *.gen.go
@@ -18,3 +18,4 @@ bin/*
 cmd/ynafb-server/web/
 
 todo.md
+task.md

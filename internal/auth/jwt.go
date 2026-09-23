@@ -27,7 +27,7 @@ func init() {
 
 	// Clean up the token cache every mintue
 	go func() {
-		ticker := time.NewTicker(time.Minute)
+		ticker := time.NewTicker(time.Hour)
 		for {
 			<-ticker.C
 			clearExpiredTokens()

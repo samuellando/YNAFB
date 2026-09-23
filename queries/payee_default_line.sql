@@ -39,18 +39,19 @@ WHERE
       b.id = @budget_id AND b.login_id = @login_id
   );
 
--- name: DeletePayeeDefaultLinesByPayee :exec
-DELETE FROM payee_default_line
-WHERE
-  payee_default_line.payee_id = @payee_id
-  AND payee_default_line.budget_id IN (
-    SELECT
-      b.id
-    FROM
-      budget AS b
-    WHERE
-      b.id = @budget_id AND b.login_id = @login_id
-  );
+-- name: GetPayeeDefaultLine :one
+SELECT
+  pdl.*,
+  c.name AS category_name,
+  cg.id AS category_group_id,
+  cg.name AS category_group_name,
+  a.name AS dest_account_name
+FROM payee_default_line AS pdl
+JOIN budget AS b ON pdl.budget_id = b.id
+LEFT JOIN category AS c ON c.id = pdl.category_id
+LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
+LEFT JOIN account AS a ON a.id = pdl.dest_account_id
+WHERE b.login_id = @login_id AND pdl.budget_id = @budget_id AND pdl.id = @id;
 
 -- name: ListPayeeDefaultLinesByPayee :many
 SELECT
@@ -61,11 +62,14 @@ SELECT
   ao.name AS dest_account_name,
   pdl.category_id,
   c.name AS category_name,
+  cg.id AS category_group_id,
+  cg.name AS category_group_name,
   pdl.income,
   pdl.percent
 FROM payee_default_line AS pdl
 JOIN budget AS b ON pdl.budget_id = b.id
 LEFT JOIN account AS ao ON ao.id = pdl.dest_account_id
 LEFT JOIN category AS c ON c.id = pdl.category_id
+LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
 WHERE b.login_id = @login_id AND pdl.payee_id = @payee_id AND pdl.budget_id = @budget_id
 ORDER BY pdl.id;
