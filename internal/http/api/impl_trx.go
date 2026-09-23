@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-
-	"samuellando.com/YNAFB/data"
-	"samuellando.com/YNAFB/internal/db/types"
 )
 
 func (s ApiServer) PostBudgetBudgetIdAccountAccountIdTransaction(ctx context.Context, request PostBudgetBudgetIdAccountAccountIdTransactionRequestObject) (PostBudgetBudgetIdAccountAccountIdTransactionResponseObject, error) {
@@ -34,28 +31,27 @@ func (s ApiServer) PostBudgetBudgetIdAccountAccountIdTransaction(ctx context.Con
 		return nil, fmt.Errorf("Invalid date: %w", err)
 	}
 	// Query the database
-	trx, err := s.queries.CreateTrx(ctx, data.CreateTrxParams{
-		AccountID:    int64(accountID),
-		PayeeID:      int64(request.Body.PayeeId),
-		Date:         types.UnixTime{Time: date},
-		TotalOutflow: int64(request.Body.Outflow),
-		TotalInflow:  int64(request.Body.Inflow),
-		Note:         StrPtrToStr(request.Body.Note),
-		BudgetID:     int64(budgetID),
-		LoginID:      loginID,
-	})
+	account, err := s.accountService.Get(ctx, int(loginID), budgetID, accountID)
+	if err != nil {
+		return nil, err
+	}
+	payee, err := s.payeeService.Get(ctx, int(loginID), budgetID, request.Body.PayeeId)
+	if err != nil {
+		return nil, err
+	}
+	trx, err := s.trxService.Create(ctx, account, payee, date, request.Body.Outflow, request.Body.Inflow, StrPtrToStr(request.Body.Note))
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PostBudgetBudgetIdAccountAccountIdTransaction200JSONResponse{
-		Id:        int(trx.ID),
-		AccountId: int(trx.AccountID),
-		PayeeId:   int(trx.PayeeID),
-		Date:      trx.Date.Format(time.RFC3339),
-		Outflow:   int(trx.TotalOutflow),
-		Inflow:    int(trx.TotalInflow),
-		Note:      trx.Note,
+		Id:        trx.ID(),
+		AccountId: trx.Account().ID(),
+		PayeeId:   trx.Payee().ID(),
+		Date:      trx.Date().Format(time.RFC3339),
+		Outflow:   trx.TotalOutflow(),
+		Inflow:    trx.TotalInflow(),
+		Note:      trx.Note(),
 	}, nil
 }
 
@@ -88,29 +84,23 @@ func (s ApiServer) PutBudgetBudgetIdAccountAccountIdTransactionId(ctx context.Co
 		return nil, fmt.Errorf("Invalid date: %w", err)
 	}
 	// Query the database
-	trx, err := s.queries.UpdateTrx(ctx, data.UpdateTrxParams{
-		Date:         types.UnixTime{Time: date},
-		AccountID:    int64(accountID),
-		PayeeID:      int64(request.Body.PayeeId),
-		TotalOutflow: int64(request.Body.Outflow),
-		TotalInflow:  int64(request.Body.Inflow),
-		Note:         StrPtrToStr(request.Body.Note),
-		ID:           int64(id),
-		BudgetID:     int64(budgetID),
-		LoginID:      loginID,
-	})
+	trx, err := s.trxService.Get(ctx, int(loginID), budgetID, id)
+	if err != nil {
+		return nil, err
+	}
+	err = trx.Update(ctx, int(loginID), accountID, request.Body.PayeeId, date, request.Body.Outflow, request.Body.Inflow, StrPtrToStr(request.Body.Note))
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PutBudgetBudgetIdAccountAccountIdTransactionId200JSONResponse{
-		Id:        int(trx.ID),
-		AccountId: int(trx.AccountID),
-		PayeeId:   int(trx.PayeeID),
-		Date:      trx.Date.Format(time.RFC3339),
-		Outflow:   int(trx.TotalOutflow),
-		Inflow:    int(trx.TotalInflow),
-		Note:      trx.Note,
+		Id:        trx.ID(),
+		AccountId: trx.Account().ID(),
+		PayeeId:   trx.Payee().ID(),
+		Date:      trx.Date().Format(time.RFC3339),
+		Outflow:   trx.TotalOutflow(),
+		Inflow:    trx.TotalInflow(),
+		Note:      trx.Note(),
 	}, nil
 }
 
@@ -136,11 +126,11 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountAccountIdTransactionId(ctx context
 		return nil, fmt.Errorf("Invalid transaction id: %w", err)
 	}
 	// Query the database
-	err = s.queries.DeleteTrx(ctx, data.DeleteTrxParams{
-		ID:       int64(id),
-		BudgetID: int64(budgetID),
-		LoginID:  loginID,
-	})
+	trx, err := s.trxService.Get(ctx, int(loginID), budgetID, id)
+	if err != nil {
+		return nil, err
+	}
+	err = trx.Delete(ctx, int(loginID))
 	if err != nil {
 		return nil, err
 	}

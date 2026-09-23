@@ -115,7 +115,7 @@ func (a *Account) ImportStatement(ctx context.Context, stmt statement.Statement)
 		if err != nil {
 			return 0, err
 		}
-		if _, err := a.service.trxService.create(ctx, a, payee, entry.TransDate, entry.Outflow, entry.Inflow, entry.Note); err != nil {
+		if _, err := a.service.trxService.Create(ctx, a, payee, entry.TransDate, int(entry.Outflow), int(entry.Inflow), entry.Note); err != nil {
 			return 0, err
 		}
 	}
