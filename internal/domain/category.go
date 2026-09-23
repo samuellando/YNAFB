@@ -2,66 +2,124 @@ package domain
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
 )
 
 type Category struct {
-	service *CategoryService
-	row     data.Category
-	group   *Group
+	row    data.Category
+	budget *Budget
+	group  *CategoryGroup
 }
 
-func (s *CategoryService) fromRow(ctx context.Context, row data.Category, group *Group) *Category {
-	if cached, ok := cache.Get[*Category](ctx, row.ID); ok {
-		return cached
-	}
-	category := &Category{
-		service: s,
-		row:     row,
-		group:   group,
-	}
-	cache.Store(ctx, row.ID, category)
+// Create a Category object from a data row.
+func categoryFromRow(ctx context.Context, row data.Category, budget *Budget, group *CategoryGroup) *Category {
+	category, _ := cache.Get(ctx, row.ID, func() (*Category, error) {
+		return &Category{
+			row:    row,
+			budget: budget,
+			group:  group,
+		}, nil
+	})
 	return category
 }
 
-func (c *Category) ID() int {
-	return int(c.row.ID)
-}
-
-func (c *Category) Name() string {
-	return c.row.Name
-}
-
-func (c *Category) Group() *Group {
-	return c.group
-}
-
-func (c *Category) GroupID() *int {
-	if !c.row.CategoryGroupID.Valid {
-		return nil
-	}
-	id := int(c.row.CategoryGroupID.Int64)
-	return &id
-}
-
-// Update renames the category and/or moves it to another group (nil clears
-// the group). loginID is passed explicitly because, unlike Account, Category
-// holds no budget reference to derive it from.
-func (c *Category) Update(ctx context.Context, loginID int, name string, groupID *int) error {
+// Create a new category
+func (b *Budget) CreateCategory(ctx context.Context, name string, group *CategoryGroup) (*Category, error) {
 	defer cache.InvalidateResults(ctx)
-	row, err := c.service.repo.UpdateCategory(ctx, data.UpdateCategoryParams{
+	groupID := sql.NullInt64{}
+	if group != nil {
+		groupID = sql.NullInt64{Valid: true, Int64: int64(group.ID())}
+	}
+	row, err := b.service.repo.CreateCategory(ctx, data.CreateCategoryParams{
 		Name:            name,
-		CategoryGroupID: nullInt64FromInt(groupID),
-		ID:              c.row.ID,
-		BudgetID:        c.row.BudgetID,
-		LoginID:         int64(loginID),
+		CategoryGroupID: groupID,
+		BudgetID:        int64(b.ID()),
+		LoginID:         int64(b.LoginID()),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	group, err := c.service.resolveGroup(ctx, loginID, int(c.row.BudgetID), row.CategoryGroupID)
+	category := categoryFromRow(ctx, row, b, group)
+	return category, nil
+}
+
+// Get an existing category by ID
+func (b *Budget) GetCategory(ctx context.Context, categoryID int) (*Category, error) {
+	return cache.Get(ctx, int64(categoryID), func() (*Category, error) {
+		row, err := b.service.repo.GetCategory(ctx, data.GetCategoryParams{
+			LoginID:  int64(b.LoginID()),
+			BudgetID: int64(b.ID()),
+			ID:       int64(categoryID),
+		})
+		if err != nil {
+			return nil, err
+		}
+		var group *CategoryGroup
+		if row.GroupID.Valid {
+			group = categoryGroupFromRow(ctx, data.CategoryGroup{
+				ID:       row.GroupID.Int64,
+				BudgetID: row.BudgetID,
+				Name:     row.GroupName.String,
+			}, b)
+		}
+		return categoryFromRow(ctx, data.Category{
+			ID:              row.ID,
+			BudgetID:        row.BudgetID,
+			Name:            row.Name,
+			CategoryGroupID: row.GroupID,
+		}, b, group), nil
+	})
+}
+
+// List all the categories in the budget
+func (b *Budget) ListCategories(ctx context.Context) ([]*Category, error) {
+	return cache.Result(ctx, fmt.Sprintf("categoryServiceList-%d-%d", b.LoginID(), b.ID()), func() ([]*Category, error) {
+		rows, err := b.service.repo.ListCategories(ctx, data.ListCategoriesParams{
+			LoginID:  int64(b.LoginID()),
+			BudgetID: int64(b.ID()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		categories := make([]*Category, len(rows))
+		for i, row := range rows {
+			var group *CategoryGroup
+			if row.GroupID.Valid {
+				group = categoryGroupFromRow(ctx, data.CategoryGroup{
+					ID:       row.GroupID.Int64,
+					BudgetID: row.BudgetID,
+					Name:     row.GroupName.String,
+				}, b)
+			}
+			categories[i] = categoryFromRow(ctx, data.Category{
+				ID:              row.ID,
+				BudgetID:        row.BudgetID,
+				Name:            row.Name,
+				CategoryGroupID: row.GroupID,
+			}, b, group)
+		}
+		return categories, nil
+	})
+}
+
+// Update the existing category
+func (c *Category) Update(ctx context.Context, name string, group *CategoryGroup) error {
+	defer cache.InvalidateResults(ctx)
+	groupID := sql.NullInt64{}
+	if group != nil {
+		groupID = sql.NullInt64{Valid: true, Int64: int64(group.ID())}
+	}
+	row, err := c.budget.service.repo.UpdateCategory(ctx, data.UpdateCategoryParams{
+		Name:            name,
+		CategoryGroupID: groupID,
+		ID:              int64(c.ID()),
+		BudgetID:        int64(c.budget.ID()),
+		LoginID:         int64(c.budget.LoginID()),
+	})
 	if err != nil {
 		return err
 	}
@@ -70,64 +128,31 @@ func (c *Category) Update(ctx context.Context, loginID int, name string, groupID
 	return nil
 }
 
-// Delete removes the category. loginID is passed explicitly, see Update.
-func (c *Category) Delete(ctx context.Context, loginID int) error {
+// Delete a category
+func (c *Category) Delete(ctx context.Context) error {
 	defer cache.InvalidateResults(ctx)
-	return c.service.repo.DeleteCategory(ctx, data.DeleteCategoryParams{
-		ID:       c.row.ID,
-		BudgetID: c.row.BudgetID,
-		LoginID:  int64(loginID),
+	defer cache.Delete[*Category](ctx, int64(c.ID()))
+	return c.budget.service.repo.DeleteCategory(ctx, data.DeleteCategoryParams{
+		ID:       int64(c.ID()),
+		BudgetID: int64(c.budget.ID()),
+		LoginID:  int64(c.budget.LoginID()),
 	})
 }
 
-type Group struct {
-	service *CategoryService
-	row     data.CategoryGroup
+// Get the category's ID
+func (c *Category) ID() int {
+	return int(c.row.ID)
 }
 
-func (s *CategoryService) groupFromRow(ctx context.Context, row data.CategoryGroup) *Group {
-	if cached, ok := cache.Get[*Group](ctx, row.ID); ok {
-		return cached
+// Get the category's name
+func (c *Category) Name() string {
+	return c.row.Name
+}
+
+// Get the category's group, returns an error if none
+func (c *Category) Group() (*CategoryGroup, error) {
+	if c.group == nil {
+		return nil, fmt.Errorf("Category has no group")
 	}
-	group := &Group{
-		service: s,
-		row:     row,
-	}
-	cache.Store(ctx, row.ID, group)
-	return group
-}
-
-func (g *Group) ID() int {
-	return int(g.row.ID)
-}
-
-func (g *Group) Name() string {
-	return g.row.Name
-}
-
-// Update renames the group. loginID is passed explicitly because,
-// unlike Account, Group holds no budget reference to derive it from.
-func (g *Group) Update(ctx context.Context, loginID int, name string) error {
-	defer cache.InvalidateResults(ctx)
-	row, err := g.service.repo.UpdateCategoryGroup(ctx, data.UpdateCategoryGroupParams{
-		Name:     name,
-		ID:       g.row.ID,
-		BudgetID: g.row.BudgetID,
-		LoginID:  int64(loginID),
-	})
-	if err != nil {
-		return err
-	}
-	g.row = row
-	return nil
-}
-
-// Delete removes the group. loginID is passed explicitly, see Update.
-func (g *Group) Delete(ctx context.Context, loginID int) error {
-	defer cache.InvalidateResults(ctx)
-	return g.service.repo.DeleteCategoryGroup(ctx, data.DeleteCategoryGroupParams{
-		ID:       g.row.ID,
-		BudgetID: g.row.BudgetID,
-		LoginID:  int64(loginID),
-	})
+	return c.group, nil
 }

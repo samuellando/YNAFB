@@ -1,4 +1,4 @@
-package domain 
+package domain
 
 import (
 	"context"
@@ -13,22 +13,78 @@ import (
 )
 
 type Account struct {
-	service *AccountService
-	row data.Account
+	row    data.Account
 	budget *Budget
 }
 
-func (s *AccountService) fromRow(ctx context.Context, row data.Account, budget *Budget) *Account {
-	if cached, ok := cache.Get[*Account](ctx, row.ID); ok {
-		return cached
-	}
-	account := &Account{
-		service: s,
-		row: row,
-		budget: budget,
-	}
-	cache.Store(ctx, row.ID, account)
+func accountFromRow(ctx context.Context, row data.Account, budget *Budget) *Account {
+	account, _ := cache.Get(ctx, row.ID, func() (*Account, error) {
+		return &Account{
+			row:    row,
+			budget: budget,
+		}, nil
+	})
 	return account
+}
+
+// List all the accounts in the budget
+func (b *Budget) ListAccounts(ctx context.Context) ([]*Account, error) {
+	return cache.Result(ctx, fmt.Sprintf("accountServiceList-%d-%d", b.LoginID(), b.ID()), func() ([]*Account, error) {
+		rows, err := b.service.repo.ListAccounts(ctx, data.ListAccountsParams{
+			LoginID:  int64(b.LoginID()),
+			BudgetID: int64(b.ID()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		accounts := make([]*Account, len(rows))
+		for i, row := range rows {
+			accounts[i] = accountFromRow(ctx, data.Account{
+				ID:       row.ID,
+				BudgetID: row.BudgetID,
+				Name:     row.Name,
+			}, b)
+		}
+		return accounts, nil
+	})
+}
+
+// Create a new account
+func (b *Budget) CreateAccount(ctx context.Context, name string) (*Account, error) {
+	defer cache.InvalidateResults(ctx)
+	row, err := b.service.repo.CreateAccount(ctx, data.CreateAccountParams{
+		Name:     name,
+		LoginID:  int64(b.LoginID()),
+		BudgetID: int64(b.ID()),
+	})
+	if err != nil {
+		return nil, err
+	}
+	account := accountFromRow(ctx, data.Account{
+		ID:       row.ID,
+		BudgetID: row.BudgetID,
+		Name:     row.Name,
+	}, b)
+	return account, nil
+}
+
+// Get an existing account by ID
+func (b *Budget) GetAccount(ctx context.Context, accountID int) (*Account, error) {
+	return cache.Get(ctx, int64(accountID), func() (*Account, error) {
+		row, err := b.service.repo.GetAccount(ctx, data.GetAccountParams{
+			LoginID:  int64(b.LoginID()),
+			BudgetID: int64(b.ID()),
+			ID:       int64(accountID),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return accountFromRow(ctx, data.Account{
+			ID:       row.ID,
+			BudgetID: row.BudgetID,
+			Name:     row.Name,
+		}, b), nil
+	})
 }
 
 func (a *Account) ID() int {
@@ -93,9 +149,9 @@ func (a *Account) Reconcile(ctx context.Context, date time.Time, expectedBalance
 	if balance != expectedBalance {
 		return fmt.Errorf("balance mismatch: statement %d != calculated %d", expectedBalance, balance)
 	}
-	_, err = a.service.repo.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
-		BudgetID: a.row.BudgetID,
-		ID:       a.row.ID,
+	_, err = a.budget.service.repo.ReconcileAccountTransactions(ctx, data.ReconcileAccountTransactionsParams{
+		BudgetID: int64(a.budget.ID()),
+		ID:       int64(a.ID()),
 		LoginID:  int64(a.budget.LoginID()),
 		Date:     types.UnixTime{Time: date},
 	})
@@ -104,44 +160,29 @@ func (a *Account) Reconcile(ctx context.Context, date time.Time, expectedBalance
 
 func (a *Account) ImportStatement(ctx context.Context, stmt statement.Statement) (int, error) {
 	defer cache.InvalidateResults(ctx)
-	loginID := a.budget.LoginID()
-	budgetID := int(a.row.BudgetID)
 	for _, entry := range stmt.Entries {
 		payeeName := strings.TrimSpace(entry.Payee)
 		if payeeName == "" {
 			payeeName = "unknown"
 		}
-		payee, err := a.service.payeeService.GetOrCreate(ctx, loginID, budgetID, payeeName)
+		payee, err := a.budget.getOrCreatePayee(ctx, payeeName)
 		if err != nil {
 			return 0, err
 		}
-		if _, err := a.service.trxService.Create(ctx, a, payee, entry.TransDate, int(entry.Outflow), int(entry.Inflow), entry.Note); err != nil {
+		if _, err := a.CreateTransaction(ctx, payee, entry.TransDate, int(entry.Outflow), int(entry.Inflow), entry.Note); err != nil {
 			return 0, err
 		}
 	}
 	return len(stmt.Entries), nil
 }
 
-func (a *Account) ListTransactions(ctx context.Context) ([]*Trx, error) {
-	budgetTrxs, err := a.budget.ListTransactions(ctx)
-	if err != nil {
-		return nil, err
-	}
-	trxs := make([]*Trx, 0)
-	for _, trx := range budgetTrxs {
-		if trx.account == a {
-			trxs = append(trxs, trx)
-		}
-	}
-	return trxs, nil
-}
-
 func (a *Account) Update(ctx context.Context, name string) error {
-	row, err := a.service.repo.UpdateAccount(ctx, data.UpdateAccountParams{
+	defer cache.InvalidateResults(ctx)
+	row, err := a.budget.service.repo.UpdateAccount(ctx, data.UpdateAccountParams{
 		Name:     name,
-		ID:       a.row.ID,
+		ID:       int64(a.ID()),
 		LoginID:  int64(a.budget.LoginID()),
-		BudgetID: a.row.BudgetID,
+		BudgetID: int64(a.budget.ID()),
 	})
 	if err != nil {
 		return err
@@ -152,10 +193,10 @@ func (a *Account) Update(ctx context.Context, name string) error {
 
 func (a *Account) Delete(ctx context.Context) error {
 	defer cache.InvalidateResults(ctx)
-	err := a.service.repo.DeleteAccount(ctx, data.DeleteAccountParams{
-		ID:       a.row.ID,
+	defer cache.Delete[*Account](ctx, int64(a.ID()))
+	return a.budget.service.repo.DeleteAccount(ctx, data.DeleteAccountParams{
+		ID:       int64(a.ID()),
 		LoginID:  int64(a.budget.LoginID()),
-		BudgetID: a.row.BudgetID,
+		BudgetID: int64(a.budget.ID()),
 	})
-	return err
 }

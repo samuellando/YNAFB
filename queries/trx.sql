@@ -13,7 +13,7 @@ RETURNING
 -- name: UpdateTrx :one
 UPDATE trx
 SET
-  date = ?, account_id = ?, payee_id = ?, total_outflow = ?, total_inflow = ?, note = ?
+  date = ?, payee_id = ?, total_outflow = ?, total_inflow = ?, note = ?
 WHERE
   trx.id = @id
   AND trx.budget_id IN (
@@ -42,17 +42,12 @@ WHERE
 -- name: GetTrxAndLines :many
 SELECT
     sqlc.embed(t),
-    b.id AS budget_id,
-    b.name AS budget_name,
-    b.login_id AS login_id,
-    a.id AS account_id,
     a.name AS account_name,
-    p.id AS payee_id,
     p.name AS payee_name,
     tl.id AS line_id,
     tl.income AS line_income,
     tl.inflow AS line_inflow,
-    tl.outflow AS line_outlfow,
+    tl.outflow AS line_outflow,
     c.id AS category_id,
     c.name AS category_name,
     cg.id AS category_group_id,
@@ -69,7 +64,7 @@ LEFT JOIN category AS c ON tl.category_id = c.id
 LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
 LEFT JOIN account AS da ON tl.dest_account_id = da.id
 LEFT JOIN reconciliation AS r ON r.account_id = a.id AND r.trx_id = t.id
-WHERE b.login_id = @login_id AND t.budget_id = @budget_id AND t.id = @id
+WHERE b.login_id = @login_id AND t.budget_id = @budget_id AND t.id = @id AND a.id = @account_id
 ORDER BY t.date DESC, t.id DESC;
 
 -- name: ListTrxs :many
@@ -92,17 +87,12 @@ ORDER BY t.date DESC, t.id DESC;
 -- name: ListTrxsAndLines :many
 SELECT
     sqlc.embed(t),
-    b.id AS budget_id,
-    b.name AS budget_name,
-    b.login_id AS login_id,
-    a.id AS account_id,
     a.name AS account_name,
-    p.id AS payee_id,
     p.name AS payee_name,
     tl.id AS line_id,
     tl.income AS line_income,
     tl.inflow AS line_inflow,
-    tl.outflow AS line_outlfow,
+    tl.outflow AS line_outflow,
     c.id AS category_id,
     c.name AS category_name,
     cg.id AS category_group_id,

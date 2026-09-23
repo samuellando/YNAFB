@@ -18,7 +18,11 @@ func (s ApiServer) GetBudgetBudgetIdPayee(ctx context.Context, request GetBudget
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	// Query the database
-	payees, err := s.payeeService.List(ctx, int(loginID), budgetID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	payees, err := budget.ListPayees(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +52,11 @@ func (s ApiServer) PostBudgetBudgetIdPayee(ctx context.Context, request PostBudg
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
 	// Query the database
-	payee, err := s.payeeService.Create(ctx, int(loginID), budgetID, request.Body.Name)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	payee, err := budget.CreatePayee(ctx, request.Body.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -79,11 +87,15 @@ func (s ApiServer) PutBudgetBudgetIdPayeeId(ctx context.Context, request PutBudg
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
 	// Query the database
-	payee, err := s.payeeService.Get(ctx, int(loginID), budgetID, id)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = payee.Update(ctx, int(loginID), request.Body.Name)
+	payee, err := budget.GetPayee(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = payee.Update(ctx, request.Body.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -111,11 +123,15 @@ func (s ApiServer) DeleteBudgetBudgetIdPayeeId(ctx context.Context, request Dele
 		return nil, fmt.Errorf("Invalid payee id: %w", err)
 	}
 	// Query the database
-	payee, err := s.payeeService.Get(ctx, int(loginID), budgetID, id)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = payee.Delete(ctx, int(loginID))
+	payee, err := budget.GetPayee(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = payee.Delete(ctx)
 	if err != nil {
 		return nil, err
 	}

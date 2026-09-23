@@ -18,7 +18,11 @@ func (s ApiServer) GetBudgetBudgetIdCategoryGroup(ctx context.Context, request G
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	// Query the database
-	groups, err := s.categoryService.ListGroups(ctx, int(loginID), budgetID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := budget.ListCategoryGroups(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +52,11 @@ func (s ApiServer) PostBudgetBudgetIdCategoryGroup(ctx context.Context, request 
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
 	// Query the database
-	group, err := s.categoryService.CreateGroup(ctx, int(loginID), budgetID, request.Body.Name)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	group, err := budget.CreateCategoryGroup(ctx, request.Body.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -79,11 +87,15 @@ func (s ApiServer) PutBudgetBudgetIdCategoryGroupId(ctx context.Context, request
 		return nil, fmt.Errorf("`name` is required in request body")
 	}
 	// Query the database
-	group, err := s.categoryService.GetGroup(ctx, int(loginID), budgetID, id)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = group.Update(ctx, int(loginID), request.Body.Name)
+	group, err := budget.GetCategoryGroup(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = group.Update(ctx, request.Body.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -111,11 +123,15 @@ func (s ApiServer) DeleteBudgetBudgetIdCategoryGroupId(ctx context.Context, requ
 		return nil, fmt.Errorf("Invalid category group id: %w", err)
 	}
 	// Query the database
-	group, err := s.categoryService.GetGroup(ctx, int(loginID), budgetID, id)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = group.Delete(ctx, int(loginID))
+	group, err := budget.GetCategoryGroup(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = group.Delete(ctx)
 	if err != nil {
 		return nil, err
 	}

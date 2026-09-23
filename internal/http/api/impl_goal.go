@@ -24,7 +24,15 @@ func (s ApiServer) GetBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Context, 
 		return nil, fmt.Errorf("Invalid category id: %w", err)
 	}
 	// Query the database
-	goal, err := s.goalService.GetByCategory(ctx, int(loginID), budgetID, categoryID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	category, err := budget.GetCategory(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	goal, err := category.GetGoal(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +44,7 @@ func (s ApiServer) GetBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Context, 
 	}
 	return GetBudgetBudgetIdCategoryCategoryIdGoal200JSONResponse{
 		Id:         goal.ID(),
-		CategoryId: goal.Category(),
+		CategoryId: goal.Category().ID(),
 		Type:       GoalType(goal.Type()),
 		StartMonth: goal.StartDate().Format(time.RFC3339),
 		EndMonth:   endMonth,
@@ -72,7 +80,20 @@ func (s ApiServer) PostBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Context,
 		return nil, fmt.Errorf("Invalid end month: %w", err)
 	}
 	// Query the database
-	goal, err := s.goalService.Create(ctx, int(loginID), budgetID, categoryID, string(request.Body.Type), startMonth, endMonth, request.Body.Amount)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	category, err := budget.GetCategory(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	var end *time.Time
+	if endMonth.Valid {
+		t := endMonth.Time
+		end = &t
+	}
+	goal, err := category.Create(ctx, string(request.Body.Type), startMonth.Time, end, request.Body.Amount)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +105,7 @@ func (s ApiServer) PostBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Context,
 	}
 	return PostBudgetBudgetIdCategoryCategoryIdGoal200JSONResponse{
 		Id:         goal.ID(),
-		CategoryId: goal.Category(),
+		CategoryId: goal.Category().ID(),
 		Type:       GoalType(goal.Type()),
 		StartMonth: goal.StartDate().Format(time.RFC3339),
 		EndMonth:   endMonthStr,
@@ -120,11 +141,24 @@ func (s ApiServer) PutBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Context, 
 		return nil, fmt.Errorf("Invalid end month: %w", err)
 	}
 	// Query the database
-	goal, err := s.goalService.GetByCategory(ctx, int(loginID), budgetID, categoryID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = goal.Update(ctx, int(loginID), string(request.Body.Type), startMonth, endMonth, request.Body.Amount)
+	category, err := budget.GetCategory(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	goal, err := category.GetGoal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var end *time.Time
+	if endMonth.Valid {
+		t := endMonth.Time
+		end = &t
+	}
+	err = goal.Update(ctx, string(request.Body.Type), startMonth.Time, end, request.Body.Amount)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +170,7 @@ func (s ApiServer) PutBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Context, 
 	}
 	return PutBudgetBudgetIdCategoryCategoryIdGoal200JSONResponse{
 		Id:         goal.ID(),
-		CategoryId: goal.Category(),
+		CategoryId: goal.Category().ID(),
 		Type:       GoalType(goal.Type()),
 		StartMonth: goal.StartDate().Format(time.RFC3339),
 		EndMonth:   endMonthStr,
@@ -161,11 +195,19 @@ func (s ApiServer) DeleteBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Contex
 		return nil, fmt.Errorf("Invalid category id: %w", err)
 	}
 	// Query the database
-	goal, err := s.goalService.GetByCategory(ctx, int(loginID), budgetID, categoryID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = goal.Delete(ctx, int(loginID))
+	category, err := budget.GetCategory(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	goal, err := category.GetGoal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = goal.Delete(ctx)
 	if err != nil {
 		return nil, err
 	}

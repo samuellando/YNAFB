@@ -27,7 +27,7 @@ type MonthSummary struct {
 type MonthCategory struct {
 	ID        int
 	Name      string
-	Group     *Group
+	Group     *CategoryGroup
 	Allocated int
 	Spent     int
 	CarryOver int
@@ -43,19 +43,19 @@ type fetchedData struct {
 }
 
 func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
-	trxs, err := b.ListTransactions(ctx)
+	trxs, err := b.listTransactions(ctx)
 	if err != nil {
 		return nil, err
 	}
-	allocations, err := b.allocationService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	allocations, err := b.ListAllocations(ctx)
 	if err != nil {
 		return nil, err
 	}
-	goals, err := b.goalService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	goals, err := b.ListGoals(ctx)
 	if err != nil {
 		return nil, err
 	}
-	categories, err := b.categoryService.List(ctx, int(b.row.LoginID), int(b.row.ID))
+	categories, err := b.ListCategories(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -63,10 +63,9 @@ func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
 		trxs:        trxs,
 		allocations: allocations,
 		goals:       goals,
-		categories: categories,
+		categories:  categories,
 	}, nil
 }
-
 
 func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSummary, error) {
 	startOfMonth, endOfMonth := getStartAndEndOfMonth(month)
@@ -116,10 +115,11 @@ func (b *Budget) GetMonthCategories(ctx context.Context, month time.Time) ([]*Mo
 	}
 	categoriesMap := make(map[int]*MonthCategory)
 	for _, category := range data.categories {
+		group, _ := category.Group()
 		categoriesMap[category.ID()] = &MonthCategory{
 			ID:    category.ID(),
 			Name:  category.Name(),
-			Group: category.Group(),
+			Group: group,
 		}
 	}
 	for _, trx := range data.trxs {
@@ -137,17 +137,17 @@ func (b *Budget) GetMonthCategories(ctx context.Context, month time.Time) ([]*Mo
 	}
 	for _, allocation := range data.allocations {
 		if timeInsideMonth(allocation.Month(), startOfMonth, endOfMonth) {
-			categoriesMap[allocation.CategoryID()].Allocated = allocation.Amount()
-			categoriesMap[allocation.CategoryID()].Available += allocation.Amount()
+			categoriesMap[allocation.Category().ID()].Allocated = allocation.Amount()
+			categoriesMap[allocation.Category().ID()].Available += allocation.Amount()
 		} else if !futureMonth && allocation.Month().Before(endOfMonth) {
-			categoriesMap[allocation.CategoryID()].Available += allocation.Amount()
-			categoriesMap[allocation.CategoryID()].CarryOver += allocation.Amount()
+			categoriesMap[allocation.Category().ID()].Available += allocation.Amount()
+			categoriesMap[allocation.Category().ID()].CarryOver += allocation.Amount()
 		}
 	}
 	for _, goal := range data.goals {
 		if goal.StartDate().Before(startOfMonth) || goal.StartDate().Equal(startOfMonth) {
 			if goal.EndDate() == nil || goal.EndDate().After(startOfMonth) || goal.EndDate().Equal(startOfMonth) {
-				categoriesMap[goal.Category()].Goal = goal
+				categoriesMap[goal.Category().ID()].Goal = goal
 			}
 		}
 	}

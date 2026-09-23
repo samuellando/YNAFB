@@ -2,34 +2,70 @@ package domain
 
 import (
 	"context"
+	"fmt"
 
 	"samuellando.com/YNAFB/data"
 	"samuellando.com/YNAFB/internal/cache"
 )
 
 type Budget struct {
-	repo BudgetRepository
-	trxService *TrxService
-	allocationService *AllocationService
-	goalService *GoalService
-	categoryService *CategoryService
-	row  data.Budget
+	service *DomainService
+	row     data.Budget
 }
 
-func (s *BudgetService) fromRow(ctx context.Context, row data.Budget) *Budget {
-	if v, ok := cache.Get[*Budget](ctx, row.ID); ok {
-		return v
-	}
-	budget := &Budget{
-		repo:              s.repo,
-		trxService:        s.trxService,
-		allocationService: s.allocationService,
-		goalService:       s.goalService,
-		categoryService:   s.categoryService,
-		row:               row,
-	}
-	cache.Store(ctx, row.ID, budget)
+func budgetFromRow(ctx context.Context, row data.Budget, service *DomainService) *Budget {
+	budget, _ := cache.Get(ctx, row.ID, func() (*Budget, error) {
+		return &Budget{
+			service: service,
+			row:     row,
+		}, nil
+	})
 	return budget
+}
+
+// List all the budgets for a login
+func (s *DomainService) ListBudgets(ctx context.Context, loginID int) ([]*Budget, error) {
+	return cache.Result(ctx, fmt.Sprintf("budgetServiceList-%d", loginID), func() ([]*Budget, error) {
+		rows, err := s.repo.ListBudgets(ctx, data.ListBudgetsParams{
+			LoginID: int64(loginID),
+		})
+		if err != nil {
+			return nil, err
+		}
+		budgets := make([]*Budget, len(rows))
+		for i, row := range rows {
+			budgets[i] = budgetFromRow(ctx, row, s)
+		}
+		return budgets, nil
+	})
+}
+
+// Create a new budget
+func (s *DomainService) CreateBudget(ctx context.Context, loginID int, name string) (*Budget, error) {
+	defer cache.InvalidateResults(ctx)
+	row, err := s.repo.CreateBudget(ctx, data.CreateBudgetParams{
+		LoginID: int64(loginID),
+		Name:    name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	budget := budgetFromRow(ctx, row, s)
+	return budget, nil
+}
+
+// Get an existing budget by ID
+func (s *DomainService) GetBudget(ctx context.Context, loginID, budgetID int) (*Budget, error) {
+	return cache.Get(ctx, int64(budgetID), func() (*Budget, error) {
+		row, err := s.repo.GetBudget(ctx, data.GetBudgetParams{
+			ID:      int64(budgetID),
+			LoginID: int64(loginID),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return budgetFromRow(ctx, row, s), nil
+	})
 }
 
 func (b *Budget) ID() int {
@@ -45,13 +81,14 @@ func (b *Budget) Name() string {
 }
 
 func (b *Budget) ListTransactions(ctx context.Context) ([]*Trx, error) {
-	return b.trxService.list(ctx, int(b.row.LoginID), int(b.row.ID))
+	return b.listTransactions(ctx)
 }
 
 func (b *Budget) Update(ctx context.Context, name string) error {
-	row, err := b.repo.UpdateBudget(ctx, data.UpdateBudgetParams{
-		LoginID: b.row.LoginID,
-		ID:      b.row.ID,
+	defer cache.InvalidateResults(ctx)
+	row, err := b.service.repo.UpdateBudget(ctx, data.UpdateBudgetParams{
+		LoginID: int64(b.LoginID()),
+		ID:      int64(b.ID()),
 		Name:    name,
 	})
 	if err != nil {
@@ -62,10 +99,10 @@ func (b *Budget) Update(ctx context.Context, name string) error {
 }
 
 func (b *Budget) Delete(ctx context.Context) error {
-	err := b.repo.DeleteBudget(ctx, data.DeleteBudgetParams{
-		LoginID: b.row.LoginID,
-		ID:      b.row.ID,
+	defer cache.InvalidateResults(ctx)
+	defer cache.Delete[*Budget](ctx, int64(b.ID()))
+	return b.service.repo.DeleteBudget(ctx, data.DeleteBudgetParams{
+		LoginID: int64(b.LoginID()),
+		ID:      int64(b.ID()),
 	})
-	cache.InvalidateResults(ctx)
-	return err
 }

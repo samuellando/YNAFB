@@ -9,15 +9,9 @@ import (
 )
 
 type ApiServer struct {
-	budgetService     *domain.BudgetService
-	accountService    *domain.AccountService
-	allocationService *domain.AllocationService
-	categoryService   *domain.CategoryService
-	payeeService      *domain.PayeeService
-	trxService        *domain.TrxService
-	goalService       *domain.GoalService
-	queries           *data.Queries
-	db                *sql.DB
+	service *domain.DomainService
+	queries *data.Queries
+	db      *sql.DB
 }
 
 var _ StrictServerInterface = (*ApiServer)(nil)
@@ -25,31 +19,10 @@ var _ StrictServerInterface = (*ApiServer)(nil)
 func NewServer(db *sql.DB) ApiServer {
 	qdb := querycount.New(db)
 	queries := data.New(qdb)
-	allocationService := domain.NewAllocationService(queries)
-	categoryService := domain.NewCategoryService(queries)
-	payeeService := domain.NewPayeeService(queries)
-	accountService := domain.NewAccountService(queries, nil, nil, payeeService)
-	trxService := domain.NewTrxService(queries, categoryService, payeeService, accountService, nil)
-	accountService.SetTrxService(trxService)
-	goalService := domain.NewGoalService(queries, allocationService)
-	budgetService := domain.NewBudgetService(
-		queries,
-		trxService,
-		allocationService,
-		goalService,
-		categoryService,
-	)
-	accountService.SetBudgetService(budgetService)
-	trxService.SetBudgetService(budgetService)
+	service := domain.NewDomainService(queries)
 	return ApiServer{
-		budgetService:     budgetService,
-		accountService:    accountService,
-		allocationService: allocationService,
-		categoryService:   categoryService,
-		payeeService:      payeeService,
-		trxService:        trxService,
-		goalService:       goalService,
-		queries:           data.New(qdb),
-		db:                db,
+		service: service,
+		queries: data.New(qdb),
+		db:      db,
 	}
 }

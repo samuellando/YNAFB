@@ -14,15 +14,7 @@ func (s ApiServer) GetBudget(ctx context.Context, request GetBudgetRequestObject
 		return nil, err
 	}
 	// Query the DB
-	budgets, err := s.budgetService.List(ctx, int(id))
-	if err != nil {
-		return nil, err
-	}
-	budgets, err = s.budgetService.List(ctx, int(id))
-	if err != nil {
-		return nil, err
-	}
-	budgets, err = s.budgetService.List(ctx, int(id))
+	budgets, err := s.service.ListBudgets(ctx, int(id))
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +43,7 @@ func (s ApiServer) PostBudget(ctx context.Context, request PostBudgetRequestObje
 	}
 	name := request.Body.Name
 	// Query the DB
-	budget, err := s.budgetService.Create(ctx, int(loginID), name)
+	budget, err := s.service.CreateBudget(ctx, int(loginID), name)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +70,7 @@ func (s ApiServer) PutBudgetBudgetId(ctx context.Context, request PutBudgetBudge
 	}
 	name := request.Body.Name
 	// Query the DB
-	budget, err := s.budgetService.Get(ctx, int(loginID), int(budgetID))
+	budget, err := s.service.GetBudget(ctx, int(loginID), int(budgetID))
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +97,7 @@ func (s ApiServer) DeleteBudgetBudgetId(ctx context.Context, request DeleteBudge
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	// Query the DB
-	budget, err := s.budgetService.Get(ctx, int(loginID), int(budgetID))
+	budget, err := s.service.GetBudget(ctx, int(loginID), int(budgetID))
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +146,7 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 		return nil, fmt.Errorf("Invalid month: %w", err)
 	}
 	// Query the database
-	budget, err := s.budgetService.Get(ctx, int(loginID), budgetID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +173,7 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 				endMonthString := g.EndDate().Format(time.RFC3339)
 				endMonth = &endMonthString
 			}
-			values, err := g.GoalValues(ctx, int(loginID), month)
+			values, err := g.GoalValues(ctx, month)
 			if err != nil {
 				return nil, err
 			}

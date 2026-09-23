@@ -23,7 +23,11 @@ func (s ApiServer) GetBudgetBudgetIdAccount(ctx context.Context, request GetBudg
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	// Query the database
-	accounts, err := s.accountService.List(ctx, int(loginID), budgetID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	accounts, err := budget.ListAccounts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +68,11 @@ func (s ApiServer) PostBudgetBudgetIdAccount(ctx context.Context, request PostBu
 	}
 	name := request.Body.Name
 	// Query the database
-	account, err := s.accountService.Create(ctx, int(loginID), budgetID, name)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.CreateAccount(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +100,11 @@ func (s ApiServer) GetBudgetBudgetIdAccountId(ctx context.Context, request GetBu
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
 	// Query the database
-	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id) 
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.GetAccount(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +201,11 @@ func (s ApiServer) PutBudgetBudgetIdAccountId(ctx context.Context, request PutBu
 	}
 	name := request.Body.Name
 	// Query the database
-	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id) 
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.GetAccount(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +237,11 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountId(ctx context.Context, request De
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
 	// Query the database
-	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id) 
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.GetAccount(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +277,11 @@ func (s ApiServer) PostBudgetBudgetIdAccountIdReconcile(ctx context.Context, req
 		return nil, fmt.Errorf("Invalid date: %w", err)
 	}
 	// Query the database
-	account, err := s.accountService.Get(ctx, int(loginID), budgetID, id)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := budget.GetAccount(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -314,8 +338,12 @@ func (s ApiServer) PostBudgetBudgetIdAccountIdImport(ctx context.Context, reques
 		return nil, err
 	}
 	defer tx.Rollback()
-	txAccountService := s.accountService.WithRepo(s.queries.WithTx(tx))
-	account, err := txAccountService.Get(ctx, int(loginID), budgetID, id)
+	txService := s.service.WithRepo(s.queries.WithTx(tx))
+	txBudget, err := txService.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	account, err := txBudget.GetAccount(ctx, id)
 	if err != nil {
 		return nil, err
 	}

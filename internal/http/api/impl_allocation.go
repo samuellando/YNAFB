@@ -31,14 +31,22 @@ func (s ApiServer) PutBudgetBudgetIdCategoryIdAllocationMonth(ctx context.Contex
 		return nil, fmt.Errorf("`amount` is required in request body")
 	}
 	// Query the database
-	allocation, err := s.allocationService.Set(ctx, int(loginID), budgetID, categoryID, month, request.Body.Amount)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
+	if err != nil {
+		return nil, err
+	}
+	category, err := budget.GetCategory(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	allocation, err := category.SetAllocation(ctx, month, request.Body.Amount)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	return PutBudgetBudgetIdCategoryIdAllocationMonth200JSONResponse{
 		Id:         allocation.ID(),
-		CategoryId: allocation.CategoryID(),
+		CategoryId: allocation.Category().ID(),
 		Month:      allocation.Month().Format(time.RFC3339),
 		Amount:     allocation.Amount(),
 	}, nil

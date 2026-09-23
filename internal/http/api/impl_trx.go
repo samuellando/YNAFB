@@ -31,15 +31,19 @@ func (s ApiServer) PostBudgetBudgetIdAccountAccountIdTransaction(ctx context.Con
 		return nil, fmt.Errorf("Invalid date: %w", err)
 	}
 	// Query the database
-	account, err := s.accountService.Get(ctx, int(loginID), budgetID, accountID)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	payee, err := s.payeeService.Get(ctx, int(loginID), budgetID, request.Body.PayeeId)
+	account, err := budget.GetAccount(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	trx, err := s.trxService.Create(ctx, account, payee, date, request.Body.Outflow, request.Body.Inflow, StrPtrToStr(request.Body.Note))
+	payee, err := budget.GetPayee(ctx, request.Body.PayeeId)
+	if err != nil {
+		return nil, err
+	}
+	trx, err := account.CreateTransaction(ctx, payee, date, request.Body.Outflow, request.Body.Inflow, StrPtrToStr(request.Body.Note))
 	if err != nil {
 		return nil, err
 	}
@@ -84,11 +88,23 @@ func (s ApiServer) PutBudgetBudgetIdAccountAccountIdTransactionId(ctx context.Co
 		return nil, fmt.Errorf("Invalid date: %w", err)
 	}
 	// Query the database
-	trx, err := s.trxService.Get(ctx, int(loginID), budgetID, id)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = trx.Update(ctx, int(loginID), accountID, request.Body.PayeeId, date, request.Body.Outflow, request.Body.Inflow, StrPtrToStr(request.Body.Note))
+	account, err := budget.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	payee, err := budget.GetPayee(ctx, request.Body.PayeeId)
+	if err != nil {
+		return nil, err
+	}
+	trx, err := account.GetTransaction(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = trx.Update(ctx, payee, date, request.Body.Outflow, request.Body.Inflow, StrPtrToStr(request.Body.Note))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +132,7 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountAccountIdTransactionId(ctx context
 		return nil, fmt.Errorf("Invalid budget id: %w", err)
 	}
 	accountString := request.AccountId
-	_, err = strconv.Atoi(accountString)
+	accountID, err := strconv.Atoi(accountString)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid account id: %w", err)
 	}
@@ -126,11 +142,19 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountAccountIdTransactionId(ctx context
 		return nil, fmt.Errorf("Invalid transaction id: %w", err)
 	}
 	// Query the database
-	trx, err := s.trxService.Get(ctx, int(loginID), budgetID, id)
+	budget, err := s.service.GetBudget(ctx, int(loginID), budgetID)
 	if err != nil {
 		return nil, err
 	}
-	err = trx.Delete(ctx, int(loginID))
+	account, err := budget.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	trx, err := account.GetTransaction(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	err = trx.Delete(ctx)
 	if err != nil {
 		return nil, err
 	}

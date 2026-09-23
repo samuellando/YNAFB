@@ -13,7 +13,7 @@ RETURNING
 -- name: UpdateTrxLine :one
 UPDATE trx_line
 SET
-  trx_id = ?, dest_account_id = ?, category_id = ?, income = ?, outflow = ?, inflow = ?
+  dest_account_id = ?, category_id = ?, income = ?, outflow = ?, inflow = ?
 WHERE
   trx_line.id = @id
   AND trx_line.budget_id IN (
@@ -22,7 +22,7 @@ WHERE
     FROM
       budget AS b
     WHERE
-      b.id = @budget_id AND b.login_id = @login_id
+      b.id = @budget_id AND b.login_id = @login_id AND trx_line.trx_id = @trx_id
   )
 RETURNING *;
 
@@ -55,7 +55,8 @@ LEFT JOIN category_group AS cg ON cg.id = c.category_group_id
 WHERE
   b.login_id = @login_id
   AND tl.budget_id = @budget_id
-  AND tl.id = @id;
+  AND tl.id = @id
+  AND tl.trx_id = @trx_id;
 
 -- name: DeleteTrxLinesByTrx :exec
 DELETE FROM trx_line
