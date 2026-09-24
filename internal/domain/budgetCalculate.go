@@ -88,8 +88,10 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 					summary.Spent += line.Inflow() - line.Outflow()
 				}
 			}
+			if line.IsIncome() {
+				summary.ReadyToAssign += trx.TotalInflow()
+			}
 		}
-		summary.ReadyToAssign += trx.TotalInflow() - trx.TotalOutflow()
 		summary.Uncategorized += trx.TotalInflow() - trx.TotalOutflow() - categorized
 	}
 	futureMonth := time.Now().Before(startOfMonth)
