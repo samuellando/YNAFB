@@ -22,11 +22,11 @@ export default function GoalCell({ goal, onOpen }: GoalCellProps) {
     )
   }
 
-  const behind = goal.gap < 0
-  const over = goal.gap > 0
+  const behind = goal.gap > 0
+  const over = goal.gap < 0
   const offTrack = behind || over
   let message = 'On track for this month'
-  if (behind) message = `Allocate ${formatMoney(-goal.gap)} more this month`
+  if (behind) message = `Allocate ${formatMoney(goal.gap)} more this month`
   else if (over) message = `${formatMoney(goal.gap)} over this month's target`
 
   return (
