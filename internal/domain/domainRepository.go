@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"database/sql"
 	"samuellando.com/YNAFB/internal/data"
 )
 
@@ -13,6 +14,7 @@ type DomainRepository interface {
 	DeleteAccount(context.Context, data.DeleteAccountParams) error
 	UpdateAccount(context.Context, data.UpdateAccountParams) (data.Account, error)
 	ReconcileAccountTransactions(context.Context, data.ReconcileAccountTransactionsParams) (int64, error)
+	ListReconciledTrxLines(context.Context, data.ListReconciledTrxLinesParams) ([]sql.NullInt64, error)
 	// Allocation operations
 	ListAllocations(context.Context, data.ListAllocationsParams) ([]data.ListAllocationsRow, error)
 	SetAllocation(context.Context, data.SetAllocationParams) (data.Allocation, error)

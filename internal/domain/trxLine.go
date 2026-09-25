@@ -67,6 +67,9 @@ func trxLineFromRow(ctx context.Context, row data.ListTrxsAndLinesRow, trx *Trx)
 
 // Create and add a line to a transaction
 func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Category, income bool, outflow, inflow int) (*TrxLine, error) {
+	if t.IsMirror() {
+		return nil, fmt.Errorf("Mirror transactions cannot be edited")
+	}
 	defer cache.InvalidateResults(ctx)
 	destAccountID := sql.NullInt64{}
 	destAccountName := sql.NullString{}
@@ -130,6 +133,9 @@ func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Categ
 
 // Get a transaction line
 func (t *Trx) GetLine(ctx context.Context, id int) (*TrxLine, error) {
+	if t.IsMirror() {
+		return nil, fmt.Errorf("Mirror transactions cannot be edited")
+	}
 	return cache.Get(ctx, int64(id), func() (*TrxLine, error) {
 		row, err := t.account.budget.service.repo.GetTrxLine(ctx, data.GetTrxLineParams{
 			LoginID:  int64(t.account.budget.LoginID()),

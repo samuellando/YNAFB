@@ -3,11 +3,12 @@ package domain
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
-	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/db/types"
 )
 
@@ -17,6 +18,8 @@ type Trx struct {
 	payee      *Payee
 	lines      []*TrxLine
 	reconciled bool
+	// mirrorSource is nil for real transactions.
+	mirrorSource *Account
 }
 
 // Load a trx and its lines from a set of rows. Returns the trx and the number of rows consumed
@@ -27,9 +30,9 @@ func trxFromRows(ctx context.Context, rows []data.ListTrxsAndLinesRow, budget *B
 	n := 0
 	trx, _ := cache.Get(ctx, rows[0].Trx.ID, func() (*Trx, error) {
 		account := accountFromRow(ctx, data.Account{
-			ID:   rows[0].Trx.AccountID,
+			ID:       rows[0].Trx.AccountID,
 			BudgetID: rows[0].Trx.BudgetID,
-			Name: rows[0].AccountName,
+			Name:     rows[0].AccountName,
 		}, budget)
 		trx := &Trx{
 			row:     rows[0].Trx,
@@ -102,9 +105,76 @@ func (a *Account) ListTransactions(ctx context.Context) ([]*Trx, error) {
 			if trx.account == a {
 				trxs = append(trxs, trx)
 			}
+			if mirror, err := a.mirrorTrx(ctx, trx); mirror != nil {
+				trxs = append(trxs, mirror)
+			} else if err != nil {
+				return nil, err
+			}
 		}
 		return trxs, nil
 	})
+}
+
+// reconciledLineIDs returns the set of trx line ids reconciled in the account.
+func (a *Account) reconciledLineIDs(ctx context.Context) (map[int64]bool, error) {
+	return cache.Result(ctx, fmt.Sprintf("Reconcilked lines-%d-%d-%d", a.budget.LoginID(), a.budget.ID(), a.ID()), func() (map[int64]bool, error) {
+		rows, err := a.budget.service.repo.ListReconciledTrxLines(ctx, data.ListReconciledTrxLinesParams{
+			LoginID:  int64(a.budget.LoginID()),
+			BudgetID: int64(a.budget.ID()),
+			ID:       int64(a.ID()),
+		})
+		if err != nil {
+			return nil, err
+		}
+		reconciled := make(map[int64]bool, len(rows))
+		for _, row := range rows {
+			if row.Valid {
+				reconciled[row.Int64] = true
+			}
+		}
+		return reconciled, nil
+	})
+}
+
+// Mirror the trx for this account. Returns nil if the transaction is not a transfer into this account and error if 
+// any error occurrs.
+func (a *Account) mirrorTrx(ctx context.Context, source *Trx) (*Trx, error) {
+	if source.account.ID() == a.ID() {
+		return nil, nil
+	}
+	reconciled, err := a.reconciledLineIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	outflow, inflow := 0, 0
+	matched := false
+	allReconciled := true
+	for _, line := range source.lines {
+		destAccount, err := line.DestinationAccount()
+		if err != nil || destAccount.ID() != a.ID() {
+			continue
+		}
+		matched = true
+		outflow += line.Inflow()
+		inflow += line.Outflow()
+		if !reconciled[int64(line.ID())] {
+			allReconciled = false
+		}
+	}
+	if !matched {
+		return nil, nil
+	}
+	row := source.row
+	row.AccountID = int64(a.ID())
+	row.TotalOutflow = int64(outflow)
+	row.TotalInflow = int64(inflow)
+	return &Trx{
+		row:          row,
+		account:      a,
+		payee:        source.payee,
+		reconciled:   allReconciled,
+		mirrorSource: source.account,
+	}, nil
 }
 
 // Create a new transaction in an account
@@ -134,7 +204,7 @@ func (a *Account) CreateTransaction(ctx context.Context, payee *Payee, date time
 
 // Get an accounts transaction
 func (a *Account) GetTransaction(ctx context.Context, id int) (*Trx, error) {
-	return cache.Get(ctx, int64(id), func() (*Trx, error) {
+	trx, err := cache.Get(ctx, int64(id), func() (*Trx, error) {
 		rows, err := a.budget.service.repo.GetTrxAndLines(ctx, data.GetTrxAndLinesParams{
 			LoginID:   int64(a.budget.LoginID()),
 			BudgetID:  int64(a.budget.ID()),
@@ -150,6 +220,32 @@ func (a *Account) GetTransaction(ctx context.Context, id int) (*Trx, error) {
 		}
 		return trx, nil
 	})
+	if err == nil {
+		return trx, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	return a.getMirrorTransaction(ctx, id)
+}
+
+// getMirrorTransaction returns the read-only mirror of the transfer with the
+// given source transaction id into this account, or sql.ErrNoRows.
+func (a *Account) getMirrorTransaction(ctx context.Context, id int) (*Trx, error) {
+	budgetTrxs, err := a.budget.listTransactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, trx := range budgetTrxs {
+		if trx.ID() != id {
+			continue
+		}
+		if mirror, err := a.mirrorTrx(ctx, trx); mirror != nil {
+			return mirror, nil
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	return nil, sql.ErrNoRows
 }
 
 // Helper method for converting get account rows to trxFromRows rows
@@ -221,8 +317,26 @@ func (t *Trx) Lines() []*TrxLine {
 	return t.lines
 }
 
+// Returns true if the transaction is a read-only mirror of a transfer made in
+// another account. Mirrors cannot be updated, deleted, or extended.
+func (t *Trx) IsMirror() bool {
+	return t.mirrorSource != nil
+}
+
+// The account the funds were transferred from. Returns an error if the
+// transaction is not a mirror.
+func (t *Trx) SourceAccount() (*Account, error) {
+	if t.mirrorSource != nil {
+		return t.mirrorSource, nil
+	}
+	return nil, fmt.Errorf("Transaction is not a mirror transfer")
+}
+
 // Update the transaction
 func (t *Trx) Update(ctx context.Context, payee *Payee, date time.Time, outflow, inflow int, note string) error {
+	if t.IsMirror() {
+		return fmt.Errorf("Mirror transactions cannot be edited")
+	}
 	defer cache.InvalidateResults(ctx)
 	row, err := t.account.budget.service.repo.UpdateTrx(ctx, data.UpdateTrxParams{
 		Date:         types.UnixTime{Time: date},
@@ -244,6 +358,9 @@ func (t *Trx) Update(ctx context.Context, payee *Payee, date time.Time, outflow,
 
 // Delete the transaction
 func (t *Trx) Delete(ctx context.Context) error {
+	if t.IsMirror() {
+		return fmt.Errorf("Mirror transactions cannot be edited")
+	}
 	defer cache.InvalidateResults(ctx)
 	defer cache.Delete[*Trx](ctx, int64(t.ID()))
 	return t.account.budget.service.repo.DeleteTrx(ctx, data.DeleteTrxParams{

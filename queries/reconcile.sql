@@ -1,3 +1,10 @@
+-- name: ListReconciledTrxLines :many
+SELECT
+  r.trx_line_id AS line_id
+FROM reconciliation AS r
+JOIN budget AS b ON r.budget_id = b.id
+WHERE b.login_id = @login_id AND r.budget_id = @budget_id AND r.account_id = @id AND r.trx_line_id IS NOT NULL;
+
 -- name: ReconcileAccountTransactions :execrows
 INSERT INTO reconciliation (budget_id, account_id, trx_id, trx_line_id)
 SELECT

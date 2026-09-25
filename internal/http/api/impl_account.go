@@ -149,6 +149,12 @@ func marshalTrxs(trxs []*domain.Trx) []AccountTransaction {
 			Note: trx.Note(),
 			Reconciled: trx.Reconciled(),
 		}
+		if source, err := trx.SourceAccount(); err == nil {
+			id := source.ID()
+			name := source.Name()
+			accountTransaction.SourceAccountId = &id
+			accountTransaction.SourceAccountName = &name
+		}
 		res = append(res, accountTransaction)
 	}
 	return res

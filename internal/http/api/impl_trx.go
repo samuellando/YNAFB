@@ -104,6 +104,9 @@ func (s ApiServer) PutBudgetBudgetIdAccountAccountIdTransactionId(ctx context.Co
 	if err != nil {
 		return nil, err
 	}
+	if trx.IsMirror() {
+		return nil, fmt.Errorf("Mirror transactions cannot be edited")
+	}
 	err = trx.Update(ctx, payee, date, request.Body.Outflow, request.Body.Inflow, StrPtrToStr(request.Body.Note))
 	if err != nil {
 		return nil, err
@@ -153,6 +156,9 @@ func (s ApiServer) DeleteBudgetBudgetIdAccountAccountIdTransactionId(ctx context
 	trx, err := account.GetTransaction(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if trx.IsMirror() {
+		return nil, fmt.Errorf("Mirror transactions cannot be edited")
 	}
 	err = trx.Delete(ctx)
 	if err != nil {

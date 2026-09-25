@@ -51,7 +51,15 @@ the service-layer refactor — follow them so the package stays consistent.
   `Allocation.Category()`, `Trx.Account()`, `TrxLine.Trx()`.
 - Nullable relations return `(*T, error)`: `TrxLine.Category()`,
   `TrxLine.DestinationAccount()`, `Category.Group()`,
-  `PayeeDefaultLine.Category()/DestAccount()`.
+  `PayeeDefaultLine.Category()/DestAccount()`, `Trx.SourceAccount()` (set only
+  on transfer mirrors, see below).
+- Transfer mirrors: a `Trx` with a line into another account shows up in that
+  account's `ListTransactions`/`GetTransaction` as a read-only mirror
+  (`IsMirror()`, `SourceAccount()` points at the origin). Mirrors share the
+  source id and are built fresh per call — never via `cache.Get` — with
+  swapped totals, empty lines, and `Update`/`Delete`/`AddLine`/`GetLine`
+  returning errors. They never appear in budget-level listings, so month math
+  is unaffected.
 - `Allocation` keeps only `category` (no `budget` field) — the parent is
   always present (`category_id NOT NULL`) and carries the budget.
 
