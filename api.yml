@@ -1275,7 +1275,6 @@ components:
         - income
         - allocated
         - spent
-        - available
         - uncategorized
       properties:
         readyToAssign:
@@ -1290,9 +1289,6 @@ components:
         spent:
           type: integer
           description: The total spent for the month
-        available:
-          type: integer
-          description: The total available to spent (total allocated to date - spend)
         uncategorized:
           type: integer
           description: The absolute value of the uncategorize transactions

@@ -1559,8 +1559,6 @@ export interface components {
             allocated: number;
             /** @description The total spent for the month */
             spent: number;
-            /** @description The total available to spent (total allocated to date - spend) */
-            available: number;
             /** @description The absolute value of the uncategorize transactions */
             uncategorized: number;
         };

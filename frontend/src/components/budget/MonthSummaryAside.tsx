@@ -1,5 +1,5 @@
 import type { BudgetMonthSummary } from '../../lib/api/budget'
-import { availableTone, spentTone } from '../../lib/budgetView'
+import { spentTone } from '../../lib/budgetView'
 import { formatMoney } from '../../lib/money'
 
 type MonthSummaryAsideProps = {
@@ -35,14 +35,6 @@ export default function MonthSummaryAside({ summary }: MonthSummaryAsideProps) {
           </span>
           <span className={`text-sm font-semibold tabular-nums ${spentTone(summary.spent)}`}>
             {formatMoney(-summary.spent)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-            Available
-          </span>
-          <span className={`text-sm font-semibold tabular-nums ${availableTone(summary.available)}`}>
-            {formatMoney(summary.available)}
           </span>
         </div>
         {summary.uncategorized > 0 && (

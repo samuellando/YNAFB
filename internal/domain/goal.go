@@ -240,9 +240,7 @@ func (g *Goal) GoalValues(ctx context.Context, month time.Time) (*GoalValues, er
 	case "monthly":
 		values.NeededForMonth = g.Amount()
 	case "save":
-		years := g.EndDate().Year() - startOfMonth.Year()
-		months := int(g.EndDate().Month()) - int(startOfMonth.Month())
-		monthsLeft := years*12 + months + 1
+		monthsLeft := monthDiff(startOfMonth, *g.EndDate()) + 1
 		values.NeededForMonth = (g.Amount() - values.AllocatedToDate + allocatedThisMonth) / monthsLeft
 	case "refill":
 		values.NeededForMonth = g.Amount()

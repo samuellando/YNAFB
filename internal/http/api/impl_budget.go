@@ -201,7 +201,6 @@ func (s ApiServer) getBudgetMonth(ctx context.Context, request GetBudgetBudgetId
 		Month: month.Format(time.RFC3339),
 		Summary: BudgetMonthSummary{
 			Allocated:     summary.Allocated,
-			Available:     summary.Available,
 			Income:        summary.Income,
 			ReadyToAssign: summary.ReadyToAssign,
 			Spent:         summary.Spent,

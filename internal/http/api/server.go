@@ -22,7 +22,7 @@ func NewServer(db *sql.DB) ApiServer {
 	service := domain.NewDomainService(queries)
 	return ApiServer{
 		service: service,
-		queries: data.New(qdb),
+		queries: queries,
 		db:      db,
 	}
 }
