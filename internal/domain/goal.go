@@ -249,7 +249,7 @@ func (g *Goal) GoalValues(ctx context.Context, month time.Time) (*GoalValues, er
 		}
 		for _, mc := range monthCategories {
 			if mc.ID == g.category.ID() {
-				values.NeededForMonth = g.Amount() - mc.Available
+				values.NeededForMonth = g.Amount() - max(mc.Available, 0)
 			}
 		}
 	}
