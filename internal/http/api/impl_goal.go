@@ -93,7 +93,7 @@ func (s ApiServer) PostBudgetBudgetIdCategoryCategoryIdGoal(ctx context.Context,
 		t := endMonth.Time
 		end = &t
 	}
-	goal, err := category.Create(ctx, string(request.Body.Type), startMonth.Time, end, request.Body.Amount)
+	goal, err := category.CreateGoal(ctx, string(request.Body.Type), startMonth.Time, end, request.Body.Amount)
 	if err != nil {
 		return nil, err
 	}

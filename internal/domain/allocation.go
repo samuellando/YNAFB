@@ -69,7 +69,7 @@ func (c *Category) SetAllocation(ctx context.Context, month time.Time, amount in
 	defer cache.InvalidateResults(ctx)
 	row, err := c.budget.service.repo.SetAllocation(ctx, data.SetAllocationParams{
 		CategoryID: int64(c.ID()),
-		Month:      types.UnixTime{Time: month},
+		Month:      types.UnixTime{Time: getStartOfMonth(month)},
 		Amount:     int64(amount),
 		BudgetID:   int64(c.budget.ID()),
 		LoginID:    int64(c.budget.LoginID()),

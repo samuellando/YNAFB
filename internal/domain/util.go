@@ -12,7 +12,7 @@ func getStartAndEndOfMonth(month time.Time) (time.Time, time.Time) {
 }
 
 func getStartOfMonth(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.UTC().Location())
 }
 
 func timeLE(t1, t2 time.Time) bool {

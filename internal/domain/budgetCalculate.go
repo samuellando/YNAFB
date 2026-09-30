@@ -72,12 +72,12 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 	if err != nil {
 		return summary, err
 	}
-	monthlyAgg := aggregateMonthlyValues(fetchedData, startOfMonth)
 	trxs := fetchedData.trxs
 	allocations := fetchedData.allocations
 	// Accumulator variables
 	incomeBeforeMonth := 0
 	incomeThisMonth := 0
+	spentBeforeMonth := 0
 	spentThisMonth := 0
 	uncategorized := 0
 	allocatedThisMonth := 0
@@ -88,6 +88,9 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 			lineAmount := line.Inflow() - line.Outflow()
 			categorized += lineAmount
 			if trx.Date().Before(startOfMonth) {
+				if _, err := line.Category(); err == nil {
+					spentBeforeMonth -= lineAmount
+				}
 				if line.IsIncome() {
 					incomeBeforeMonth += lineAmount
 				}
@@ -114,7 +117,7 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 	summary.Income = incomeThisMonth
 	summary.Spent = spentThisMonth
 	summary.Uncategorized = uncategorized
-	summary.ReadyToAssign = (incomeToEndOfMonth - monthlyAgg.allocated) - monthlyAgg.carry
+	summary.ReadyToAssign = (incomeToEndOfMonth - spentBeforeMonth - allocatedThisMonth) - calculateCarryIn(fetchedData, month)
 	return summary, nil
 }
 
@@ -125,7 +128,7 @@ func (b *Budget) GetMonthCategories(ctx context.Context, month time.Time) ([]*Mo
 	if err != nil {
 		return nil, err
 	}
-	categoryValues := calculateMonthCategoryValues(data, startOfMonth) 
+	categoryValues := calculateMonthCategoryValues(data, startOfMonth)
 	categoriesMap := make(map[int]*MonthCategory)
 	for _, category := range data.categories {
 		group, _ := category.Group()
@@ -133,7 +136,7 @@ func (b *Budget) GetMonthCategories(ctx context.Context, month time.Time) ([]*Mo
 			ID:        category.ID(),
 			Name:      category.Name(),
 			Group:     group,
-			Spent: categoryValues[category.ID()].spent,
+			Spent:     categoryValues[category.ID()].spent,
 			Allocated: categoryValues[category.ID()].allocated,
 			Available: categoryValues[category.ID()].available,
 		}
@@ -211,7 +214,7 @@ func calculateMonthCategoryValues(data *fetchedData, month time.Time) map[int]*m
 			}
 			res[category.ID()].spent = v.spent
 			res[category.ID()].allocated = v.allocated
-			// Only carry forward possitive available amounts. Negatives 
+			// Only carry forward possitive available amounts. Negatives
 			// will be subtracted from the ready to assign for next month
 			if pa := res[category.ID()].available; pa > 0 {
 				res[category.ID()].available = v.allocated - v.spent + pa
@@ -223,38 +226,15 @@ func calculateMonthCategoryValues(data *fetchedData, month time.Time) map[int]*m
 	return res
 }
 
-type monthValues struct {
-	allocated int
-	carry     int
-}
-
-func aggregateMonthlyValues(data *fetchedData, month time.Time) monthValues {
-	// Accumulate the monthly spending and allocations
-	minMonth, _, monthlyTotals := aggregateCategoryMonthlyEntrties(data)
-	// Convert to an contiguous timeline array
-	res := monthValues{}
-	// No data, return zeros
-	if minMonth.Equal(zero) {
-		return res
-	}
-	for iMonth := minMonth; timeLE(iMonth, month); iMonth = iMonth.AddDate(0, 1, 0) {
-		for _, category := range data.categories {
-			v, ok := monthlyTotals[category.ID()][iMonth]
-			if !ok {
-				v = &monthTotals{
-					spent:     0,
-					allocated: 0,
-				}
-			}
-			res.allocated += v.allocated
-			if iMonth.Before(month) {
-				if v.spent > v.allocated {
-					res.carry += v.spent - v.allocated
-				}
-			}
+func calculateCarryIn(data *fetchedData, month time.Time) int {
+	monthlyValues := calculateMonthCategoryValues(data, month.AddDate(0, -1, 0))
+	available := 0
+	for _, catValues := range monthlyValues {
+		if catValues.available > 0 {
+			available += catValues.available
 		}
 	}
-	return res
+	return available
 }
 
 func aggregateCategoryMonthlyEntrties(data *fetchedData) (time.Time, time.Time, map[int]map[time.Time]*monthTotals) {

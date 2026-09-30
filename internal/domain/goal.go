@@ -98,16 +98,16 @@ func (c *Category) GetGoal(ctx context.Context) (*Goal, error) {
 	return goal, nil
 }
 
-// Create a goal in a category
-func (c *Category) Create(ctx context.Context, goalType string, start time.Time, end *time.Time, amount int) (*Goal, error) {
+// CreateGoal a goal in a category
+func (c *Category) CreateGoal(ctx context.Context, goalType string, start time.Time, end *time.Time, amount int) (*Goal, error) {
 	defer cache.InvalidateResults(ctx)
 	endTime := types.NullUnixTime{}
 	if end != nil {
-		endTime = types.NullUnixTime{Valid: true, Time: *end}
+		endTime = types.NullUnixTime{Valid: true, Time: getStartOfMonth(*end)}
 	}
 	row, err := c.budget.service.repo.CreateGoal(ctx, data.CreateGoalParams{
 		Type:       goalType,
-		StartDate:  types.UnixTime{Time: start},
+		StartDate:  types.UnixTime{Time: getStartOfMonth(start)},
 		EndDate:    endTime,
 		CategoryID: int64(c.ID()),
 		Amount:     int64(amount),
@@ -177,11 +177,11 @@ func (g *Goal) Update(ctx context.Context, goalType string, start time.Time, end
 	defer cache.InvalidateResults(ctx)
 	endTime := types.NullUnixTime{}
 	if end != nil {
-		endTime = types.NullUnixTime{Valid: true, Time: *end}
+		endTime = types.NullUnixTime{Valid: true, Time: getStartOfMonth(*end)}
 	}
 	row, err := g.category.budget.service.repo.UpdateGoal(ctx, data.UpdateGoalParams{
 		Type:       goalType,
-		StartDate:  types.UnixTime{Time: start},
+		StartDate:  types.UnixTime{Time: getStartOfMonth(start)},
 		EndDate:    endTime,
 		Amount:     int64(amount),
 		BudgetID:   int64(g.category.budget.ID()),
@@ -232,7 +232,7 @@ func (g *Goal) GoalValues(ctx context.Context, month time.Time) (*GoalValues, er
 		if allocation.Month().Equal(startOfMonth) {
 			allocatedThisMonth = allocation.Amount()
 		}
-		if allocation.Month().Before(endOfMonth) {
+		if timeLE(g.StartDate(), allocation.Month())  && allocation.Month().Before(endOfMonth) {
 			values.AllocatedToDate += allocation.Amount()
 		}
 	}
@@ -243,7 +243,15 @@ func (g *Goal) GoalValues(ctx context.Context, month time.Time) (*GoalValues, er
 		monthsLeft := monthDiff(startOfMonth, *g.EndDate()) + 1
 		values.NeededForMonth = (g.Amount() - values.AllocatedToDate + allocatedThisMonth) / monthsLeft
 	case "refill":
-		values.NeededForMonth = g.Amount()
+		monthCategories, err := g.category.budget.GetMonthCategories(ctx, startOfMonth.AddDate(0, -1, 0))
+		if err != nil {
+			return nil, err
+		}
+		for _, mc := range monthCategories {
+			if mc.ID == g.category.ID() {
+				values.NeededForMonth = g.Amount() - mc.Available
+			}
+		}
 	}
 	values.Gap = values.NeededForMonth - allocatedThisMonth
 	return &values, nil
