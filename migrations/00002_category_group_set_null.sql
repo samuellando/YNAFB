@@ -24,9 +24,9 @@ ALTER TABLE category RENAME TO category_old;
 CREATE TABLE category (
   id INTEGER PRIMARY KEY,
   budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-  name TEXT NOT NULL CHECK (LENGTH(name) >= 3),
+  name TEXT NOT NULL COLLATE NOCASE CHECK (LENGTH(TRIM(name)) >= 3),
   category_group_id INTEGER REFERENCES category_group (id) ON DELETE SET NULL,
-  CHECK (lower(name) IS NOT 'income'),
+  CHECK (LOWER(TRIM(name)) != 'income'),
   UNIQUE (budget_id, id),
   UNIQUE (budget_id, name),
   FOREIGN KEY (budget_id, category_group_id) REFERENCES category_group (budget_id, id)
@@ -50,9 +50,9 @@ ALTER TABLE category RENAME TO category_old;
 CREATE TABLE category (
   id INTEGER PRIMARY KEY,
   budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-  name TEXT NOT NULL CHECK (LENGTH(name) >= 3),
+  name TEXT NOT NULL COLLATE NOCASE CHECK (LENGTH(TRIM(name)) >= 3),
   category_group_id INTEGER,
-  CHECK (lower(name) IS NOT 'income'),
+  CHECK (LOWER(TRIM(name)) != 'income'),
   UNIQUE (budget_id, id),
   UNIQUE (budget_id, name),
   FOREIGN KEY (budget_id, category_group_id) REFERENCES category_group (budget_id, id) ON DELETE CASCADE

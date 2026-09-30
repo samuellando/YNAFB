@@ -33,7 +33,7 @@ type DomainRepository interface {
 	// CategoryGroups operations
 	ListCategoryGroups(context.Context, data.ListCategoryGroupsParams) ([]data.CategoryGroup, error)
 	GetCategoryGroup(context.Context, data.GetCategoryGroupParams) (data.CategoryGroup, error)
-	CreateCategoryGroup(context.Context, data.CreateCategoryGroupParams) (int64, error)
+	CreateCategoryGroup(context.Context, data.CreateCategoryGroupParams) (data.CategoryGroup, error)
 	UpdateCategoryGroup(context.Context, data.UpdateCategoryGroupParams) (data.CategoryGroup, error)
 	DeleteCategoryGroup(context.Context, data.DeleteCategoryGroupParams) error
 	// Goals operations

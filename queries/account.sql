@@ -3,7 +3,7 @@ INSERT INTO
   account (budget_id, name)
 SELECT
   b.id,
-  @name
+  TRIM(@name)
 FROM
   budget AS b
 WHERE
@@ -31,7 +31,7 @@ RETURNING
 -- name: UpdateAccount :one
 UPDATE account
 SET
-  name = ?
+  name = TRIM(sqlc.arg(name))
 WHERE
   account.id = @id
   AND account.budget_id IN (

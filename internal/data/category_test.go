@@ -337,7 +337,7 @@ func TestCreateCategoryGroup(t *testing.T) {
 	db, queries, ctx := setup(t)
 	defer teardown(db)
 	budget := newBudget(t, queries, ctx, "testBudget")
-	groupID, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
+	created, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
 		LoginID:  budget.LoginID,
 		BudgetID: budget.ID,
 		Name:     "testgroup",
@@ -347,13 +347,13 @@ func TestCreateCategoryGroup(t *testing.T) {
 	}
 	group, err := queries.GetCategoryGroup(ctx, data.GetCategoryGroupParams{
 		LoginID:  budget.LoginID,
-		ID:       groupID,
+		ID:       created.ID,
 		BudgetID: budget.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if group.ID != groupID {
+	if group.ID != created.ID {
 		t.Error("category group id does not match")
 	}
 	if group.Name != "testgroup" {

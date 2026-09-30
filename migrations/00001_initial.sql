@@ -1,21 +1,21 @@
 -- +goose up
 CREATE TABLE login (
   id INTEGER PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE CHECK (LENGTH(username) >= 3),
+  username TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (LENGTH(TRIM(username)) >= 3),
   password TEXT NOT NULL
 );
 
 CREATE TABLE budget (
   id INTEGER PRIMARY KEY,
   login_id INTEGER NOT NULL REFERENCES login (id) ON DELETE CASCADE,
-  name TEXT NOT NULL CHECK (LENGTH(name) >= 3),
+  name TEXT NOT NULL COLLATE NOCASE CHECK (LENGTH(TRIM(name)) >= 3),
   UNIQUE (login_id, name)
 );
 
 CREATE TABLE account (
   id INTEGER PRIMARY KEY,
   budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-  name TEXT NOT NULL CHECK (LENGTH(name) >= 3),
+  name TEXT NOT NULL COLLATE NOCASE CHECK (LENGTH(TRIM(name)) >= 3),
   UNIQUE (budget_id, id),
   UNIQUE (budget_id, name)
 );
@@ -23,7 +23,7 @@ CREATE TABLE account (
 CREATE TABLE payee (
   id INTEGER PRIMARY KEY,
   budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-  name TEXT NOT NULL CHECK (LENGTH(name) >= 3),
+  name TEXT NOT NULL COLLATE NOCASE CHECK (LENGTH(TRIM(name)) >= 3),
   UNIQUE (budget_id, id),
   UNIQUE (budget_id, name)
 );
@@ -58,7 +58,7 @@ CREATE TABLE trx_line (
   trx_id INTEGER NOT NULL,
   dest_account_id INTEGER,
   category_id INTEGER,
-  income BOOL NOT NULL DEFAULT false,
+  income BOOL NOT NULL DEFAULT false CHECK (income IN (0, 1)),
   outflow INTEGER NOT NULL DEFAULT 0,
   inflow INTEGER NOT NULL DEFAULT 0,
   -- XOR, can only be one of category (spend), transfer, or income
@@ -101,9 +101,9 @@ CREATE TABLE trx_line (
 CREATE TABLE category (
   id INTEGER PRIMARY KEY,
   budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-  name TEXT NOT NULL CHECK (LENGTH(name) >= 3),
+  name TEXT NOT NULL COLLATE NOCASE CHECK (LENGTH(TRIM(name)) >= 3),
   category_group_id INTEGER,
-  CHECK (lower(name) IS NOT 'income'),
+  CHECK (LOWER(TRIM(name)) != 'income'),
   UNIQUE (budget_id, id),
   UNIQUE (budget_id, name),
   FOREIGN KEY (budget_id, category_group_id) REFERENCES category_group (budget_id, id) ON DELETE CASCADE
@@ -112,7 +112,7 @@ CREATE TABLE category (
 CREATE TABLE category_group (
   id INTEGER PRIMARY KEY,
   budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
-  name TEXT NOT NULL CHECK (LENGTH(name) >= 3),
+  name TEXT NOT NULL COLLATE NOCASE CHECK (LENGTH(TRIM(name)) >= 3),
   UNIQUE (budget_id, id),
   UNIQUE (budget_id, name)
 );
@@ -123,7 +123,7 @@ CREATE TABLE payee_default_line (
   payee_id INTEGER NOT NULL,
   dest_account_id INTEGER,
   category_id INTEGER,
-  income BOOL NOT NULL DEFAULT false,
+  income BOOL NOT NULL DEFAULT false CHECK (income IN (0, 1)),
   percent INTEGER NOT NULL,
   -- XOR, can only be one of category (spend), transfer, or income
   CHECK (

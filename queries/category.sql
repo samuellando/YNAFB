@@ -1,7 +1,7 @@
 -- name: CreateCategory :one
 INSERT INTO
   category (budget_id, name, category_group_id)
-SELECT b.id, ?, ?
+SELECT b.id, TRIM(sqlc.arg(name)), sqlc.arg(category_group_id)
 FROM budget AS b
 WHERE b.id = @budget_id AND b.login_id = @login_id
 RETURNING
@@ -10,8 +10,8 @@ RETURNING
 -- name: UpdateCategory :one
 UPDATE category
 SET
-  name = ?,
-  category_group_id = ?
+  name = TRIM(sqlc.arg(name)),
+  category_group_id = sqlc.arg(category_group_id)
 WHERE
   category.id = @id
   AND category.budget_id IN (

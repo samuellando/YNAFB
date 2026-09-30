@@ -27,7 +27,7 @@ func categoryGroupFromRow(ctx context.Context, row data.CategoryGroup, budget *B
 // Create a new category group
 func (b *Budget) CreateCategoryGroup(ctx context.Context, name string) (*CategoryGroup, error) {
 	defer cache.InvalidateResults(ctx)
-	id, err := b.service.repo.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
+	row, err := b.service.repo.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{
 		Name:     name,
 		BudgetID: int64(b.ID()),
 		LoginID:  int64(b.LoginID()),
@@ -35,11 +35,7 @@ func (b *Budget) CreateCategoryGroup(ctx context.Context, name string) (*Categor
 	if err != nil {
 		return nil, err
 	}
-	group := categoryGroupFromRow(ctx, data.CategoryGroup{
-		ID:       id,
-		BudgetID: int64(b.ID()),
-		Name:     name,
-	}, b)
+	group := categoryGroupFromRow(ctx, row, b)
 	return group, nil
 }
 

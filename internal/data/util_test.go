@@ -86,11 +86,11 @@ func newCategory(t *testing.T, queries *data.Queries, ctx context.Context, budge
 
 func newCategoryGroup(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, name string) int64 {
 	t.Helper()
-	id, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{BudgetID: budget.ID, LoginID: budget.LoginID, Name: name})
+	group, err := queries.CreateCategoryGroup(ctx, data.CreateCategoryGroupParams{BudgetID: budget.ID, LoginID: budget.LoginID, Name: name})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return id
+	return group.ID
 }
 
 func newGoal(t *testing.T, queries *data.Queries, ctx context.Context, budget data.Budget, category int64, goalType string, start types.UnixTime, end types.NullUnixTime, amount int64) data.Goal {

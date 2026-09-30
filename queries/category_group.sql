@@ -2,18 +2,18 @@
 INSERT INTO
   category_group (budget_id, name)
 SELECT
-  b.id, ?
+  b.id, TRIM(sqlc.arg(name))
 FROM
   budget AS b
 WHERE
   b.id = @budget_id AND b.login_id = @login_id
 RETURNING
-  id;
+  *;
 
 -- name: UpdateCategoryGroup :one
 UPDATE category_group
 SET
-  name = ?
+  name = TRIM(sqlc.arg(name))
 WHERE
   category_group.id = @id
   AND category_group.budget_id IN (

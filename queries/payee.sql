@@ -2,7 +2,7 @@
 INSERT INTO
   payee (budget_id, name)
 SELECT
-  b.id, ?
+  b.id, TRIM(sqlc.arg(name))
 FROM
   budget AS b
 WHERE
@@ -13,7 +13,7 @@ RETURNING
 -- name: UpdatePayee :one
 UPDATE payee
 SET
-  name = ?
+  name = TRIM(sqlc.arg(name))
 WHERE
   payee.id = @id
   AND payee.budget_id IN (
@@ -76,4 +76,4 @@ FROM
 WHERE
   b.login_id = @login_id
   AND p.budget_id = @budget_id
-  AND p.name = ?;
+  AND p.name = TRIM(sqlc.arg(name));

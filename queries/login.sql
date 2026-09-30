@@ -3,8 +3,8 @@ INSERT INTO login (
   username,
   password
 ) VALUES (
-  ?,
-  ?
+  TRIM(sqlc.arg(username)),
+  sqlc.arg(password)
 )
 RETURNING *;
 
@@ -14,7 +14,7 @@ SELECT
 FROM
   login
 WHERE
-  login.username = ?;
+  login.username = TRIM(sqlc.arg(username));
 
 -- name: ListLogins :many
 SELECT

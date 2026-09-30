@@ -70,6 +70,9 @@ func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Categ
 	if t.IsMirror() {
 		return nil, fmt.Errorf("Mirror transactions cannot be edited")
 	}
+	if destAccount != nil && destAccount.ID() == t.account.ID() {
+		return nil, fmt.Errorf("Transfer destination must differ from source account")
+	}
 	defer cache.InvalidateResults(ctx)
 	destAccountID := sql.NullInt64{}
 	destAccountName := sql.NullString{}
@@ -216,6 +219,9 @@ func (l *TrxLine) Trx() *Trx {
 }
 
 func (l *TrxLine) Update(ctx context.Context, destAccount *Account, category *Category, income bool, outflow, inflow int) error {
+	if destAccount != nil && destAccount.ID() == l.trx.account.ID() {
+		return fmt.Errorf("Transfer destination must differ from source account")
+	}
 	defer cache.InvalidateResults(ctx)
 	destAccountID := sql.NullInt64{}
 	if destAccount != nil {

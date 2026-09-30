@@ -3,11 +3,11 @@ INSERT INTO budget (
   login_id,
   name
 ) VALUES (
-  ?,
-  ?
+  sqlc.arg(login_id),
+  TRIM(sqlc.arg(name))
 )
-RETURNING *;
-
+RETURNING
+  *;
 -- name: GetBudget :one
 SELECT * 
 FROM budget
@@ -16,7 +16,7 @@ WHERE id = @id AND login_id = @login_id;
 -- name: UpdateBudget :one
 UPDATE budget
 SET
-  name = ?
+  name = TRIM(sqlc.arg(name))
 WHERE
   budget.login_id = @login_id AND budget.id = @id
 RETURNING *;
