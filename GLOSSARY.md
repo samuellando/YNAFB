@@ -71,3 +71,23 @@ _Avoid_: lock, close
 **Mirror transaction**:
 A read-only swapped-total view of a transfer in its destination account; never stored.
 _Avoid_: copy, double-entry
+
+**Expense Share**:
+A global group spanning budgets and logins; ownerless, auto-deleted when the last membership leaves.
+_Avoid_: expanse, group expense
+
+**Share Membership**:
+One budget's join in an Expense Share (its local name + display name).
+_Avoid_: share user, member
+
+**Shared Transaction**:
+A published snapshot copy (totals, requested, payee, date, note) of a source trx.
+_Avoid_: shared expense
+
+**Share Split**:
+One member's portion of requested; splits should sum to requested, source portion is implicit (total - requested), (0,0) means not participating.
+_Avoid_: share, split transaction
+
+**Split Line**:
+How a member categorizes their split locally (spend or transfer); deleted when the member leaves.
+_Avoid_: split categorization
