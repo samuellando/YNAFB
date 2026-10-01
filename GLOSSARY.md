@@ -92,13 +92,13 @@ A transaction line tagging another member budget as owing a portion of the total
 _Avoid_: shared expense, split transaction, reimbursement
 
 **Settlement line**:
-A transaction line recording real money paid to settle share debt; each side records their own.
+A transaction line recording real money paid to settle share debt; each side records their own, and it is always the sole line of its transaction with an amount equal to the transaction totals.
 _Avoid_: share transfer, payback, reimbursement
 
 **Split categorization**:
 How the tagged counterparty records their share locally against the source transaction.
-_Avoid_: split categorization, split line
+_Avoid_: split line
 
 **Share Balance**:
-A membership's caller-relative net in an Expense Share (splits I tagged others minus splits others tagged me minus settlements I sent); positive means others owe me.
+A membership's caller-relative net in an Expense Share (splits I tagged others minus splits others tagged me minus settlements I sent plus settlements I received, signed outflow minus inflow; categorizations are balance-neutral); positive means others owe me.
 _Avoid_: settlement, debt
