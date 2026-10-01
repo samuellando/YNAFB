@@ -80,14 +80,27 @@ _Avoid_: expanse, group expense
 One budget's join in an Expense Share (its local name + display name).
 _Avoid_: share user, member
 
+**Share Code**:
+A server-minted invite for an Expense Share (server-decided expiry, shown once, no listing).
+_Avoid_: invite link, token
+
 **Shared Transaction**:
-A published snapshot copy (totals, requested, payee, date, note) of a source trx.
+A published snapshot copy (totals, requested, payee, date, note) of a source trx, taken once at publish.
+Requested is the sum of the source's reimbursement lines; the snapshot survives the source leaving or being deleted.
 _Avoid_: shared expense
 
 **Share Split**:
-One member's portion of requested; splits should sum to requested, source portion is implicit (total - requested), (0,0) means not participating.
+One member's portion of requested, open-edit by any member; splits should sum to requested, source portion is implicit (total - requested), (0,0) means not participating.
 _Avoid_: share, split transaction
 
 **Split Line**:
-How a member categorizes their split locally (spend or transfer); deleted when the member leaves.
+How a member categorizes their split locally (spend or transfer), private to the owning budget; deleted when the member leaves.
 _Avoid_: split categorization
+
+**Reimbursement**:
+A transfer to an Expense Share via a transaction line carrying the share id.
+_Avoid_: payback, settlement
+
+**Share Balance**:
+A membership's caller-relative net in an Expense Share (requested outflow minus inflow where I am source, minus my splits on others' publishes); positive means others owe me. A member balance applies the same rule pairwise.
+_Avoid_: settlement, debt

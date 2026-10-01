@@ -483,6 +483,9 @@ paths:
                 income:
                   type: boolean
                   description: Whether this is an income line
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for reimbursement lines)
                 outflow:
                   type: integer
                   description: The outflow of this line
@@ -543,6 +546,9 @@ paths:
                 income:
                   type: boolean
                   description: Whether this is an income line
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for reimbursement lines)
                 outflow:
                   type: integer
                   description: The outflow of this line
@@ -1123,6 +1129,9 @@ paths:
                 income:
                   type: boolean
                   description: Whether this is an income line
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for reimbursement lines)
                 percent:
                   type: integer
                   description: The percent of the transaction this line accounts for
@@ -1173,6 +1182,9 @@ paths:
                 income:
                   type: boolean
                   description: Whether this is an income line
+                expenseShareId:
+                  type: integer
+                  description: The expense share id (for reimbursement lines)
                 percent:
                   type: integer
                   description: The percent of the transaction this line accounts for
@@ -1201,6 +1213,530 @@ paths:
       - name: id
         in: path
         description: the default line id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully deleted
+
+  /budget/{budgetId}/expense-share:
+    get:
+      summary: Get the list of expense share memberships in a budget
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The list of expense share memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/expenseShareMembership"
+    post:
+      summary: Create a new expense share with this budget as the first member
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - displayName
+              properties:
+                defaultName:
+                  type: string
+                  description: The global default name (immutable, defaults to name)
+                name:
+                  type: string
+                  description: How this expense share is displayed for this budget
+                displayName:
+                  type: string
+                  description: How this budget is displayed to other members
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/expenseShareMembership"
+
+  /budget/{budgetId}/expense-share/join:
+    post:
+      summary: Join an expense share via an invite code
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+                - name
+                - displayName
+              properties:
+                code:
+                  type: string
+                  description: The invite code minted by an existing member
+                name:
+                  type: string
+                  description: How this expense share is displayed for this budget
+                displayName:
+                  type: string
+                  description: How this budget is displayed to other members
+      responses:
+        "200":
+          description: Successfully joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/expenseShareMembership"
+
+  /budget/{budgetId}/expense-share/{shareId}:
+    get:
+      summary: Get an expense share with members, shared transactions and splits
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The expense share detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/expenseShareDetail"
+    put:
+      summary: Rename an expense share membership (local name and display name)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: How this expense share is displayed for this budget
+                displayName:
+                  type: string
+                  description: How this budget is displayed to other members
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/expenseShareMembership"
+    delete:
+      summary: Leave an expense share (auto-deletes the share when the last member leaves)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully left
+
+  /budget/{budgetId}/expense-share/{shareId}/codes:
+    post:
+      summary: Mint a new invite code for an expense share (server-generated, server-decided expiry)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully minted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/expenseShareCode"
+
+  /budget/{budgetId}/expense-share/{shareId}/transactions:
+    post:
+      summary: Publish a transaction to an expense share (requested sums the source expense-share lines, snapshot taken once)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - trxId
+              properties:
+                trxId:
+                  type: integer
+                  description: The source transaction to publish
+      responses:
+        "200":
+          description: Successfully published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/sharedTransaction"
+
+  /budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}:
+    get:
+      summary: Get a shared transaction with all splits (only the caller's own split lines included)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: sharedTrxId
+        in: path
+        description: the shared transaction id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The shared transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/sharedTransaction"
+    put:
+      summary: Re-snapshot a shared transaction from its source (re-sums requested, re-copies totals)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: sharedTrxId
+        in: path
+        description: the shared transaction id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trxId:
+                  type: integer
+                  description: The source transaction to re-snapshot from (defaults to the linked source)
+      responses:
+        "200":
+          description: Successfully re-snapshotted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/sharedTransaction"
+    delete:
+      summary: Unpublish a shared transaction for all members
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: sharedTrxId
+        in: path
+        description: the shared transaction id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successfully unpublished
+
+  /budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}/splits/{memberBudgetId}:
+    put:
+      summary: Set any member's split portion (open-edit, 0/0 means not participating, sum mismatch is a warning)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: sharedTrxId
+        in: path
+        description: the shared transaction id
+        required: true
+        schema:
+          type: string
+      - name: memberBudgetId
+        in: path
+        description: the member budget whose split is set
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - splitOutflow
+                - splitInflow
+              properties:
+                splitOutflow:
+                  type: integer
+                  description: The member's outflow portion
+                splitInflow:
+                  type: integer
+                  description: The member's inflow portion
+      responses:
+        "200":
+          description: Successfully set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/shareSplit"
+
+  /budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}/splits/{memberBudgetId}/lines:
+    post:
+      summary: Categorize my split of a shared transaction (private to the owning budget)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: sharedTrxId
+        in: path
+        description: the shared transaction id
+        required: true
+        schema:
+          type: string
+      - name: memberBudgetId
+        in: path
+        description: the member budget whose split is categorized (must match the path budget)
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - outflow
+                - inflow
+              properties:
+                destAccountId:
+                  type: integer
+                  description: The destination account id (for transfer lines)
+                categoryId:
+                  type: integer
+                  description: The category id (for spend lines)
+                outflow:
+                  type: integer
+                  description: The outflow of this line
+                inflow:
+                  type: integer
+                  description: The inflow of this line
+      responses:
+        "200":
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/splitLine"
+
+  /budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}/splits/{memberBudgetId}/lines/{lineId}:
+    put:
+      summary: Update my split line (private to the owning budget)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: sharedTrxId
+        in: path
+        description: the shared transaction id
+        required: true
+        schema:
+          type: string
+      - name: memberBudgetId
+        in: path
+        description: the member budget whose split is categorized (must match the path budget)
+        required: true
+        schema:
+          type: string
+      - name: lineId
+        in: path
+        description: the split line id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - outflow
+                - inflow
+              properties:
+                destAccountId:
+                  type: integer
+                  description: The destination account id (for transfer lines)
+                categoryId:
+                  type: integer
+                  description: The category id (for spend lines)
+                outflow:
+                  type: integer
+                  description: The outflow of this line
+                inflow:
+                  type: integer
+                  description: The inflow of this line
+      responses:
+        "200":
+          description: Successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/splitLine"
+    delete:
+      summary: Delete my split line (private to the owning budget)
+      parameters:
+      - name: budgetId
+        in: path
+        description: the budget id
+        required: true
+        schema:
+          type: string
+      - name: shareId
+        in: path
+        description: the expense share id
+        required: true
+        schema:
+          type: string
+      - name: sharedTrxId
+        in: path
+        description: the shared transaction id
+        required: true
+        schema:
+          type: string
+      - name: memberBudgetId
+        in: path
+        description: the member budget whose split is categorized (must match the path budget)
+        required: true
+        schema:
+          type: string
+      - name: lineId
+        in: path
+        description: the split line id
         required: true
         schema:
           type: string
@@ -1417,7 +1953,7 @@ components:
       type: object
       description: |
         a transaction line, can be one of a transfer to a destination account,
-        income, or a categorization.
+        income, a categorization, or a reimbursement to an expense share.
       required:
         - lineId
         - income
@@ -1434,6 +1970,9 @@ components:
           type: integer
         categoryName:
           type: string
+        expenseShareId:
+          type: integer
+          description: "The expense share id (present on reimbursement lines)"
         income:
           type: boolean
         outflow:
@@ -1562,6 +2101,9 @@ components:
         income:
           type: boolean
           description: "Whether this is an income line"
+        expenseShareId:
+          type: integer
+          description: "The expense share id (present on reimbursement lines)"
         percent:
           type: integer
           description: "The percent of the transaction this line accounts for"
@@ -1623,6 +2165,212 @@ components:
         income:
           type: boolean
           description: "Whether this is an income line"
+        expenseShareId:
+          type: integer
+          description: "The expense share id (present on reimbursement lines)"
+        outflow:
+          type: integer
+          description: "The outflow of this line"
+        inflow:
+          type: integer
+          description: "The inflow of this line"
+
+    expenseShareMembership:
+      type: object
+      required:
+        - id
+        - expenseShareId
+        - budgetId
+        - name
+        - displayName
+      properties:
+        id:
+          type: integer
+          description: "The membership id"
+        expenseShareId:
+          type: integer
+          description: "The global expense share id"
+        budgetId:
+          type: integer
+          description: "The member budget id"
+        name:
+          type: string
+          description: "How this expense share is displayed for this budget"
+        displayName:
+          type: string
+          description: "How this budget is displayed to other members"
+
+    expenseShareDetail:
+      type: object
+      required:
+        - membership
+        - summary
+        - members
+        - sharedTransactions
+      properties:
+        membership:
+          $ref: "#/components/schemas/expenseShareMembership"
+        summary:
+          $ref: "#/components/schemas/expenseShareSummary"
+        members:
+          type: array
+          description: "All budgets in the expense share"
+          items:
+            $ref: "#/components/schemas/shareMember"
+        sharedTransactions:
+          type: array
+          description: "Published snapshot transactions with splits (only the caller's own split lines included)"
+          items:
+            $ref: "#/components/schemas/sharedTransaction"
+
+    expenseShareSummary:
+      type: object
+      required:
+        - balance
+        - memberBalances
+      properties:
+        balance:
+          type: integer
+          description: "Caller net (requested outflow minus inflow where I source, minus my splits elsewhere; positive means others owe me)"
+        memberBalances:
+          type: array
+          description: "Pairwise nets with each other active member (self excluded, zero-activity omitted)"
+          items:
+            $ref: "#/components/schemas/expenseShareMemberBalance"
+
+    expenseShareMemberBalance:
+      type: object
+      required:
+        - budgetId
+        - displayName
+        - balance
+      properties:
+        budgetId:
+          type: integer
+          description: "The other member budget id"
+        displayName:
+          type: string
+          description: "How this member is displayed to other members"
+        balance:
+          type: integer
+          description: "Net with this member (their splits on my publishes minus my splits on theirs, outflow minus inflow; positive means they owe me)"
+
+    shareMember:
+      type: object
+      required:
+        - budgetId
+        - displayName
+      properties:
+        budgetId:
+          type: integer
+          description: "The member budget id"
+        displayName:
+          type: string
+          description: "How this member is displayed to other members"
+
+    expenseShareCode:
+      type: object
+      required:
+        - code
+        - expires
+      properties:
+        code:
+          type: string
+          description: "The invite code (server-generated, shown once)"
+        expires:
+          type: string
+          description: "When the code expires (RFC3339, server-decided)"
+
+    sharedTransaction:
+      type: object
+      required:
+        - id
+        - sourceBudget
+        - expenseShareId
+        - payeeName
+        - date
+        - totalOutflow
+        - totalInflow
+        - requestedOutflow
+        - requestedInflow
+        - note
+        - splits
+      properties:
+        id:
+          type: integer
+          description: "The shared transaction id"
+        sourceBudget:
+          type: integer
+          description: "The budget ID of the member who published the transaction"
+        expenseShareId:
+          type: integer
+          description: "The expense share it was published to"
+        payeeName:
+          type: string
+          description: "Snapshot of the source payee name"
+        date:
+          type: string
+          description: "Snapshot of the source date (RFC3339)"
+        totalOutflow:
+          type: integer
+          description: "Snapshot of the source total outflow"
+        totalInflow:
+          type: integer
+          description: "Snapshot of the source total inflow"
+        requestedOutflow:
+          type: integer
+          description: "Sum of the source expense-share lines (outflow)"
+        requestedInflow:
+          type: integer
+          description: "Sum of the source expense-share lines (inflow)"
+        note:
+          type: string
+          description: "Snapshot of the source note"
+        splits:
+          type: array
+          description: "Every member's portion (open-edit by any member)"
+          items:
+            $ref: "#/components/schemas/shareSplit"
+
+    shareSplit:
+      type: object
+      required:
+        - memberBudgetId
+        - splitOutflow
+        - splitInflow
+        - lines
+      properties:
+        memberBudgetId:
+          type: integer
+          description: "The member budget this split belongs to"
+        splitOutflow:
+          type: integer
+          description: "The member's outflow portion (0,0 means not participating)"
+        splitInflow:
+          type: integer
+          description: "The member's inflow portion (0,0 means not participating)"
+        lines:
+          type: array
+          description: "Only the caller's own categorization lines, omitted for other members"
+          items:
+            $ref: "#/components/schemas/splitLine"
+
+    splitLine:
+      type: object
+      required:
+        - id
+        - outflow
+        - inflow
+      properties:
+        id:
+          type: integer
+          description: "The split line id"
+        destAccountId:
+          type: integer
+          description: "The destination account id (present on transfer lines)"
+        categoryId:
+          type: integer
+          description: "The category id (present on spend lines)"
         outflow:
           type: integer
           description: "The outflow of this line"
