@@ -74,6 +74,9 @@ _Avoid_: copy, double-entry
 
 **Expense Share**:
 A global group spanning budgets and logins; ownerless, auto-deleted when the last membership leaves.
+From a member's perspective this represents transactions they split with other members. 
+The point of the expense share is to settle the amounts members owe eachother when they split 
+transactions.
 _Avoid_: expanse, group expense
 
 **Share Membership**:
@@ -84,23 +87,18 @@ _Avoid_: share user, member
 A server-minted invite for an Expense Share (server-decided expiry, shown once, no listing).
 _Avoid_: invite link, token
 
-**Shared Transaction**:
-A published snapshot copy (totals, requested, payee, date, note) of a source trx, taken once at publish.
-Requested is the sum of the source's reimbursement lines; the snapshot survives the source leaving or being deleted.
-_Avoid_: shared expense
+**Split line**:
+A transaction line tagging another member budget as owing a portion of the total.
+_Avoid_: shared expense, split transaction, reimbursement
 
-**Share Split**:
-One member's portion of requested, open-edit by any member; splits should sum to requested, source portion is implicit (total - requested), (0,0) means not participating.
-_Avoid_: share, split transaction
+**Settlement line**:
+A transaction line recording real money paid to settle share debt; each side records their own.
+_Avoid_: share transfer, payback, reimbursement
 
-**Split Line**:
-How a member categorizes their split locally (spend or transfer), private to the owning budget; deleted when the member leaves.
-_Avoid_: split categorization
-
-**Reimbursement**:
-A transfer to an Expense Share via a transaction line carrying the share id.
-_Avoid_: payback, settlement
+**Split categorization**:
+How the tagged counterparty records their share locally against the source transaction.
+_Avoid_: split categorization, split line
 
 **Share Balance**:
-A membership's caller-relative net in an Expense Share (requested outflow minus inflow where I am source, minus my splits on others' publishes); positive means others owe me. A member balance applies the same rule pairwise.
+A membership's caller-relative net in an Expense Share (splits I tagged others minus splits others tagged me minus settlements I sent); positive means others owe me.
 _Avoid_: settlement, debt

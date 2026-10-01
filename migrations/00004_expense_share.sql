@@ -2,17 +2,13 @@
 -- +goose up
 
 -- Expense shares, a global entry that can be shared across budgets and across users
--- Ownerless: no login_id/budget owner. default_name is immutable after creation.
--- Deleted automatically by the domain layer when the last membership leaves.
+-- Ownerless: no login_id/budget owner.
 CREATE TABLE expense_share (
   id INTEGER PRIMARY KEY,
   default_name TEXT NOT NULL CHECK (LENGTH(default_name) >= 3)
 );
 
-
 -- Share codes for the expense share so other users can add it.
--- Multiple active codes allowed, reusable until expires. Any member can mint.
--- Expiry is enforced in the domain layer.
 CREATE TABLE expense_share_code (
   id INTEGER PRIMARY KEY,
   expense_share_id integer NOT NULL REFERENCES expense_share (id) ON DELETE CASCADE,
@@ -42,130 +38,21 @@ CREATE TABLE budget_expense_share (
   UNIQUE (expense_share_id, id)
 );
 
--- A transaction a user has published to an expense share.
--- Handles the user leaving the expense share by taking snapshots.
--- Takes a snapshot of the source: payee_name, date, totals, requested, note.
--- Leaving nulls budget_expense_share_id/budget_id via FK SET NULL and the domain
--- nulls trx_id (no FK from membership to trx); the snapshot survives for
--- remaining members. total - requested is the source member's implicit portion
--- (no explicit split row for the source).
-CREATE TABLE expense_share_trx (
-  id INTEGER PRIMARY KEY,
-  -- A reference to the source expense share
-  expense_share_id INTEGER NOT NULL REFERENCES expense_share (id) ON DELETE CASCADE,
-  -- Reference back to the source, nullable if the source is deleted or leaves
-  budget_expense_share_id INTEGER REFERENCES budget_expense_share (id) ON DELETE SET NULL,
-  budget_id INTEGER REFERENCES budget (id) ON DELETE SET NULL,
-  trx_id INTEGER REFERENCES trx (id) ON DELETE SET NULL,
-  -- Copy of the source information
-  payee_name TEXT NOT NULL,
-  date UNIX_EPOCH_INTEGER NOT NULL,
-  total_outflow INTEGER NOT NULL DEFAULT 0,
-  total_inflow INTEGER NOT NULL DEFAULT 0,
-  requested_outflow INTEGER NOT NULL DEFAULT 0,
-  requested_inflow INTEGER NOT NULL DEFAULT 0,
-  note TEXT NOT NULL DEFAULT '',
-  UNIQUE (id, expense_share_id),
-  -- The transaction must either be an inflow or outflow
-  CHECK (
-    (
-      total_inflow > 0
-      AND total_outflow = 0
-    )
-    OR (
-      total_outflow > 0
-      AND total_inflow = 0
-    )
-  ),
-  -- The amount the user is requesting other's to pay
-  CHECK (
-    (
-      requested_inflow > 0
-      AND requested_outflow = 0
-    )
-    OR (
-      requested_outflow > 0
-      AND requested_inflow = 0
-    )
-  ),
-  -- the signs must match
-  CHECK (
-    (
-      total_outflow > 0
-      AND requested_outflow > 0
-    )
-    OR (
-      total_inflow > 0
-      AND requested_inflow > 0
-    )
-  ),
-  -- Can only request less or equal to the amount
-  CHECK (
-      requested_outflow <= total_outflow
-      AND requested_inflow <= total_inflow
-  ),
-  -- The budget must actually be part of the expense share.
-  -- NOTE: the share-match (expense_share_id, budget_expense_share_id) is
-  -- enforced in the domain layer, not here: expense_share_id is NOT NULL so it
-  -- cannot participate in SET NULL, and a NO ACTION FK would block leaving.
-  FOREIGN KEY (budget_id, budget_expense_share_id) REFERENCES budget_expense_share (budget_id, id) ON DELETE SET NULL,
-  -- The transaction must belong to the budget
-  FOREIGN KEY (budget_id, trx_id) REFERENCES trx (budget_id, id) ON DELETE SET NULL
-);
-
--- The portion of the requested amount users other than the requestor are paying.
--- Splits should total the requested amount on the shared transaction, checked
--- in the domain layer. The source member has no explicit row: their portion is
--- implicitly total - requested. A (0, 0) split means the member is not part of
--- this transaction. Sign mismatch vs the parent is a domain-level warning only.
-CREATE TABLE expense_share_trx_split (
-  id INTEGER PRIMARY KEY,
-  budget_id INTEGER REFERENCES budget (id) ON DELETE SET NULL,
-  expense_share_id INTEGER NOT NULL REFERENCES expense_share (id) ON DELETE CASCADE,
-  expense_share_trx_id INTEGER NOT NULL REFERENCES expense_share_trx (id) ON DELETE CASCADE,
-  split_inflow INTEGER NOT NULL DEFAULT 0,
-  split_outflow INTEGER NOT NULL DEFAULT 0 CHECK (
-    (
-      split_inflow >= 0
-      AND split_outflow = 0
-    )
-    OR (
-      split_outflow >= 0
-      AND split_inflow = 0
-    )
-  ),
-  -- NOTE: membership-in-share (budget_id, expense_share_id) is enforced in the
-  -- domain layer, not here: expense_share_id is NOT NULL so SET NULL would
-  -- violate it, and NO ACTION/CASCADE would delete or block surviving splits
-  -- on leave. Leaving leaves splits untouched (budget_id kept as history).
-  -- The transaction must match with the expense share
-  FOREIGN KEY (expense_share_trx_id, expense_share_id) REFERENCES expense_share_trx (id, expense_share_id) ON DELETE CASCADE
-);
-
--- How the user categorizes their split of a shared transaction in their budget
--- Not shared with other users. Deleted by the domain layer when the owning
--- member leaves; remaining members' lines survive. Reimbursement is a separate
--- step: a transfer to the expense share via trx_line.expense_share_id.
+-- How the counterparty categorizes their share of a shared transaction.
+-- Cross-budget by design
 CREATE TABLE expense_share_trx_split_line (
   id INTEGER PRIMARY KEY,
-  budget_id INTEGER NOT NULL references budget (id) ON DELETE CASCADE,
-  expense_share_trx_split_id INTEGER NOT NULL REFERENCES expense_share_trx_split (id) ON DELETE CASCADE,
-  dest_account_id INTEGER,
+  -- Owner: the tagged counterparty categorizing in their own budget
+  budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
+  expense_share_id INTEGER NOT NULL,
+  -- Source: the original transaction being categorized (other budget)
+  source_budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
+  source_trx_id INTEGER NOT NULL,
+  -- Optional link to the exact split line being categorized
+  source_trx_line_id INTEGER REFERENCES trx_line (id) ON DELETE CASCADE,
   category_id INTEGER,
   outflow INTEGER NOT NULL DEFAULT 0,
   inflow INTEGER NOT NULL DEFAULT 0,
-  -- XOR, can only be one of category (spend) or transfer
-  CHECK (
-    (
-      CASE
-        WHEN dest_account_id IS NOT NULL THEN 1
-        ELSE 0
-      END + CASE
-        WHEN category_id IS NOT NULL THEN 1
-        ELSE 0
-      END
-    ) = 1
-  ),
   CHECK (
     (
       inflow > 0
@@ -176,10 +63,14 @@ CREATE TABLE expense_share_trx_split_line (
       AND inflow = 0
     )
   ),
-  -- All the values must belong to the budget.
-  -- NOTE: line-to-split budget match is enforced in the domain layer, not via
-  -- a (budget_id, split_id) FK: split.budget_id is nullable (SET NULL on budget
-  -- delete) so a composite FK would break surviving lines on detach.
+  -- Cross-budget by design: owner and source must differ
+  CHECK (budget_id != source_budget_id),
+  -- Owner and source must both be members of the same expense share
+  FOREIGN KEY (budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
+  FOREIGN KEY (source_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
+  -- Live reference: source delete cascades categorizations (no snapshot)
+  FOREIGN KEY (source_budget_id, source_trx_id) REFERENCES trx (budget_id, id) ON DELETE CASCADE,
+  -- Categorization targets belong to the owner's budget
   FOREIGN KEY (budget_id, dest_account_id) REFERENCES account (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE
 );
@@ -196,11 +87,16 @@ CREATE TABLE trx_line (
   trx_id INTEGER NOT NULL,
   dest_account_id INTEGER,
   category_id INTEGER,
+  -- expense share qualifier: which share this split/settlement belongs to
   expense_share_id INTEGER,
+  -- split with another member of an expense share
+  split_budget_id INTEGER,
+  -- settlement with another member of an expense share
+  dest_budget_id INTEGER,
   income BOOL NOT NULL DEFAULT false CHECK (income IN (0, 1)),
   outflow INTEGER NOT NULL DEFAULT 0,
   inflow INTEGER NOT NULL DEFAULT 0,
-  -- XOR, can only be one of category (spend), transfer, income, or expense share
+  -- XOR, can only be one of category (spend), transfer, income, split line, or settlement line
   CHECK (
     (
       CASE
@@ -213,11 +109,26 @@ CREATE TABLE trx_line (
         WHEN income THEN 1
         ELSE 0
       END + CASE
-        WHEN expense_share_id IS NOT NULL THEN 1
+        WHEN split_budget_id IS NOT NULL THEN 1
+        ELSE 0
+      END + CASE
+        WHEN dest_budget_id IS NOT NULL THEN 1
         ELSE 0
       END
     ) = 1
   ),
+  -- Split/settlement lines must name their share; other lines must not
+  CHECK (
+    (split_budget_id IS NULL AND dest_budget_id IS NULL)
+    OR expense_share_id IS NOT NULL
+  ),
+  CHECK (
+    expense_share_id IS NULL
+    OR (split_budget_id IS NOT NULL OR dest_budget_id IS NOT NULL)
+  ),
+  -- No self-splits or self-settlements (NULL passes, non-NULL must differ)
+  CHECK (split_budget_id != budget_id),
+  CHECK (dest_budget_id != budget_id),
   CHECK (
     NOT INCOME
     OR (
@@ -237,8 +148,10 @@ CREATE TABLE trx_line (
   ),
   FOREIGN KEY (budget_id, trx_id) REFERENCES trx (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, dest_account_id) REFERENCES account (budget_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
-  FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE
+  FOREIGN KEY (split_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
+  FOREIGN KEY (dest_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE
 );
 
 INSERT INTO
@@ -249,6 +162,8 @@ INSERT INTO
     dest_account_id,
     category_id,
     expense_share_id,
+    split_budget_id,
+    dest_budget_id,
     income,
     outflow,
     inflow
@@ -259,6 +174,8 @@ SELECT
   trx_id,
   dest_account_id,
   category_id,
+  NULL,
+  NULL,
   NULL,
   income,
   outflow,
@@ -277,10 +194,15 @@ CREATE TABLE payee_default_line (
   payee_id INTEGER NOT NULL,
   dest_account_id INTEGER,
   category_id INTEGER,
+  -- expense share qualifier: which share this split/settlement belongs to
   expense_share_id INTEGER,
+  -- split with another member of an expense share
+  split_budget_id INTEGER,
+  -- settlement with another member of an expense share
+  dest_budget_id INTEGER,
   income BOOL NOT NULL DEFAULT false CHECK (income IN (0, 1)),
   percent INTEGER NOT NULL,
-  -- XOR, can only be one of category (spend), transfer, income, or expense share
+  -- XOR, can only be one of category (spend), transfer, income, split line, or settlement line
   CHECK (
     (
       CASE
@@ -293,19 +215,36 @@ CREATE TABLE payee_default_line (
         WHEN income THEN 1
         ELSE 0
       END + CASE
-        WHEN expense_share_id IS NOT NULL THEN 1
+        WHEN split_budget_id IS NOT NULL THEN 1
+        ELSE 0
+      END + CASE
+        WHEN dest_budget_id IS NOT NULL THEN 1
         ELSE 0
       END
     ) = 1
   ),
+  -- Split/settlement lines must name their share; other lines must not
+  CHECK (
+    (split_budget_id IS NULL AND dest_budget_id IS NULL)
+    OR expense_share_id IS NOT NULL
+  ),
+  CHECK (
+    expense_share_id IS NULL
+    OR (split_budget_id IS NOT NULL OR dest_budget_id IS NOT NULL)
+  ),
+  -- No self-splits or self-settlements (NULL passes, non-NULL must differ)
+  CHECK (split_budget_id != budget_id),
+  CHECK (dest_budget_id != budget_id),
   CHECK (
     percent > 0
     AND percent <= 100
   ),
   FOREIGN KEY (budget_id, payee_id) REFERENCES payee (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, dest_account_id) REFERENCES account (budget_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
-  FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE
+  FOREIGN KEY (split_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
+  FOREIGN KEY (dest_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE
 );
 
 INSERT INTO
@@ -316,6 +255,8 @@ INSERT INTO
     dest_account_id,
     category_id,
     expense_share_id,
+    split_budget_id,
+    dest_budget_id,
     income,
   percent
   )
@@ -325,6 +266,8 @@ SELECT
   payee_id,
   dest_account_id,
   category_id,
+  NULL,
+  NULL,
   NULL,
   income,
   percent
@@ -342,8 +285,6 @@ PRAGMA foreign_keys = OFF;
 PRAGMA legacy_alter_table = ON;
 
 DROP TABLE expense_share_trx_split_line;
-DROP TABLE expense_share_trx_split;
-DROP TABLE expense_share_trx;
 DROP TABLE expense_share_code;
 DROP TABLE budget_expense_share;
 DROP TABLE expense_share;
