@@ -48,8 +48,6 @@ CREATE TABLE expense_share_trx_split_line (
   -- Source: the original transaction being categorized (other budget)
   source_budget_id INTEGER NOT NULL REFERENCES budget (id) ON DELETE CASCADE,
   source_trx_id INTEGER NOT NULL,
-  -- Optional link to the exact split line being categorized
-  source_trx_line_id INTEGER REFERENCES trx_line (id) ON DELETE CASCADE,
   category_id INTEGER,
   outflow INTEGER NOT NULL DEFAULT 0,
   inflow INTEGER NOT NULL DEFAULT 0,

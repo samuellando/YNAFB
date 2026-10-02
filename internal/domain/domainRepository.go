@@ -66,4 +66,25 @@ type DomainRepository interface {
 	CreateTrxLine(context.Context, data.CreateTrxLineParams) (data.TrxLine, error)
 	UpdateTrxLine(context.Context, data.UpdateTrxLineParams) (data.TrxLine, error)
 	DeleteTrxLine(context.Context, data.DeleteTrxLineParams) error
+	// Expense share operations
+	GetExpenseShareById(context.Context, data.GetExpenseShareByIdParams) (data.ExpenseShare, error)
+	CreateExpenseShare(context.Context, data.CreateExpenseShareParams) (data.ExpenseShare, error)
+	DeleteExpenseShare(context.Context, data.DeleteExpenseShareParams) error
+	CreateExpenseShareCode(context.Context, data.CreateExpenseShareCodeParams) (data.ExpenseShareCode, error)
+	GetExpenseShareByCode(context.Context, data.GetExpenseShareByCodeParams) (data.GetExpenseShareByCodeRow, error)
+	ListMembershipsByBudget(context.Context, data.ListMembershipsByBudgetParams) ([]data.ListMembershipsByBudgetRow, error)
+	GetMembershipByShare(context.Context, data.GetMembershipByShareParams) (data.GetMembershipByShareRow, error)
+	ListShareMembers(context.Context, data.ListShareMembersParams) ([]data.ListShareMembersRow, error)
+	GetShareMember(context.Context, data.GetShareMemberParams) (data.GetShareMemberRow, error)
+	GetShareMemberByBudget(context.Context, data.GetShareMemberByBudgetParams) (data.GetShareMemberByBudgetRow, error)
+	CreateMembership(context.Context, data.CreateMembershipParams) (data.BudgetExpenseShare, error)
+	UpdateMembership(context.Context, data.UpdateMembershipParams) (data.BudgetExpenseShare, error)
+	DeleteMembership(context.Context, data.DeleteMembershipParams) error
+	ListShareTransactions(context.Context, data.ListShareTransactionsParams) ([]data.ListShareTransactionsRow, error)
+	GetShareTransaction(context.Context, data.GetShareTransactionParams) ([]data.GetShareTransactionRow, error)
+	ListCategorizations(context.Context, data.ListCategorizationsParams) ([]data.ListCategorizationsRow, error)
+	GetSplitLine(context.Context, data.GetSplitLineParams) (data.GetSplitLineRow, error)
+	CreateSplitLine(context.Context, data.CreateSplitLineParams) (data.ExpenseShareTrxSplitLine, error)
+	UpdateSplitLine(context.Context, data.UpdateSplitLineParams) (data.ExpenseShareTrxSplitLine, error)
+	DeleteSplitLine(context.Context, data.DeleteSplitLineParams) error
 }

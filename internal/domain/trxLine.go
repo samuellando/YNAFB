@@ -145,7 +145,7 @@ func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Categ
 	splitBudgetID := sql.NullInt64{}
 	splitBudgetName := sql.NullString{}
 	splitBudgetLoginID := sql.NullInt64{}
-	if share != nil {
+	if splitBudget != nil {
 		splitBudgetExpenseShareID = sql.NullInt64{Valid: true, Int64: int64(splitBudget.ID())}
 		splitBudgetID = sql.NullInt64{Valid: true, Int64: int64(splitBudget.Budget().ID())}
 		splitBudgetName = sql.NullString{Valid: true, String: splitBudget.Budget().Name()}
@@ -155,7 +155,7 @@ func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Categ
 	destBudgetID := sql.NullInt64{}
 	destBudgetName := sql.NullString{}
 	destBudgetLoginID := sql.NullInt64{}
-	if share != nil {
+	if destBudget != nil {
 		destBudgetExpenseShareID = sql.NullInt64{Valid: true, Int64: int64(destBudget.ID())}
 		destBudgetID = sql.NullInt64{Valid: true, Int64: int64(destBudget.Budget().ID())}
 		destBudgetName = sql.NullString{Valid: true, String: destBudget.Budget().Name()}
@@ -359,12 +359,12 @@ func (l *TrxLine) Update(ctx context.Context, destAccount *Account, category *Ca
 		shareID = sql.NullInt64{Valid: true, Int64: int64(share.ID())}
 	}
 	splitBudgetID := sql.NullInt64{}
-	if share != nil {
+	if splitBudget != nil {
 		splitBudgetID = sql.NullInt64{Valid: true, Int64: int64(splitBudget.ID())}
 	}
 	destBudgetID := sql.NullInt64{}
-	if share != nil {
-		destAccountID = sql.NullInt64{Valid: true, Int64: int64(destBudget.ID())}
+	if destBudget != nil {
+		destBudgetID = sql.NullInt64{Valid: true, Int64: int64(destBudget.ID())}
 	}
 	row, err := l.trx.account.budget.service.repo.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 		ID:             int64(l.ID()),
