@@ -81,13 +81,13 @@ func marshalDefaultLine(line *domain.PayeeDefaultLine, dest *domain.Account, cat
 		resp.ExpenseShareId = &id
 	}
 	if splitBudget != nil {
-		id := splitBudget.ID()
+		id := splitBudget.Budget().ID()
 		displayName := splitBudget.DisplayName()
 		resp.SplitBudgetId = &id
 		resp.SplitBudgetDisplayName = &displayName
 	}
 	if destBudget != nil {
-		id := destBudget.ID()
+		id := destBudget.Budget().ID()
 		displayName := destBudget.DisplayName()
 		resp.DestBudgetId = &id
 		resp.DestBudgetDisplayName = &displayName

@@ -21,6 +21,7 @@ import {
   type PayeeDefaultLineInput,
   type TransactionLineInput,
 } from '../../lib/api/budget'
+import { listShares } from '../../lib/api/expenseShare'
 import { categoryOptions, defaultLineAmounts, linePercents } from '../../lib/accountView'
 import { dateFromInput, dateInputValue, isDateInput, todayInput } from '../../lib/date'
 import { centsFromInput, centsToInput, formatMoney } from '../../lib/money'
@@ -28,6 +29,7 @@ import { currentMonth } from '../../lib/month'
 import { PlusIcon, WarningIcon, XIcon } from '../icons'
 import AmountInput from '../ui/AmountInput'
 import DialogShell from '../ui/DialogShell'
+import ShareLineTarget from './ShareLineTarget'
 import { CANCEL_BUTTON, DANGER_BUTTON, PRIMARY_BUTTON } from '../ui/buttons'
 import EntityPicker, { type EntityOption } from '../ui/EntityPicker'
 import { TRANSACTION_LINE_GRID } from './layout'
@@ -46,36 +48,54 @@ type TransactionDialogProps = {
   onSkip?: () => void
 }
 
-type LineKind = 'income' | 'spending' | 'transfer'
+type LineKind = 'income' | 'spending' | 'transfer' | 'split' | 'settlement'
 
 type LineDraft = {
   key: string
   lineId: number | null
   kind: LineKind
+  // Category id, dest account id, or member budget id depending on kind.
   targetId: number | null
+  // Global expense share id for split/settlement lines, null otherwise.
+  shareId: number | null
   outflow: string
   inflow: string
 }
 
 function lineKindOf(line: AccountTransactionLine): LineKind {
+  if (line.expenseShareId !== undefined) {
+    if (line.splitBudgetId !== undefined) return 'split'
+    if (line.destBudgetId !== undefined) return 'settlement'
+  }
   if (line.destAccountId !== undefined) return 'transfer'
   if (line.income) return 'income'
   return 'spending'
 }
 
 function draftFromLine(line: AccountTransactionLine): LineDraft {
+  const kind = lineKindOf(line)
   return {
     key: `line-${line.lineId}`,
     lineId: line.lineId,
-    kind: lineKindOf(line),
-    targetId: line.destAccountId ?? line.categoryId ?? null,
+    kind,
+    targetId:
+      line.destAccountId ?? line.categoryId ?? line.splitBudgetId ?? line.destBudgetId ?? null,
+    shareId: kind === 'split' || kind === 'settlement' ? (line.expenseShareId ?? null) : null,
     outflow: centsToInput(line.outflow),
     inflow: centsToInput(line.inflow),
   }
 }
 
 function emptyDraft(key: string): LineDraft {
-  return { key, lineId: null, kind: 'spending', targetId: null, outflow: '', inflow: '' }
+  return {
+    key,
+    lineId: null,
+    kind: 'spending',
+    targetId: null,
+    shareId: null,
+    outflow: '',
+    inflow: '',
+  }
 }
 
 function draftToInput(draft: LineDraft, outflow: number, inflow: number): TransactionLineInput {
@@ -87,6 +107,15 @@ function draftToInput(draft: LineDraft, outflow: number, inflow: number): Transa
       ? { categoryId: draft.targetId }
       : {}),
     income: draft.kind === 'income',
+    ...(draft.kind === 'split' || draft.kind === 'settlement'
+      ? { expenseShareId: draft.shareId ?? undefined }
+      : {}),
+    ...(draft.kind === 'split' && draft.targetId !== null
+      ? { splitBudgetId: draft.targetId }
+      : {}),
+    ...(draft.kind === 'settlement' && draft.targetId !== null
+      ? { destBudgetId: draft.targetId }
+      : {}),
     outflow,
     inflow,
   }
@@ -110,12 +139,22 @@ function draftsFromDefaults(
   const amounts = defaultLineAmounts(defaults, total)
   return defaults.map((d, i) => {
     const kind: LineKind =
-      d.destAccountId !== undefined ? 'transfer' : d.income ? 'income' : 'spending'
+      d.expenseShareId !== undefined
+        ? d.splitBudgetId !== undefined
+          ? 'split'
+          : 'settlement'
+        : d.destAccountId !== undefined
+          ? 'transfer'
+          : d.income
+            ? 'income'
+            : 'spending'
     return {
       key: newKey(),
       lineId: null,
       kind,
-      targetId: d.destAccountId ?? d.categoryId ?? null,
+      targetId:
+        d.destAccountId ?? d.categoryId ?? d.splitBudgetId ?? d.destBudgetId ?? null,
+      shareId: kind === 'split' || kind === 'settlement' ? (d.expenseShareId ?? null) : null,
       outflow: useOutflow ? centsToInput(amounts[i]) : centsToInput(0),
       inflow: useOutflow ? centsToInput(0) : centsToInput(amounts[i]),
     }
@@ -131,6 +170,15 @@ function defaultLineInput(draft: LineDraft, percent: number): PayeeDefaultLineIn
       ? { categoryId: draft.targetId }
       : {}),
     income: draft.kind === 'income',
+    ...(draft.kind === 'split' || draft.kind === 'settlement'
+      ? { expenseShareId: draft.shareId ?? undefined }
+      : {}),
+    ...(draft.kind === 'split' && draft.targetId !== null
+      ? { splitBudgetId: draft.targetId }
+      : {}),
+    ...(draft.kind === 'settlement' && draft.targetId !== null
+      ? { destBudgetId: draft.targetId }
+      : {}),
     percent,
   }
 }
@@ -168,6 +216,10 @@ export default function TransactionDialog({
     queryKey: ['budget-month', budgetId, current],
     queryFn: () => getBudgetMonth(budgetId, current),
   })
+  const sharesQuery = useQuery({
+    queryKey: ['expense-shares', budgetId],
+    queryFn: () => listShares(budgetId),
+  })
   const payeeOptions: EntityOption[] = useMemo(
     () => (payeesQuery.data ?? []).map((payee) => ({ id: payee.id, name: payee.name })),
     [payeesQuery.data],
@@ -191,6 +243,10 @@ export default function TransactionDialog({
         ...(category.groupName ? { subtext: category.groupName } : {}),
       })),
     [categoryOpts],
+  )
+  const shareOptions: EntityOption[] = useMemo(
+    () => (sharesQuery.data ?? []).map((share) => ({ id: share.expenseShareId, name: share.name })),
+    [sharesQuery.data],
   )
 
   const [payeeId, setPayeeId] = useState<number | null>(transaction?.payeeId ?? null)
@@ -273,8 +329,12 @@ export default function TransactionDialog({
   const lineStates = lines.map((draft) => {
     const lineOut = parseAmount(draft.outflow)
     const lineIn = parseAmount(draft.inflow)
-    const needsTarget = draft.kind === 'spending' || draft.kind === 'transfer'
-    const valid = lineOut !== null && lineIn !== null && (!needsTarget || draft.targetId !== null)
+    const needsTarget = draft.kind !== 'income'
+    const targetComplete =
+      draft.kind === 'split' || draft.kind === 'settlement'
+        ? draft.targetId !== null && draft.shareId !== null
+        : draft.targetId !== null
+    const valid = lineOut !== null && lineIn !== null && (!needsTarget || targetComplete)
     return { draft, out: lineOut ?? 0, in: lineIn ?? 0, valid }
   })
   const validLines = lineStates.every((state) => state.valid)
@@ -286,7 +346,13 @@ export default function TransactionDialog({
     lines.length > 0 &&
     (lineOutTotal !== outflowCents || lineInTotal !== inflowCents)
 
-  const canSave = payeeId !== null && validDate && validAmounts && validLines
+  // Settlement lines must stand alone: the backend rejects a settlement line
+  // on a transaction that already holds one, and glossary settlement
+  // transactions carry exactly one line matching the totals.
+  const hasSettlement = lines.some((draft) => draft.kind === 'settlement')
+  const settlementAlone = !hasSettlement || lines.length === 1
+
+  const canSave = payeeId !== null && validDate && validAmounts && validLines && settlementAlone
 
   function updateDraft(key: string, patch: Partial<LineDraft>) {
     setLines((prev) => prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)))
@@ -294,7 +360,9 @@ export default function TransactionDialog({
 
   function setKind(key: string, kind: LineKind) {
     setLines((prev) =>
-      prev.map((draft) => (draft.key === key ? { ...draft, kind, targetId: null } : draft)),
+      prev.map((draft) =>
+        draft.key === key ? { ...draft, kind, targetId: null, shareId: null } : draft,
+      ),
     )
   }
 
@@ -322,6 +390,7 @@ export default function TransactionDialog({
       queryClient.invalidateQueries({ queryKey: ['account', budgetId, accountId] }),
       queryClient.invalidateQueries({ queryKey: ['accounts', budgetId] }),
       queryClient.invalidateQueries({ queryKey: ['budget-month', budgetId] }),
+      queryClient.invalidateQueries({ queryKey: ['expense-share', budgetId] }),
       ...(payeeId !== null
         ? [queryClient.invalidateQueries({ queryKey: ['payee-defaults', budgetId, payeeId] })]
         : []),
@@ -422,8 +491,13 @@ export default function TransactionDialog({
     return { id: category.id, name: category.name }
   }
 
-  const loading = payeesQuery.isPending || accountsQuery.isPending || monthQuery.isPending
-  const loadError = payeesQuery.isError || accountsQuery.isError || monthQuery.isError
+  const loading =
+    payeesQuery.isPending ||
+    accountsQuery.isPending ||
+    monthQuery.isPending ||
+    sharesQuery.isPending
+  const loadError =
+    payeesQuery.isError || accountsQuery.isError || monthQuery.isError || sharesQuery.isError
 
   return (
     <DialogShell wide onClose={onCancel}>
@@ -449,6 +523,7 @@ export default function TransactionDialog({
               payeesQuery.refetch()
               accountsQuery.refetch()
               monthQuery.refetch()
+              sharesQuery.refetch()
             }}
             className="mt-4 rounded-lg border border-red-800 px-3 py-1.5 text-sm font-medium text-red-400 transition hover:bg-red-900/50"
           >
@@ -524,8 +599,11 @@ export default function TransactionDialog({
             )}
 
             {lines.map((draft, index) => {
-              const needsTarget = draft.kind === 'spending' || draft.kind === 'transfer'
-              const missingTarget = needsTarget && draft.targetId === null
+              const missingTarget =
+                draft.kind !== 'income' &&
+                (draft.targetId === null ||
+                  ((draft.kind === 'split' || draft.kind === 'settlement') &&
+                    draft.shareId === null))
               const badOut = parseAmount(draft.outflow) === null
               const badIn = parseAmount(draft.inflow) === null
               return (
@@ -542,6 +620,8 @@ export default function TransactionDialog({
                     <option value="income">Income</option>
                     <option value="spending">Spending</option>
                     <option value="transfer">Transfer</option>
+                    <option value="split">Split</option>
+                    <option value="settlement">Settlement</option>
                   </select>
                   {draft.kind === 'income' ? (
                     <span className="truncate px-3 py-2 text-sm text-slate-500">Income</span>
@@ -558,7 +638,7 @@ export default function TransactionDialog({
                       createLabel="New category"
                       onEnter={() => focusLineOutflow(draft.key)}
                     />
-                  ) : (
+                  ) : draft.kind === 'transfer' ? (
                     <EntityPicker
                       hideLabel
                       label="To account"
@@ -568,6 +648,21 @@ export default function TransactionDialog({
                       placeholder="Select account"
                       invalid={missingTarget}
                       onEnter={() => focusLineOutflow(draft.key)}
+                    />
+                  ) : (
+                    <ShareLineTarget
+                      budgetId={budgetId}
+                      kind={draft.kind}
+                      shareOptions={shareOptions}
+                      shareId={draft.shareId}
+                      memberBudgetId={draft.targetId}
+                      invalid={missingTarget}
+                      onShareChange={(shareId) =>
+                        updateDraft(draft.key, { shareId, targetId: null })
+                      }
+                      onMemberChange={(memberBudgetId) =>
+                        updateDraft(draft.key, { targetId: memberBudgetId })
+                      }
                     />
                   )}
                   <AmountInput
@@ -619,6 +714,13 @@ export default function TransactionDialog({
                 <WarningIcon className="h-3.5 w-3.5" />
                 Lines ({formatMoney(lineOutTotal)} out, {formatMoney(lineInTotal)} in) don&apos;t
                 add up to the transaction total.
+              </p>
+            )}
+
+            {!settlementAlone && (
+              <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-yellow-300">
+                <WarningIcon className="h-3.5 w-3.5" />
+                A settlement line must be the only line on its transaction.
               </p>
             )}
           </div>

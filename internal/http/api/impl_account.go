@@ -181,6 +181,22 @@ func marshalTrxLines(lines []*domain.TrxLine) []AccountTransactionLine {
 			accountTransactionLine.DestAccountId = &id
 			accountTransactionLine.DestAccountName = &name
 		}
+		if share, err := line.Share(); err == nil {
+			id := share.ID()
+			accountTransactionLine.ExpenseShareId = &id
+		}
+		if split, err := line.SplitBudget(); err == nil {
+			id := split.Budget().ID()
+			name := split.DisplayName()
+			accountTransactionLine.SplitBudgetId = &id
+			accountTransactionLine.SplitBudgetDisplayName = &name
+		}
+		if dest, err := line.DestBudget(); err == nil {
+			id := dest.Budget().ID()
+			name := dest.DisplayName()
+			accountTransactionLine.DestBudgetId = &id
+			accountTransactionLine.DestBudgetDisplayName = &name
+		}
 		res = append(res, accountTransactionLine)
 	}
 	return res
