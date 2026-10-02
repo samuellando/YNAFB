@@ -78,10 +78,12 @@ SELECT
   da.name AS dest_account_name,
   es.default_name AS expense_share_default_name,
   tl.expense_share_id,
-  tl.split_budget_id,
-  tl.dest_budget_id,
+  tl.split_budget_expense_share_id,
+  tl.dest_budget_expense_share_id,
+  sb.id AS split_budget_id,
   sb.name AS split_budget_name,
   sb.login_id AS split_budget_login_id,
+  db.id AS dest_budget_id,
   db.name AS dest_budget_name,
   db.login_id AS dest_budget_login_id,
   CAST((r.account_id IS NOT NULL) AS bool) AS reconciled
@@ -95,8 +97,10 @@ FROM
   LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
   LEFT JOIN account AS da ON tl.dest_account_id = da.id
   LEFT JOIN expense_share AS es ON es.id = tl.expense_share_id
-  LEFT JOIN budget AS sb ON sd.id = tl.split_budget_id
-  LEFT JOIN budget AS db ON db.id = tl.dest_budget_id
+  LEFT JOIN budget_expense_share AS sbes ON sbes.id = tl.split_budget_expense_share_id
+  LEFT JOIN budget AS sb ON sb.id = sbes.budget_id
+  LEFT JOIN budget_expense_share AS dbes ON dbes.id = tl.dest_budget_expense_share_id
+  LEFT JOIN budget AS db ON db.id = dbes.budget_id
   LEFT JOIN reconciliation AS r ON r.account_id = a.id
   AND r.trx_id = t.id
 WHERE
@@ -125,10 +129,16 @@ SELECT
   da.name AS dest_account_name,
   es.default_name AS expense_share_default_name,
   tl.expense_share_id,
-  tl.split_budget_id,
-  tl.dest_budget_id,
+  tl.split_budget_expense_share_id,
+  tl.dest_budget_expense_share_id,
+  sbes.name AS split_budget_expense_share_name,
+  sbes.display_name AS split_budget_expense_share_display_name,
+  sb.id AS split_budget_id,
   sb.name AS split_budget_name,
   sb.login_id AS split_budget_login_id,
+  dbes.name AS dest_budget_expense_share_name,
+  dbes.display_name AS dest_budget_expense_share_display_name,
+  db.id AS dest_budget_id,
   db.name AS dest_budget_name,
   db.login_id AS dest_budget_login_id,
   CAST((r.account_id IS NOT NULL) AS bool) AS reconciled
@@ -142,8 +152,10 @@ FROM
   LEFT JOIN category_group AS cg ON c.category_group_id = cg.id
   LEFT JOIN account AS da ON tl.dest_account_id = da.id
   LEFT JOIN expense_share AS es ON es.id = tl.expense_share_id
-  LEFT JOIN budget AS sb ON sd.id = tl.split_budget_id
-  LEFT JOIN budget AS db ON db.id = tl.dest_budget_id
+  LEFT JOIN budget_expense_share AS sbes ON sbes.id = tl.split_budget_expense_share_id
+  LEFT JOIN budget AS sb ON sb.id = sbes.budget_id
+  LEFT JOIN budget_expense_share AS dbes ON dbes.id = tl.dest_budget_expense_share_id
+  LEFT JOIN budget AS db ON db.id = dbes.budget_id
   LEFT JOIN reconciliation AS r ON r.account_id = a.id
   AND r.trx_id = t.id
 WHERE

@@ -70,22 +70,61 @@ func (s ApiServer) PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLine(ctx co
 			return nil, err
 		}
 	}
+	var expenseShare *domain.ExpenseShare
+	if request.Body.SplitBudgetId != nil {
+		expenseShare, err = s.service.GetExpenseShare(ctx, *request.Body.ExpenseShareId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var splitBudget *domain.ExpenseShareMembership
+	if request.Body.SplitBudgetId != nil {
+		splitBudget, err = expenseShare.GetMembership(ctx, *request.Body.SplitBudgetId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var destBudget *domain.ExpenseShareMembership
+	if request.Body.DestBudgetId != nil {
+		destBudget, err = expenseShare.GetMembership(ctx, *request.Body.DestBudgetId)
+		if err != nil {
+			return nil, err
+		}
+	}
 	trx, err := account.GetTransaction(ctx, trxID)
 	if err != nil {
 		return nil, err
 	}
-	line, err := trx.AddLine(ctx, dest, category, BoolPtrToBool(request.Body.Income), request.Body.Outflow, request.Body.Inflow)
+	line, err := trx.AddLine(ctx, dest, category, BoolPtrToBool(request.Body.Income), expenseShare, splitBudget, destBudget, request.Body.Outflow, request.Body.Inflow)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
 	destAccountID, categoryID := lineRefIDs(line)
+	var expenseShareID *int
+	if expenseShare != nil {
+		expenseShareIDVal := expenseShare.ID()
+		expenseShareID = &expenseShareIDVal
+	}
+	var splitBudgetID *int
+	if splitBudget != nil {
+		splitBudgetIDVal := splitBudget.ID()
+		splitBudgetID = &splitBudgetIDVal
+	}
+	var destBudgetID *int
+	if destBudget != nil {
+		destBudgetIDVal := destBudget.ID()
+		destBudgetID = &destBudgetIDVal
+	}
 	return PostBudgetBudgetIdAccountAccountIdTransactionTrxIdLine200JSONResponse{
 		Id:            line.ID(),
 		TrxId:         line.Trx().ID(),
 		DestAccountId: destAccountID,
 		CategoryId:    categoryID,
 		Income:        line.IsIncome(),
+		ExpenseShareId: expenseShareID,
+		SplitBudgetId: splitBudgetID,
+		DestBudgetId: destBudgetID,
 		Outflow:       line.Outflow(),
 		Inflow:        line.Inflow(),
 	}, nil
@@ -151,7 +190,7 @@ func (s ApiServer) PutBudgetBudgetIdAccountAccountIdTransactionTrxIdLineId(ctx c
 	if err != nil {
 		return nil, err
 	}
-	err = line.Update(ctx, dest, category, BoolPtrToBool(request.Body.Income), request.Body.Outflow, request.Body.Inflow)
+	err = line.Update(ctx, dest, category, BoolPtrToBool(request.Body.Income), nil, nil, nil, request.Body.Outflow, request.Body.Inflow)
 	if err != nil {
 		return nil, err
 	}

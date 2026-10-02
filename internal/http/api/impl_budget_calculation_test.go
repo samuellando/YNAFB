@@ -190,7 +190,7 @@ func TestCalcIncomeInMonth(t *testing.T) {
 	ts, budget, account, payee := calcSetup(t)
 	budget.CreateCategory(ts.ctx, "Groceries", nil)
 	trx, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-1), 0, 100, "")
-	trx.AddLine(ts.ctx, nil, nil, true, 0, 100)
+	trx.AddLine(ts.ctx, nil, nil, true, nil, nil, nil, 0, 100)
 
 	// Before income
 	m := fetchBudgetMonth(t, ts, budget.ID(), sRelMonth(-2))
@@ -227,7 +227,7 @@ func TestCalcSpentInMonth(t *testing.T) {
 		t.Fatal(err)
 	}
 	trx, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-1), 100, 0, "")
-	trx.AddLine(ts.ctx, nil, cat, false, 100, 0)
+	trx.AddLine(ts.ctx, nil, cat, false, nil, nil, nil, 100, 0)
 
 	// before spending
 	m := fetchBudgetMonth(t, ts, budget.ID(), sRelMonth(-2))
@@ -332,12 +332,12 @@ func TestCalcAvailableCarriesPositiveOnly(t *testing.T) {
 	}
 	// User overspends 100 3 months ago
 	trx1, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-3), 100, 0, "")
-	trx1.AddLine(ts.ctx, nil, cat, false, 100, 0)
+	trx1.AddLine(ts.ctx, nil, cat, false, nil, nil, nil, 100, 0)
 	// User spends another 50 in month -1, overallocates and has income
 	trx2, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-1), 50, 0, "")
-	trx2.AddLine(ts.ctx, nil, cat, false, 50, 0)
+	trx2.AddLine(ts.ctx, nil, cat, false, nil, nil, nil, 50, 0)
 	trx3, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-1), 0, 1000, "")
-	trx3.AddLine(ts.ctx, nil, nil, true, 0, 1000)
+	trx3.AddLine(ts.ctx, nil, nil, true, nil, nil, nil, 0, 1000)
 	cat.SetAllocation(ts.ctx, relMonth(-1), 200)
 	// User allocates more in current month
 	cat.SetAllocation(ts.ctx, relMonth(0), 200)
@@ -433,7 +433,7 @@ func TestCalcNegativeAllocations(t *testing.T) {
 	}
 	// Add income
 	trx, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-3), 0, 1000, "")
-	trx.AddLine(ts.ctx, nil, nil, true, 0, 1000)
+	trx.AddLine(ts.ctx, nil, nil, true, nil, nil, nil, 0, 1000)
 	// Allocations
 	cat.SetAllocation(ts.ctx, relMonth(-2), 200)
 	cat.SetAllocation(ts.ctx, relMonth(-1), -300)
@@ -501,9 +501,9 @@ func TestNegativeAllocationOnSpend(t *testing.T) {
 	}
 	// Add income
 	trx, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-3), 0, 1000, "")
-	trx.AddLine(ts.ctx, nil, nil, true, 0, 1000)
+	trx.AddLine(ts.ctx, nil, nil, true, nil, nil, nil, 0, 1000)
 	trx2, _ := account.CreateTransaction(ts.ctx, payee, relMonth(-2), 100, 0, "")
-	trx2.AddLine(ts.ctx, nil, cat, false, 100, 0)
+	trx2.AddLine(ts.ctx, nil, cat, false, nil, nil, nil, 100, 0)
 	// Allocations
 	cat.SetAllocation(ts.ctx, relMonth(-2), -300)
 

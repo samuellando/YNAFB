@@ -86,12 +86,11 @@ CREATE TABLE trx_line (
   trx_id INTEGER NOT NULL,
   dest_account_id INTEGER,
   category_id INTEGER,
-  -- expense share qualifier: which share this split/settlement belongs to
   expense_share_id INTEGER,
   -- split with another member of an expense share
-  split_budget_id INTEGER,
+  split_budget_expense_share_id INTEGER,
   -- settlement with another member of an expense share
-  dest_budget_id INTEGER,
+  dest_budget_expense_share_id INTEGER,
   income BOOL NOT NULL DEFAULT false CHECK (income IN (0, 1)),
   outflow INTEGER NOT NULL DEFAULT 0,
   inflow INTEGER NOT NULL DEFAULT 0,
@@ -108,26 +107,29 @@ CREATE TABLE trx_line (
         WHEN income THEN 1
         ELSE 0
       END + CASE
-        WHEN split_budget_id IS NOT NULL THEN 1
+        WHEN split_budget_expense_share_id IS NOT NULL THEN 1
         ELSE 0
       END + CASE
-        WHEN dest_budget_id IS NOT NULL THEN 1
+        WHEN dest_budget_expense_share_id IS NOT NULL THEN 1
         ELSE 0
       END
     ) = 1
   ),
   -- Split/settlement lines must name their share; other lines must not
   CHECK (
-    (split_budget_id IS NULL AND dest_budget_id IS NULL)
+    (
+      split_budget_expense_share_id IS NULL
+      AND dest_budget_expense_share_id IS NULL
+    )
     OR expense_share_id IS NOT NULL
   ),
   CHECK (
     expense_share_id IS NULL
-    OR (split_budget_id IS NOT NULL OR dest_budget_id IS NOT NULL)
+    OR (
+      split_budget_expense_share_id IS NOT NULL
+      OR dest_budget_expense_share_id IS NOT NULL
+    )
   ),
-  -- No self-splits or self-settlements (NULL passes, non-NULL must differ)
-  CHECK (split_budget_id != budget_id),
-  CHECK (dest_budget_id != budget_id),
   CHECK (
     NOT INCOME
     OR (
@@ -149,8 +151,8 @@ CREATE TABLE trx_line (
   FOREIGN KEY (budget_id, dest_account_id) REFERENCES account (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
-  FOREIGN KEY (split_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
-  FOREIGN KEY (dest_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE
+  FOREIGN KEY (split_budget_expense_share_id, expense_share_id) REFERENCES budget_expense_share (id, expense_share_id) ON DELETE CASCADE,
+  FOREIGN KEY (dest_budget_expense_share_id, expense_share_id) REFERENCES budget_expense_share (id, expense_share_id) ON DELETE CASCADE
 );
 
 INSERT INTO
@@ -161,8 +163,8 @@ INSERT INTO
     dest_account_id,
     category_id,
     expense_share_id,
-    split_budget_id,
-    dest_budget_id,
+    split_budget_expense_share_id,
+    dest_budget_expense_share_id,
     income,
     outflow,
     inflow
@@ -196,9 +198,9 @@ CREATE TABLE payee_default_line (
   -- expense share qualifier: which share this split/settlement belongs to
   expense_share_id INTEGER,
   -- split with another member of an expense share
-  split_budget_id INTEGER,
+  split_budget_expense_share_id INTEGER,
   -- settlement with another member of an expense share
-  dest_budget_id INTEGER,
+  dest_budget_expense_share_id INTEGER,
   income BOOL NOT NULL DEFAULT false CHECK (income IN (0, 1)),
   percent INTEGER NOT NULL,
   -- XOR, can only be one of category (spend), transfer, income, split line, or settlement line
@@ -214,26 +216,29 @@ CREATE TABLE payee_default_line (
         WHEN income THEN 1
         ELSE 0
       END + CASE
-        WHEN split_budget_id IS NOT NULL THEN 1
+        WHEN split_budget_expense_share_id IS NOT NULL THEN 1
         ELSE 0
       END + CASE
-        WHEN dest_budget_id IS NOT NULL THEN 1
+        WHEN dest_budget_expense_share_id IS NOT NULL THEN 1
         ELSE 0
       END
     ) = 1
   ),
   -- Split/settlement lines must name their share; other lines must not
   CHECK (
-    (split_budget_id IS NULL AND dest_budget_id IS NULL)
+    (
+      split_budget_expense_share_id IS NULL
+      AND dest_budget_expense_share_id IS NULL
+    )
     OR expense_share_id IS NOT NULL
   ),
   CHECK (
     expense_share_id IS NULL
-    OR (split_budget_id IS NOT NULL OR dest_budget_id IS NOT NULL)
+    OR (
+      split_budget_expense_share_id IS NOT NULL
+      OR dest_budget_expense_share_id IS NOT NULL
+    )
   ),
-  -- No self-splits or self-settlements (NULL passes, non-NULL must differ)
-  CHECK (split_budget_id != budget_id),
-  CHECK (dest_budget_id != budget_id),
   CHECK (
     percent > 0
     AND percent <= 100
@@ -242,8 +247,8 @@ CREATE TABLE payee_default_line (
   FOREIGN KEY (budget_id, dest_account_id) REFERENCES account (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE,
   FOREIGN KEY (budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
-  FOREIGN KEY (split_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
-  FOREIGN KEY (dest_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE
+  FOREIGN KEY (split_budget_expense_share_id, expense_share_id) REFERENCES budget_expense_share (id, expense_share_id) ON DELETE CASCADE,
+  FOREIGN KEY (dest_budget_expense_share_id, expense_share_id) REFERENCES budget_expense_share (id, expense_share_id) ON DELETE CASCADE
 );
 
 INSERT INTO
@@ -254,8 +259,8 @@ INSERT INTO
     dest_account_id,
     category_id,
     expense_share_id,
-    split_budget_id,
-    dest_budget_id,
+    split_budget_expense_share_id,
+    dest_budget_expense_share_id,
     income,
   percent
   )
