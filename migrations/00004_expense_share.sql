@@ -70,8 +70,7 @@ CREATE TABLE expense_share_trx_split_line (
   FOREIGN KEY (source_budget_id, expense_share_id) REFERENCES budget_expense_share (budget_id, expense_share_id) ON DELETE CASCADE,
   -- Live reference: source delete cascades categorizations (no snapshot)
   FOREIGN KEY (source_budget_id, source_trx_id) REFERENCES trx (budget_id, id) ON DELETE CASCADE,
-  -- Categorization targets belong to the owner's budget
-  FOREIGN KEY (budget_id, dest_account_id) REFERENCES account (budget_id, id) ON DELETE CASCADE,
+  -- Categorization targets belong to the owner's budget (spend only)
   FOREIGN KEY (budget_id, category_id) REFERENCES category (budget_id, id) ON DELETE CASCADE
 );
 

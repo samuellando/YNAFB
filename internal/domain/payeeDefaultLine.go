@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 type PayeeDefaultLine struct {
@@ -14,23 +14,34 @@ type PayeeDefaultLine struct {
 	payee       *Payee
 	destAccount *Account
 	category    *Category
+	// Expense share qualifier (present on split and settlement lines only).
+	// Split/dest member budgets resolve via share-scoped member queries
+	// (queries slice) and stay nil until then.
+	share       *ExpenseShare
+	splitBudget *Budget
+	destBudget  *Budget
 }
 
-// Create a PayeeDefaultLine object from a data row.
-func defaultLineFromRow(ctx context.Context, row data.PayeeDefaultLine, payee *Payee, destAccount *Account, category *Category) *PayeeDefaultLine {
+// Create a PayeeDefaultLine object from a data row. Share-typed relations
+// arrive as objects; call sites pass nil until the share-scoped member
+// queries land.
+func defaultLineFromRow(ctx context.Context, row data.PayeeDefaultLine, payee *Payee, destAccount *Account, category *Category, share *ExpenseShare, splitBudget, destBudget *Budget) *PayeeDefaultLine {
 	line, _ := cache.Get(ctx, row.ID, func() (*PayeeDefaultLine, error) {
 		return &PayeeDefaultLine{
 			row:         row,
 			payee:       payee,
 			destAccount: destAccount,
 			category:    category,
+			share:       share,
+			splitBudget: splitBudget,
+			destBudget:  destBudget,
 		}, nil
 	})
 	return line
 }
 
 // Add a new default line for the payee
-func (p *Payee) AddDefaultLine(ctx context.Context, destAccount *Account, category *Category, income bool, percent int) (*PayeeDefaultLine, error) {
+func (p *Payee) AddDefaultLine(ctx context.Context, destAccount *Account, category *Category, income bool, expenseShare *ExpenseShare, splitBudget, destBudget *Budget, percent int) (*PayeeDefaultLine, error) {
 	defer cache.InvalidateResults(ctx)
 	destAccountID := sql.NullInt64{}
 	if destAccount != nil {
@@ -42,19 +53,37 @@ func (p *Payee) AddDefaultLine(ctx context.Context, destAccount *Account, catego
 		categoryID.Valid = true
 		categoryID.Int64 = int64(category.ID())
 	}
+	expenseShareID := sql.NullInt64{}
+	if expenseShare != nil {
+		expenseShareID.Valid = true
+		expenseShareID.Int64 = int64(expenseShare.ID())
+	}
+	splitBudgetID := sql.NullInt64{}
+	if splitBudget != nil {
+		splitBudgetID.Valid = true
+		splitBudgetID.Int64 = int64(splitBudget.ID())
+	}
+	destBudgetID := sql.NullInt64{}
+	if destBudget != nil {
+		destBudgetID.Valid = true
+		destBudgetID.Int64 = int64(splitBudget.ID())
+	}
 	row, err := p.budget.service.repo.CreatePayeeDefaultLine(ctx, data.CreatePayeeDefaultLineParams{
-		PayeeID:       int64(p.ID()),
-		DestAccountID: destAccountID,
-		CategoryID:    categoryID,
-		Income:        income,
-		Percent:       int64(percent),
-		BudgetID:      int64(p.budget.ID()),
-		LoginID:       int64(p.budget.LoginID()),
+		PayeeID:        int64(p.ID()),
+		DestAccountID:  destAccountID,
+		CategoryID:     categoryID,
+		ExpenseShareID: expenseShareID,
+		SplitBudgetID:  splitBudgetID,
+		DestBudgetID:   destBudgetID,
+		Income:         income,
+		Percent:        int64(percent),
+		BudgetID:       int64(p.budget.ID()),
+		LoginID:        int64(p.budget.LoginID()),
 	})
 	if err != nil {
 		return nil, err
 	}
-	line := defaultLineFromRow(ctx, row, p, destAccount, category)
+	line := defaultLineFromRow(ctx, row, p, destAccount, category, expenseShare, splitBudget, destBudget)
 	return line, nil
 }
 
@@ -80,9 +109,9 @@ func (p *Payee) GetDefaultLine(ctx context.Context, id int) (*PayeeDefaultLine, 
 		var category *Category
 		if row.CategoryID.Valid {
 			category = categoryFromRow(ctx, data.Category{
-				ID:       row.CategoryID.Int64,
-				BudgetID: row.BudgetID,
-				Name:     row.CategoryName.String,
+				ID:              row.CategoryID.Int64,
+				BudgetID:        row.BudgetID,
+				Name:            row.CategoryName.String,
 				CategoryGroupID: row.CategoryGroupID,
 			}, p.budget, categoryGroup)
 		}
@@ -94,15 +123,41 @@ func (p *Payee) GetDefaultLine(ctx context.Context, id int) (*PayeeDefaultLine, 
 				Name:     row.DestAccountName.String,
 			}, p.budget)
 		}
+		var expenseShare *ExpenseShare
+		if row.ExpenseShareID.Valid {
+			expenseShare = expenseShareFromRow(ctx, data.ExpenseShare{
+				ID:          row.ExpenseShareID.Int64,
+				DefaultName: row.ExpenseShareDefaultName.String,
+			}, p.budget.service)
+		}
+		var splitBudget *Budget
+		if row.SplitBudgetID.Valid {
+			splitBudget = budgetFromRow(ctx, data.Budget{
+				ID:      row.SplitBudgetID.Int64,
+				LoginID: row.SplitBudgetLoginID.Int64,
+				Name:    row.SplitBudgetName.String,
+			}, p.budget.service)
+		}
+		var destBudget *Budget
+		if row.DestBudgetID.Valid {
+			splitBudget = budgetFromRow(ctx, data.Budget{
+				ID:      row.DestBudgetID.Int64,
+				LoginID: row.DestBudgetLoginID.Int64,
+				Name:    row.DestBudgetName.String,
+			}, p.budget.service)
+		}
 		return defaultLineFromRow(ctx, data.PayeeDefaultLine{
-			ID: row.ID,
-			BudgetID: row.BudgetID,
-			PayeeID: row.PayeeID,
-			DestAccountID: row.DestAccountID,
-			CategoryID: row.CategoryID,
-			Income: row.Income,
-			Percent: row.Percent,
-		}, p, destAccount, category), nil
+			ID:             row.ID,
+			BudgetID:       row.BudgetID,
+			PayeeID:        row.PayeeID,
+			DestAccountID:  row.DestAccountID,
+			CategoryID:     row.CategoryID,
+			ExpenseShareID: row.ExpenseShareID,
+			SplitBudgetID:  row.SplitBudgetID,
+			DestBudgetID:   row.DestBudgetID,
+			Income:         row.Income,
+			Percent:        row.Percent,
+		}, p, destAccount, category, expenseShare, splitBudget, destBudget), nil
 	})
 }
 
@@ -140,18 +195,45 @@ func (l *PayeeDefaultLine) Category() (*Category, error) {
 	return l.category, nil
 }
 
+// Get the expense share of the default line, returns an error if none
+func (l *PayeeDefaultLine) Share() (*ExpenseShare, error) {
+	if l.row.ExpenseShareID.Valid {
+		return l.share, nil
+	}
+	return nil, fmt.Errorf("Default line is not a split or settlement line")
+}
 
-func (l *PayeeDefaultLine) Update(ctx context.Context, destAccountID, categoryID *int, income bool, percent int) error {
+// Get the split line tagged member budget, returns an error if none
+func (l *PayeeDefaultLine) SplitBudget() (*Budget, error) {
+	if l.row.SplitBudgetID.Valid {
+		return l.splitBudget, nil
+	}
+	return nil, fmt.Errorf("Default line is not a split line")
+}
+
+// Get the settlement line counterparty member budget, returns an error if none
+func (l *PayeeDefaultLine) DestBudget() (*Budget, error) {
+	if l.row.DestBudgetID.Valid {
+		return l.destBudget, nil
+	}
+	return nil, fmt.Errorf("Default line is not a settlement line")
+}
+
+func (l *PayeeDefaultLine) Update(ctx context.Context, destAccountID, categoryID *int, income bool, expenseShareID, splitBudgetID, destBudgetID *int, percent int) error {
 	defer cache.InvalidateResults(ctx)
+	// TODO: this is should take in the actual domain objects, derive the IDs from them and update the pointers in the pdl
 	row, err := l.payee.budget.service.repo.UpdatePayeeDefaultLine(ctx, data.UpdatePayeeDefaultLineParams{
-		PayeeID:       int64(l.payee.ID()),
-		DestAccountID: nullInt64FromInt(destAccountID),
-		CategoryID:    nullInt64FromInt(categoryID),
-		Income:        income,
-		Percent:       int64(percent),
-		ID:            int64(l.ID()),
-		BudgetID:      int64(l.payee.budget.ID()),
-		LoginID:       int64(l.payee.budget.LoginID()),
+		PayeeID:        int64(l.payee.ID()),
+		DestAccountID:  nullInt64FromInt(destAccountID),
+		CategoryID:     nullInt64FromInt(categoryID),
+		ExpenseShareID: nullInt64FromInt(expenseShareID),
+		SplitBudgetID:  nullInt64FromInt(splitBudgetID),
+		DestBudgetID:   nullInt64FromInt(destBudgetID),
+		Income:         income,
+		Percent:        int64(percent),
+		ID:             int64(l.ID()),
+		BudgetID:       int64(l.payee.budget.ID()),
+		LoginID:        int64(l.payee.budget.LoginID()),
 	})
 	if err != nil {
 		return err
@@ -169,4 +251,3 @@ func (l *PayeeDefaultLine) Delete(ctx context.Context) error {
 		LoginID:  int64(l.payee.budget.LoginID()),
 	})
 }
-
