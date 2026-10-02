@@ -629,8 +629,12 @@ export interface paths {
                         categoryId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
-                        /** @description The expense share id (for reimbursement lines) */
+                        /** @description The expense share id (required on split and settlement lines, absent otherwise) */
                         expenseShareId?: number;
+                        /** @description The tagged member budget id (for split lines, mutually exclusive with destBudgetId) */
+                        splitBudgetId?: number;
+                        /** @description The counterparty member budget id (for settlement lines, mutually exclusive with splitBudgetId) */
+                        destBudgetId?: number;
                         /** @description The outflow of this line */
                         outflow: number;
                         /** @description The inflow of this line */
@@ -690,8 +694,12 @@ export interface paths {
                         categoryId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
-                        /** @description The expense share id (for reimbursement lines) */
+                        /** @description The expense share id (required on split and settlement lines, absent otherwise) */
                         expenseShareId?: number;
+                        /** @description The tagged member budget id (for split lines, mutually exclusive with destBudgetId) */
+                        splitBudgetId?: number;
+                        /** @description The counterparty member budget id (for settlement lines, mutually exclusive with splitBudgetId) */
+                        destBudgetId?: number;
                         /** @description The outflow of this line */
                         outflow: number;
                         /** @description The inflow of this line */
@@ -1421,8 +1429,12 @@ export interface paths {
                         categoryId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
-                        /** @description The expense share id (for reimbursement lines) */
+                        /** @description The expense share id (required on split and settlement lines, absent otherwise) */
                         expenseShareId?: number;
+                        /** @description The tagged member budget id (for split lines, mutually exclusive with destBudgetId) */
+                        splitBudgetId?: number;
+                        /** @description The counterparty member budget id (for settlement lines, mutually exclusive with splitBudgetId) */
+                        destBudgetId?: number;
                         /** @description The percent of the transaction this line accounts for */
                         percent: number;
                     };
@@ -1478,8 +1490,12 @@ export interface paths {
                         categoryId?: number;
                         /** @description Whether this is an income line */
                         income?: boolean;
-                        /** @description The expense share id (for reimbursement lines) */
+                        /** @description The expense share id (required on split and settlement lines, absent otherwise) */
                         expenseShareId?: number;
+                        /** @description The tagged member budget id (for split lines, mutually exclusive with destBudgetId) */
+                        splitBudgetId?: number;
+                        /** @description The counterparty member budget id (for settlement lines, mutually exclusive with splitBudgetId) */
+                        destBudgetId?: number;
                         /** @description The percent of the transaction this line accounts for */
                         percent: number;
                     };
@@ -1659,7 +1675,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an expense share with members, shared transactions and splits */
+        /** Get an expense share with members, transactions and summary */
         get: {
             parameters: {
                 query?: never;
@@ -1750,7 +1766,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/budget/{budgetId}/expense-share/{shareId}/codes": {
+    "/budget/{budgetId}/expense-share/{shareId}/code": {
         parameters: {
             query?: never;
             header?: never;
@@ -1791,246 +1807,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/budget/{budgetId}/expense-share/{shareId}/transactions": {
+    "/budget/{budgetId}/expense-share/{shareId}/transaction/{trxId}/line": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Publish a transaction to an expense share (requested sums the source expense-share lines, snapshot taken once) */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description the budget id */
-                    budgetId: string;
-                    /** @description the expense share id */
-                    shareId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        /** @description The source transaction to publish */
-                        trxId: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successfully published */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["sharedTransaction"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a shared transaction with all splits (only the caller's own split lines included) */
+        /** List my categorizations of a shared transaction */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description the budget id */
+                    /** @description the categorizing budget id */
                     budgetId: string;
                     /** @description the expense share id */
                     shareId: string;
-                    /** @description the shared transaction id */
-                    sharedTrxId: string;
+                    /** @description the source transaction id */
+                    trxId: string;
                 };
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description The shared transaction */
+                /** @description My categorizations for the source transaction */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["sharedTransaction"];
+                        "application/json": components["schemas"]["splitCategorization"][];
                     };
                 };
             };
         };
-        /** Re-snapshot a shared transaction from its source (re-sums requested, re-copies totals) */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description the budget id */
-                    budgetId: string;
-                    /** @description the expense share id */
-                    shareId: string;
-                    /** @description the shared transaction id */
-                    sharedTrxId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        /** @description The source transaction to re-snapshot from (defaults to the linked source) */
-                        trxId?: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successfully re-snapshotted */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["sharedTransaction"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        /** Unpublish a shared transaction for all members */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description the budget id */
-                    budgetId: string;
-                    /** @description the expense share id */
-                    shareId: string;
-                    /** @description the shared transaction id */
-                    sharedTrxId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successfully unpublished */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}/splits/{memberBudgetId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Set any member's split portion (open-edit, 0/0 means not participating, sum mismatch is a warning) */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description the budget id */
-                    budgetId: string;
-                    /** @description the expense share id */
-                    shareId: string;
-                    /** @description the shared transaction id */
-                    sharedTrxId: string;
-                    /** @description the member budget whose split is set */
-                    memberBudgetId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        /** @description The member's outflow portion */
-                        splitOutflow: number;
-                        /** @description The member's inflow portion */
-                        splitInflow: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successfully set */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["shareSplit"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}/splits/{memberBudgetId}/lines": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
         put?: never;
-        /** Categorize my split of a shared transaction (private to the owning budget) */
+        /** Categorize my portion of a shared transaction (counterparty of the source trx) */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description the budget id */
+                    /** @description the categorizing budget id (must be a member of the share) */
                     budgetId: string;
                     /** @description the expense share id */
                     shareId: string;
-                    /** @description the shared transaction id */
-                    sharedTrxId: string;
-                    /** @description the member budget whose split is categorized (must match the path budget) */
-                    memberBudgetId: string;
+                    /** @description the source transaction id (in another member budget, source budget resolved backend-side) */
+                    trxId: string;
                 };
                 cookie?: never;
             };
             requestBody?: {
                 content: {
                     "application/json": {
-                        /** @description The destination account id (for transfer lines) */
-                        destAccountId?: number;
-                        /** @description The category id (for spend lines) */
-                        categoryId?: number;
-                        /** @description The outflow of this line */
+                        /** @description The category id (spend only) */
+                        categoryId: number;
+                        /** @description The outflow of this categorization */
                         outflow: number;
-                        /** @description The inflow of this line */
+                        /** @description The inflow of this categorization */
                         inflow: number;
                     };
                 };
@@ -2042,7 +1877,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["splitLine"];
+                        "application/json": components["schemas"]["splitCategorization"];
                     };
                 };
             };
@@ -2053,7 +1888,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/budget/{budgetId}/expense-share/{shareId}/transactions/{sharedTrxId}/splits/{memberBudgetId}/lines/{lineId}": {
+    "/budget/{budgetId}/expense-share/{shareId}/transaction/{trxId}/line/{lineId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2061,21 +1896,19 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update my split line (private to the owning budget) */
+        /** Update my categorization of a shared transaction */
         put: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description the budget id */
+                    /** @description the categorizing budget id */
                     budgetId: string;
                     /** @description the expense share id */
                     shareId: string;
-                    /** @description the shared transaction id */
-                    sharedTrxId: string;
-                    /** @description the member budget whose split is categorized (must match the path budget) */
-                    memberBudgetId: string;
-                    /** @description the split line id */
+                    /** @description the source transaction id */
+                    trxId: string;
+                    /** @description the categorization id */
                     lineId: string;
                 };
                 cookie?: never;
@@ -2083,13 +1916,11 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        /** @description The destination account id (for transfer lines) */
-                        destAccountId?: number;
-                        /** @description The category id (for spend lines) */
-                        categoryId?: number;
-                        /** @description The outflow of this line */
+                        /** @description The category id (spend only) */
+                        categoryId: number;
+                        /** @description The outflow of this categorization */
                         outflow: number;
-                        /** @description The inflow of this line */
+                        /** @description The inflow of this categorization */
                         inflow: number;
                     };
                 };
@@ -2101,27 +1932,25 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["splitLine"];
+                        "application/json": components["schemas"]["splitCategorization"];
                     };
                 };
             };
         };
         post?: never;
-        /** Delete my split line (private to the owning budget) */
+        /** Delete my categorization of a shared transaction */
         delete: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description the budget id */
+                    /** @description the categorizing budget id */
                     budgetId: string;
                     /** @description the expense share id */
                     shareId: string;
-                    /** @description the shared transaction id */
-                    sharedTrxId: string;
-                    /** @description the member budget whose split is categorized (must match the path budget) */
-                    memberBudgetId: string;
-                    /** @description the split line id */
+                    /** @description the source transaction id */
+                    trxId: string;
+                    /** @description the categorization id */
                     lineId: string;
                 };
                 cookie?: never;
@@ -2239,7 +2068,8 @@ export interface components {
         };
         /**
          * @description a transaction line, can be one of a transfer to a destination account,
-         *     income, a categorization, or a reimbursement to an expense share.
+         *     income, a categorization, a split tagging another member budget,
+         *     or a settlement with another member budget.
          */
         accountTransactionLine: {
             lineId: number;
@@ -2247,8 +2077,16 @@ export interface components {
             destAccountName?: string;
             categoryId?: number;
             categoryName?: string;
-            /** @description The expense share id (present on reimbursement lines) */
+            /** @description The expense share id (present on split and settlement lines) */
             expenseShareId?: number;
+            /** @description The tagged member budget id (present on split lines) */
+            splitBudgetId?: number;
+            /** @description How the tagged member is displayed (present on split lines in responses) */
+            splitBudgetDisplayName?: string;
+            /** @description The counterparty member budget id (present on settlement lines) */
+            destBudgetId?: number;
+            /** @description How the settlement counterparty is displayed (present on settlement lines in responses) */
+            destBudgetDisplayName?: string;
             income: boolean;
             outflow: number;
             inflow: number;
@@ -2315,8 +2153,16 @@ export interface components {
             categoryName?: string;
             /** @description Whether this is an income line */
             income: boolean;
-            /** @description The expense share id (present on reimbursement lines) */
+            /** @description The expense share id (present on split and settlement lines) */
             expenseShareId?: number;
+            /** @description The tagged member budget id (present on split lines) */
+            splitBudgetId?: number;
+            /** @description How the tagged member is displayed (present on split lines in responses) */
+            splitBudgetDisplayName?: string;
+            /** @description The counterparty member budget id (present on settlement lines) */
+            destBudgetId?: number;
+            /** @description How the settlement counterparty is displayed (present on settlement lines in responses) */
+            destBudgetDisplayName?: string;
             /** @description The percent of the transaction this line accounts for */
             percent: number;
         };
@@ -2347,8 +2193,16 @@ export interface components {
             categoryId?: number;
             /** @description Whether this is an income line */
             income: boolean;
-            /** @description The expense share id (present on reimbursement lines) */
+            /** @description The expense share id (present on split and settlement lines) */
             expenseShareId?: number;
+            /** @description The tagged member budget id (present on split lines) */
+            splitBudgetId?: number;
+            /** @description How the tagged member is displayed (present on split lines in responses) */
+            splitBudgetDisplayName?: string;
+            /** @description The counterparty member budget id (present on settlement lines) */
+            destBudgetId?: number;
+            /** @description How the settlement counterparty is displayed (present on settlement lines in responses) */
+            destBudgetDisplayName?: string;
             /** @description The outflow of this line */
             outflow: number;
             /** @description The inflow of this line */
@@ -2371,11 +2225,11 @@ export interface components {
             summary: components["schemas"]["expenseShareSummary"];
             /** @description All budgets in the expense share */
             members: components["schemas"]["shareMember"][];
-            /** @description Published snapshot transactions with splits (only the caller's own split lines included) */
-            sharedTransactions: components["schemas"]["sharedTransaction"][];
+            /** @description Live source transactions carrying split or settlement lines in this share (totals/payee/date/note resolved live, only the caller's own categorizations included) */
+            transactions: components["schemas"]["expenseShareTransaction"][];
         };
         expenseShareSummary: {
-            /** @description Caller net (requested outflow minus inflow where I source, minus my splits elsewhere; positive means others owe me) */
+            /** @description Caller net (splits I tagged others minus splits others tagged me minus settlements I sent plus settlements I received, outflow minus inflow; positive means others owe me; categorizations are balance-neutral) */
             balance: number;
             /** @description Pairwise nets with each other active member (self excluded, zero-activity omitted) */
             memberBalances: components["schemas"]["expenseShareMemberBalance"][];
@@ -2385,7 +2239,7 @@ export interface components {
             budgetId: number;
             /** @description How this member is displayed to other members */
             displayName: string;
-            /** @description Net with this member (their splits on my publishes minus my splits on theirs, outflow minus inflow; positive means they owe me) */
+            /** @description Net with this member (splits I tagged them minus splits they tagged me minus settlements I sent them plus settlements I received from them, outflow minus inflow; positive means they owe me) */
             balance: number;
         };
         shareMember: {
@@ -2400,50 +2254,57 @@ export interface components {
             /** @description When the code expires (RFC3339, server-decided) */
             expires: string;
         };
-        sharedTransaction: {
-            /** @description The shared transaction id */
-            id: number;
-            /** @description The budget ID of the member who published the transaction */
-            sourceBudget: number;
-            /** @description The expense share it was published to */
-            expenseShareId: number;
-            /** @description Snapshot of the source payee name */
+        expenseShareTransaction: {
+            /** @description The member budget holding the source transaction */
+            sourceBudgetId: number;
+            /** @description How the source member is displayed */
+            sourceBudgetDisplayName: string;
+            /** @description The source transaction id (live reference, cascades on delete) */
+            trxId: number;
+            /** @description Live source payee name */
             payeeName: string;
-            /** @description Snapshot of the source date (RFC3339) */
+            /** @description Live source date (RFC3339) */
             date: string;
-            /** @description Snapshot of the source total outflow */
+            /** @description Live source total outflow */
             totalOutflow: number;
-            /** @description Snapshot of the source total inflow */
+            /** @description Live source total inflow */
             totalInflow: number;
-            /** @description Sum of the source expense-share lines (outflow) */
-            requestedOutflow: number;
-            /** @description Sum of the source expense-share lines (inflow) */
-            requestedInflow: number;
-            /** @description Snapshot of the source note */
+            /** @description Live source note */
             note: string;
-            /** @description Every member's portion (open-edit by any member) */
-            splits: components["schemas"]["shareSplit"][];
+            /** @description Split lines on the source transaction tagging member budgets */
+            splitLines?: components["schemas"]["expenseShareSplitLine"][];
+            /** @description Present only on single-line settlement transactions; the settlement amount always equals the parent totals */
+            settlementLine?: components["schemas"]["expenseShareSettlementLine"];
+            /** @description Only the caller's own split categorizations of this source transaction */
+            myCategorizations?: components["schemas"]["splitCategorization"][];
         };
-        shareSplit: {
-            /** @description The member budget this split belongs to */
-            memberBudgetId: number;
-            /** @description The member's outflow portion (0,0 means not participating) */
-            splitOutflow: number;
-            /** @description The member's inflow portion (0,0 means not participating) */
-            splitInflow: number;
-            /** @description Only the caller's own categorization lines, omitted for other members */
-            lines: components["schemas"]["splitLine"][];
-        };
-        splitLine: {
-            /** @description The split line id */
-            id: number;
-            /** @description The destination account id (present on transfer lines) */
-            destAccountId?: number;
-            /** @description The category id (present on spend lines) */
-            categoryId?: number;
-            /** @description The outflow of this line */
+        expenseShareSplitLine: {
+            /** @description The counterparty member budget id */
+            splitBudgetId: number;
+            /** @description How the tagged member is displayed */
+            splitBudgetDisplayName: string;
+            /** @description The outflow portion tagged */
             outflow: number;
-            /** @description The inflow of this line */
+            /** @description The inflow portion tagged */
+            inflow: number;
+        };
+        /** @description A settlement counterparty; the parent single-line transaction totals are the settlement amount */
+        expenseShareSettlementLine: {
+            /** @description The counterparty member budget id */
+            destBudgetId: number;
+            /** @description How the counterparty is displayed */
+            destBudgetDisplayName: string;
+        };
+        splitCategorization: {
+            /** @description The categorization id */
+            id: number;
+            /** @description The category id (spend only) */
+            categoryId?: number;
+            /** @description The category name (present on responses) */
+            categoryName?: string;
+            /** @description The outflow of this categorization */
+            outflow: number;
+            /** @description The inflow of this categorization */
             inflow: number;
         };
     };

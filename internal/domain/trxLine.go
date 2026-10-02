@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/db/types"
 )
 
@@ -15,9 +15,12 @@ type TrxLine struct {
 	trx                *Trx
 	category           *Category
 	destinationAccount *Account
+	share              *ExpenseShare
+	splitBudget        *Budget
+	destBudget         *Budget
 }
 
-// Load a trx line from a row. If the row has no line return nil
+// Load a trx line from a row.
 func trxLineFromRow(ctx context.Context, row data.ListTrxsAndLinesRow, trx *Trx) *TrxLine {
 	if !row.LineID.Valid {
 		return nil
@@ -25,14 +28,17 @@ func trxLineFromRow(ctx context.Context, row data.ListTrxsAndLinesRow, trx *Trx)
 	line, _ := cache.Get(ctx, row.LineID.Int64, func() (*TrxLine, error) {
 		line := &TrxLine{
 			row: data.TrxLine{
-				ID:            row.LineID.Int64,
-				BudgetID:      int64(trx.account.budget.ID()),
-				TrxID:         row.Trx.ID,
-				DestAccountID: row.DestAccountID,
-				CategoryID:    row.CategoryID,
-				Income:        row.LineIncome.Bool,
-				Inflow:        row.LineInflow.Int64,
-				Outflow:       row.LineOutflow.Int64,
+				ID:             row.LineID.Int64,
+				BudgetID:       int64(trx.account.budget.ID()),
+				TrxID:          row.Trx.ID,
+				DestAccountID:  row.DestAccountID,
+				CategoryID:     row.CategoryID,
+				Income:         row.LineIncome.Bool,
+				ExpenseShareID: row.ExpenseShareID,
+				SplitBudgetID:  row.SplitBudgetID,
+				DestBudgetID:   row.DestBudgetID,
+				Inflow:         row.LineInflow.Int64,
+				Outflow:        row.LineOutflow.Int64,
 			},
 			trx: trx,
 		}
@@ -60,18 +66,43 @@ func trxLineFromRow(ctx context.Context, row data.ListTrxsAndLinesRow, trx *Trx)
 				Name:     row.DestAccountName.String,
 			}, trx.account.budget)
 		}
+		if row.ExpenseShareID.Valid {
+			line.share = expenseShareFromRow(ctx, data.ExpenseShare{
+				ID:          row.ExpenseShareID.Int64,
+				DefaultName: row.ExpenseShareDefaultName.String,
+			}, trx.account.budget.service)
+		}
+		if row.SplitBudgetID.Valid {
+			line.splitBudget = budgetFromRow(ctx, data.Budget{
+				ID:      row.SplitBudgetID.Int64,
+				Name:    row.SplitBudgetName.String,
+				LoginID: row.SplitBudgetLoginID.Int64,
+			}, trx.account.budget.service)
+		}
+		if row.DestBudgetID.Valid {
+			line.destBudget = budgetFromRow(ctx, data.Budget{
+				ID:      row.DestBudgetID.Int64,
+				Name:    row.DestBudgetName.String,
+				LoginID: row.DestBudgetLoginID.Int64,
+			}, trx.account.budget.service)
+		}
 		return line, nil
 	})
 	return line
 }
 
 // Create and add a line to a transaction
-func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Category, income bool, outflow, inflow int) (*TrxLine, error) {
+func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Category, income bool, share *ExpenseShare, splitBudget, destBudget *Budget, outflow, inflow int) (*TrxLine, error) {
 	if t.IsMirror() {
 		return nil, fmt.Errorf("Mirror transactions cannot be edited")
 	}
 	if destAccount != nil && destAccount.ID() == t.account.ID() {
 		return nil, fmt.Errorf("Transfer destination must differ from source account")
+	}
+	for _, existing := range t.lines {
+		if _, err := existing.DestBudget(); err == nil {
+			return nil, fmt.Errorf("Settlement transactions hold exactly one line")
+		}
 	}
 	defer cache.InvalidateResults(ctx)
 	destAccountID := sql.NullInt64{}
@@ -92,15 +123,40 @@ func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Categ
 			categoryGroupName = sql.NullString{Valid: true, String: category.group.Name()}
 		}
 	}
+	shareID := sql.NullInt64{}
+	shareDefaultName := sql.NullString{}
+	if share != nil {
+		shareID = sql.NullInt64{Valid: true, Int64: int64(share.ID())}
+		shareDefaultName = sql.NullString{Valid: true, String: share.DefaultName()}
+	}
+	splitBudgetID := sql.NullInt64{}
+	splitBudgetName := sql.NullString{}
+	splitBudgetLoginID := sql.NullInt64{}
+	if share != nil {
+		splitBudgetID = sql.NullInt64{Valid: true, Int64: int64(splitBudget.ID())}
+		splitBudgetName = sql.NullString{Valid: true, String: splitBudget.Name()}
+		splitBudgetLoginID = sql.NullInt64{Valid: true, Int64: int64(splitBudget.LoginID())}
+	}
+	destBudgetID := sql.NullInt64{}
+	destBudgetName := sql.NullString{}
+	destBudgetLoginID := sql.NullInt64{}
+	if share != nil {
+		destBudgetID = sql.NullInt64{Valid: true, Int64: int64(destBudget.ID())}
+		destBudgetName = sql.NullString{Valid: true, String: destBudget.Name()}
+		destBudgetLoginID = sql.NullInt64{Valid: true, Int64: int64(destBudget.LoginID())}
+	}
 	row, err := t.account.budget.service.repo.CreateTrxLine(ctx, data.CreateTrxLineParams{
-		TrxID:         int64(t.ID()),
-		DestAccountID: destAccountID,
-		CategoryID:    categoryID,
-		Income:        income,
-		Outflow:       int64(outflow),
-		Inflow:        int64(inflow),
-		BudgetID:      int64(t.account.budget.ID()),
-		LoginID:       int64(t.account.budget.LoginID()),
+		TrxID:          int64(t.ID()),
+		DestAccountID:  destAccountID,
+		CategoryID:     categoryID,
+		Income:         income,
+		ExpenseShareID: shareID,
+		SplitBudgetID:  splitBudgetID,
+		DestBudgetID:   destBudgetID,
+		Outflow:        int64(outflow),
+		Inflow:         int64(inflow),
+		BudgetID:       int64(t.account.budget.ID()),
+		LoginID:        int64(t.account.budget.LoginID()),
 	})
 	if err != nil {
 		return nil, err
@@ -116,19 +172,27 @@ func (t *Trx) AddLine(ctx context.Context, destAccount *Account, category *Categ
 			TotalInflow:  int64(t.TotalInflow()),
 			Note:         t.Note(),
 		},
-		AccountName:       t.account.Name(),
-		PayeeName:         t.payee.Name(),
-		LineID:            sql.NullInt64{Valid: true, Int64: row.ID},
-		LineIncome:        sql.NullBool{Valid: true, Bool: row.Income},
-		LineInflow:        sql.NullInt64{Valid: true, Int64: row.Inflow},
-		LineOutflow:       sql.NullInt64{Valid: true, Int64: row.Outflow},
-		CategoryID:        categoryID,
-		CategoryName:      categoryName,
-		CategoryGroupID:   categoryGroupID,
-		CategoryGroupName: categoryGroupName,
-		DestAccountID:     destAccountID,
-		DestAccountName:   destAccountName,
-		Reconciled:        t.Reconciled(),
+		AccountName:             t.account.Name(),
+		PayeeName:               t.payee.Name(),
+		LineID:                  sql.NullInt64{Valid: true, Int64: row.ID},
+		LineIncome:              sql.NullBool{Valid: true, Bool: row.Income},
+		LineInflow:              sql.NullInt64{Valid: true, Int64: row.Inflow},
+		LineOutflow:             sql.NullInt64{Valid: true, Int64: row.Outflow},
+		CategoryID:              categoryID,
+		CategoryName:            categoryName,
+		CategoryGroupID:         categoryGroupID,
+		CategoryGroupName:       categoryGroupName,
+		DestAccountID:           destAccountID,
+		DestAccountName:         destAccountName,
+		ExpenseShareID:          shareID,
+		ExpenseShareDefaultName: shareDefaultName,
+		SplitBudgetID:           splitBudgetID,
+		SplitBudgetName:         splitBudgetName,
+		SplitBudgetLoginID:      splitBudgetLoginID,
+		DestBudgetID:            destBudgetID,
+		DestBudgetName:          destBudgetName,
+		DestBudgetLoginID:       destBudgetLoginID,
+		Reconciled:              t.Reconciled(),
 	}, t)
 	t.lines = append(t.lines, line)
 	return line, nil
@@ -149,7 +213,7 @@ func (t *Trx) GetLine(ctx context.Context, id int) (*TrxLine, error) {
 		if err != nil {
 			return nil, err
 		}
-		return trxLineFromRow(ctx, data.ListTrxsAndLinesRow{
+		line := trxLineFromRow(ctx, data.ListTrxsAndLinesRow{
 			Trx: data.Trx{
 				ID:           int64(t.ID()),
 				BudgetID:     int64(t.account.budget.ID()),
@@ -160,20 +224,29 @@ func (t *Trx) GetLine(ctx context.Context, id int) (*TrxLine, error) {
 				TotalInflow:  int64(t.TotalInflow()),
 				Note:         t.Note(),
 			},
-			AccountName:       t.account.Name(),
-			PayeeName:         t.payee.Name(),
-			LineID:            sql.NullInt64{Valid: true, Int64: row.TrxLine.ID},
-			LineIncome:        sql.NullBool{Valid: true, Bool: row.TrxLine.Income},
-			LineInflow:        sql.NullInt64{Valid: true, Int64: row.TrxLine.Inflow},
-			LineOutflow:       sql.NullInt64{Valid: true, Int64: row.TrxLine.Outflow},
-			CategoryID:        row.TrxLine.CategoryID,
-			CategoryName:      row.CategoryName,
-			CategoryGroupID:   row.CategoryGroupID,
-			CategoryGroupName: row.CategoryGroupName,
-			DestAccountID:     row.TrxLine.DestAccountID,
-			DestAccountName:   row.DestAccountName,
-			Reconciled:        t.Reconciled(),
-		}, t), nil
+			AccountName:             t.account.Name(),
+			PayeeName:               t.payee.Name(),
+			LineID:                  sql.NullInt64{Valid: true, Int64: row.TrxLine.ID},
+			LineIncome:              sql.NullBool{Valid: true, Bool: row.TrxLine.Income},
+			LineInflow:              sql.NullInt64{Valid: true, Int64: row.TrxLine.Inflow},
+			LineOutflow:             sql.NullInt64{Valid: true, Int64: row.TrxLine.Outflow},
+			CategoryID:              row.TrxLine.CategoryID,
+			CategoryName:            row.CategoryName,
+			CategoryGroupID:         row.CategoryGroupID,
+			CategoryGroupName:       row.CategoryGroupName,
+			DestAccountID:           row.TrxLine.DestAccountID,
+			DestAccountName:         row.DestAccountName,
+			ExpenseShareID:          row.TrxLine.ExpenseShareID,
+			ExpenseShareDefaultName: row.ExpenseShareDefaultName,
+			SplitBudgetID:           row.TrxLine.SplitBudgetID,
+			SplitBudgetName:         row.SplitBudgetName,
+			SplitBudgetLoginID:      row.SplitBudgetLoginID,
+			DestBudgetID:            row.TrxLine.DestBudgetID,
+			DestBudgetName:          row.DestBudgetName,
+			DestBudgetLoginID:       row.DestBudgetLoginID,
+			Reconciled:              t.Reconciled(),
+		}, t)
+		return line, nil
 	})
 }
 
@@ -203,6 +276,32 @@ func (l *TrxLine) DestinationAccount() (*Account, error) {
 	return nil, fmt.Errorf("Transaction line is not a transfer")
 }
 
+// The transaction line expense share, returns an error if its not a split
+// or settlement line.
+func (l *TrxLine) Share() (*ExpenseShare, error) {
+	if l.row.ExpenseShareID.Valid {
+		return l.share, nil
+	}
+	return nil, fmt.Errorf("Transaction line is not a split or settlement line")
+}
+
+// The split line tagged member budget, returns an error if its not a split.
+func (l *TrxLine) SplitBudget() (*Budget, error) {
+	if l.row.SplitBudgetID.Valid {
+		return l.splitBudget, nil
+	}
+	return nil, fmt.Errorf("Transaction line is not a split line")
+}
+
+// The settlement line counterparty member budget, returns an error if its
+// not a settlement.
+func (l *TrxLine) DestBudget() (*Budget, error) {
+	if l.row.DestBudgetID.Valid {
+		return l.destBudget, nil
+	}
+	return nil, fmt.Errorf("Transaction line is not a settlement line")
+}
+
 // The inflow on this line
 func (l *TrxLine) Inflow() int {
 	return int(l.row.Inflow)
@@ -218,7 +317,7 @@ func (l *TrxLine) Trx() *Trx {
 	return l.trx
 }
 
-func (l *TrxLine) Update(ctx context.Context, destAccount *Account, category *Category, income bool, outflow, inflow int) error {
+func (l *TrxLine) Update(ctx context.Context, destAccount *Account, category *Category, income bool,share *ExpenseShare, splitBudget, destBudget *Budget,  outflow, inflow int) error {
 	if destAccount != nil && destAccount.ID() == l.trx.account.ID() {
 		return fmt.Errorf("Transfer destination must differ from source account")
 	}
@@ -231,6 +330,18 @@ func (l *TrxLine) Update(ctx context.Context, destAccount *Account, category *Ca
 	if category != nil {
 		categoryID = sql.NullInt64{Valid: true, Int64: int64(category.ID())}
 	}
+	shareID := sql.NullInt64{}
+	if share != nil {
+		shareID = sql.NullInt64{Valid: true, Int64: int64(share.ID())}
+	}
+	splitBudgetID := sql.NullInt64{}
+	if share != nil {
+		splitBudgetID = sql.NullInt64{Valid: true, Int64: int64(splitBudget.ID())}
+	}
+	destBudgetID := sql.NullInt64{}
+	if share != nil {
+		destAccountID = sql.NullInt64{Valid: true, Int64: int64(destBudget.ID())}
+	}
 	row, err := l.trx.account.budget.service.repo.UpdateTrxLine(ctx, data.UpdateTrxLineParams{
 		ID:            int64(l.ID()),
 		TrxID:         int64(l.trx.ID()),
@@ -239,6 +350,9 @@ func (l *TrxLine) Update(ctx context.Context, destAccount *Account, category *Ca
 		DestAccountID: destAccountID,
 		CategoryID:    categoryID,
 		Income:        income,
+		ExpenseShareID: shareID,
+		SplitBudgetID: splitBudgetID,
+		DestBudgetID: destBudgetID,
 		Outflow:       int64(outflow),
 		Inflow:        int64(inflow),
 	})
@@ -246,6 +360,7 @@ func (l *TrxLine) Update(ctx context.Context, destAccount *Account, category *Ca
 		return err
 	}
 	l.row = row
+	l.share, l.splitBudget, l.destBudget = share, splitBudget, destBudget
 	l.destinationAccount = destAccount
 	l.category = category
 	return nil

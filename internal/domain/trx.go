@@ -136,7 +136,7 @@ func (a *Account) reconciledLineIDs(ctx context.Context) (map[int64]bool, error)
 	})
 }
 
-// Mirror the trx for this account. Returns nil if the transaction is not a transfer into this account and error if 
+// Mirror the trx for this account. Returns nil if the transaction is not a transfer into this account and error if
 // any error occurrs.
 func (a *Account) mirrorTrx(ctx context.Context, source *Trx) (*Trx, error) {
 	if source.account.ID() == a.ID() {

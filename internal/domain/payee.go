@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"samuellando.com/YNAFB/internal/data"
 	"samuellando.com/YNAFB/internal/cache"
+	"samuellando.com/YNAFB/internal/data"
 )
 
 type Payee struct {
@@ -160,15 +160,41 @@ func (p *Payee) DefaultLines(ctx context.Context) ([]*PayeeDefaultLine, error) {
 					Name:     row.DestAccountName.String,
 				}, p.budget)
 			}
+			var expenseShare *ExpenseShare
+			if row.ExpenseShareID.Valid {
+				expenseShare = expenseShareFromRow(ctx, data.ExpenseShare{
+					ID:          row.ExpenseShareID.Int64,
+					DefaultName: row.ExpenseShareDefaultName.String,
+				}, p.budget.service)
+			}
+			var splitBudget *Budget
+			if row.SplitBudgetID.Valid {
+				splitBudget = budgetFromRow(ctx, data.Budget{
+					ID:      row.SplitBudgetID.Int64,
+					LoginID: row.SplitBudgetLoginID.Int64,
+					Name:    row.SplitBudgetName.String,
+				}, p.budget.service)
+			}
+			var destBudget *Budget
+			if row.DestBudgetID.Valid {
+				splitBudget = budgetFromRow(ctx, data.Budget{
+					ID:      row.DestBudgetID.Int64,
+					LoginID: row.DestBudgetLoginID.Int64,
+					Name:    row.DestBudgetName.String,
+				}, p.budget.service)
+			}
 			lines = append(lines, defaultLineFromRow(ctx, data.PayeeDefaultLine{
 				ID:            row.ID,
 				BudgetID:      row.BudgetID,
 				PayeeID:       row.PayeeID,
 				DestAccountID: row.DestAccountID,
 				CategoryID:    row.CategoryID,
+				ExpenseShareID: row.ExpenseShareID,
+				SplitBudgetID: row.SplitBudgetID,
+				DestBudgetID: row.DestBudgetID,
 				Income:        row.Income,
 				Percent:       row.Percent,
-			}, p, destAccount, category))
+			}, p, destAccount, category, expenseShare, splitBudget, destBudget))
 		}
 		return lines, nil
 	})
