@@ -23,12 +23,12 @@ func marshalMembership(share *domain.ExpenseShareMembership) ExpenseShareMembers
 }
 
 // marshalMembers translates active share members to the wire shape.
-func marshalMembers(members []*domain.ShareMember) []ShareMember {
+func marshalMembers(members []*domain.ExpenseShareMembership) []ShareMember {
 	marshalled := make([]ShareMember, 0, len(members))
 	for _, m := range members {
 		marshalled = append(marshalled, ShareMember{
-			BudgetId:    m.Budget.ID(),
-			DisplayName: m.DisplayName,
+			BudgetId:    m.Budget().ID(),
+			DisplayName: m.DisplayName(),
 		})
 	}
 	return marshalled
@@ -224,7 +224,7 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareShareId(ctx context.Context, req
 	if err != nil {
 		return nil, err
 	}
-	balance, balances, err := share.Balance(ctx)
+	balance, balances, err := share.Balances(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +342,7 @@ func (s ApiServer) PostBudgetBudgetIdExpenseShareShareIdCode(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	code, err := share.MintCode(ctx)
+	code, err := share.Share().MintCode(ctx)
 	if err != nil {
 		return nil, err
 	}

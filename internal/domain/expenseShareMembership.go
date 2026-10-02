@@ -14,11 +14,6 @@ type ExpenseShareMembership struct {
 	share  *ExpenseShare
 }
 
-type ShareMember struct {
-	Budget      *Budget
-	DisplayName string
-}
-
 type MemberBalance struct {
 	Budget      *Budget
 	DisplayName string
@@ -72,7 +67,11 @@ func (m *ExpenseShareMembership) Share() *ExpenseShare {
 	return m.share
 }
 
-func (m *ExpenseShareMembership) Members(ctx context.Context) ([]*ShareMember, error) {
+func (m *ExpenseShare) GetMembership(ctx context.Context, budgetID int) (*ExpenseShareMembership, error) {
+	return nil, fmt.Errorf("expense share not implemented")
+}
+
+func (m *ExpenseShareMembership) Members(ctx context.Context) ([]*ExpenseShareMembership, error) {
 	return nil, fmt.Errorf("expense share not implemented")
 }
 

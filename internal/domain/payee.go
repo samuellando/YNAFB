@@ -167,33 +167,45 @@ func (p *Payee) DefaultLines(ctx context.Context) ([]*PayeeDefaultLine, error) {
 					DefaultName: row.ExpenseShareDefaultName.String,
 				}, p.budget.service)
 			}
-			var splitBudget *Budget
-			if row.SplitBudgetID.Valid {
-				splitBudget = budgetFromRow(ctx, data.Budget{
+			var splitBudget *ExpenseShareMembership
+			if row.SplitBudgetExpenseShareID.Valid {
+				splitMemberBudget := budgetFromRow(ctx, data.Budget{
 					ID:      row.SplitBudgetID.Int64,
 					LoginID: row.SplitBudgetLoginID.Int64,
 					Name:    row.SplitBudgetName.String,
 				}, p.budget.service)
+				splitBudget = expenseShareMembershipFromRow(ctx, data.BudgetExpenseShare{
+					ID:          row.SplitBudgetExpenseShareID.Int64,
+					Name:        row.SplitBudgetExpenseShareName.String,
+					DisplayName: row.SplitBudgetExpenseShareDisplayName.String,
+					BudgetID:    row.SplitBudgetID.Int64,
+				}, splitMemberBudget, expenseShare)
 			}
-			var destBudget *Budget
-			if row.DestBudgetID.Valid {
-				splitBudget = budgetFromRow(ctx, data.Budget{
+			var destBudget *ExpenseShareMembership
+			if row.DestBudgetExpenseShareID.Valid {
+				destMemberBudget := budgetFromRow(ctx, data.Budget{
 					ID:      row.DestBudgetID.Int64,
 					LoginID: row.DestBudgetLoginID.Int64,
 					Name:    row.DestBudgetName.String,
 				}, p.budget.service)
+				destBudget = expenseShareMembershipFromRow(ctx, data.BudgetExpenseShare{
+					ID:          row.DestBudgetExpenseShareID.Int64,
+					Name:        row.DestBudgetExpenseShareName.String,
+					DisplayName: row.DestBudgetExpenseShareDisplayName.String,
+					BudgetID:    row.DestBudgetID.Int64,
+				}, destMemberBudget, expenseShare)
 			}
 			lines = append(lines, defaultLineFromRow(ctx, data.PayeeDefaultLine{
-				ID:            row.ID,
-				BudgetID:      row.BudgetID,
-				PayeeID:       row.PayeeID,
-				DestAccountID: row.DestAccountID,
-				CategoryID:    row.CategoryID,
-				ExpenseShareID: row.ExpenseShareID,
-				SplitBudgetID: row.SplitBudgetID,
-				DestBudgetID: row.DestBudgetID,
-				Income:        row.Income,
-				Percent:       row.Percent,
+				ID:                        row.ID,
+				BudgetID:                  row.BudgetID,
+				PayeeID:                   row.PayeeID,
+				DestAccountID:             row.DestAccountID,
+				CategoryID:                row.CategoryID,
+				ExpenseShareID:            row.ExpenseShareID,
+				SplitBudgetExpenseShareID: row.SplitBudgetExpenseShareID,
+				DestBudgetExpenseShareID:  row.DestBudgetExpenseShareID,
+				Income:                    row.Income,
+				Percent:                   row.Percent,
 			}, p, destAccount, category, expenseShare, splitBudget, destBudget))
 		}
 		return lines, nil

@@ -19,6 +19,20 @@ func defaultLineRefs(line *domain.PayeeDefaultLine) (dest *domain.Account, categ
 	return dest, category
 }
 
+// defaultLineShareRefs unwraps a line's expense-share objects, tolerating absence.
+func defaultLineShareRefs(line *domain.PayeeDefaultLine) (share *domain.ExpenseShare, split, dest *domain.ExpenseShareMembership) {
+	if s, err := line.Share(); err == nil {
+		share = s
+	}
+	if sb, err := line.SplitBudget(); err == nil {
+		split = sb
+	}
+	if db, err := line.DestBudget(); err == nil {
+		dest = db
+	}
+	return share, split, dest
+}
+
 // resolveDefaultLineRefs loads the related objects for optional wire IDs.
 func resolveDefaultLineRefs(ctx context.Context, budget *domain.Budget, destID, categoryID *int) (*domain.Account, *domain.Category, error) {
 	var dest *domain.Account
@@ -43,7 +57,7 @@ func resolveDefaultLineRefs(ctx context.Context, budget *domain.Budget, destID, 
 // marshalDefaultLine translates a PayeeDefaultLine and its related objects
 // to the wire shape. The entity exposes objects (not scalar FKs), so the
 // conversion lives here in the API layer.
-func marshalDefaultLine(line *domain.PayeeDefaultLine, dest *domain.Account, category *domain.Category) PayeeDefaultLine {
+func marshalDefaultLine(line *domain.PayeeDefaultLine, dest *domain.Account, category *domain.Category, expenseShare *domain.ExpenseShare, splitBudget, destBudget *domain.ExpenseShareMembership) PayeeDefaultLine {
 	resp := PayeeDefaultLine{
 		Id:      line.ID(),
 		PayeeId: line.Payee().ID(),
@@ -61,6 +75,22 @@ func marshalDefaultLine(line *domain.PayeeDefaultLine, dest *domain.Account, cat
 		name := category.Name()
 		resp.CategoryId = &id
 		resp.CategoryName = &name
+	}
+	if expenseShare != nil {
+		id := expenseShare.ID()
+		resp.ExpenseShareId = &id
+	}
+	if splitBudget != nil {
+		id := splitBudget.ID()
+		displayName := splitBudget.DisplayName()
+		resp.SplitBudgetId = &id
+		resp.SplitBudgetDisplayName = &displayName
+	}
+	if destBudget != nil {
+		id := destBudget.ID()
+		displayName := destBudget.DisplayName()
+		resp.DestBudgetId = &id
+		resp.DestBudgetDisplayName = &displayName
 	}
 	return resp
 }
@@ -98,7 +128,8 @@ func (s ApiServer) GetBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context,
 	resp := GetBudgetBudgetIdPayeePayeeIdDefaultLine200JSONResponse{}
 	for _, line := range lines {
 		dest, category := defaultLineRefs(line)
-		resp = append(resp, marshalDefaultLine(line, dest, category))
+		share, split, destBudget := defaultLineShareRefs(line)
+		resp = append(resp, marshalDefaultLine(line, dest, category, share, split, destBudget))
 	}
 	return resp, nil
 }
@@ -135,12 +166,33 @@ func (s ApiServer) PostBudgetBudgetIdPayeePayeeIdDefaultLine(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	line, err := payee.AddDefaultLine(ctx, dest, category, BoolPtrToBool(request.Body.Income), request.Body.Percent)
+	var expenseShare *domain.ExpenseShare
+	if request.Body.ExpenseShareId != nil {
+		expenseShare, err = s.service.GetExpenseShare(ctx, *request.Body.ExpenseShareId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var splitBudget *domain.ExpenseShareMembership
+	if request.Body.SplitBudgetId != nil {
+		splitBudget, err = expenseShare.GetMembership(ctx, *request.Body.SplitBudgetId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var destBudget *domain.ExpenseShareMembership
+	if request.Body.DestBudgetId != nil {
+		destBudget, err = expenseShare.GetMembership(ctx, *request.Body.DestBudgetId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	line, err := payee.AddDefaultLine(ctx, dest, category, BoolPtrToBool(request.Body.Income), expenseShare, splitBudget, destBudget, request.Body.Percent)
 	if err != nil {
 		return nil, err
 	}
 	// Send response
-	return PostBudgetBudgetIdPayeePayeeIdDefaultLine200JSONResponse(marshalDefaultLine(line, dest, category)), nil
+	return PostBudgetBudgetIdPayeePayeeIdDefaultLine200JSONResponse(marshalDefaultLine(line, dest, category, expenseShare, splitBudget, destBudget)), nil
 }
 
 func (s ApiServer) PutBudgetBudgetIdPayeePayeeIdDefaultLineId(ctx context.Context, request PutBudgetBudgetIdPayeePayeeIdDefaultLineIdRequestObject) (PutBudgetBudgetIdPayeePayeeIdDefaultLineIdResponseObject, error) {
@@ -180,18 +232,17 @@ func (s ApiServer) PutBudgetBudgetIdPayeePayeeIdDefaultLineId(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	err = line.Update(ctx, request.Body.DestAccountId, request.Body.CategoryId, BoolPtrToBool(request.Body.Income), request.Body.Percent)
-	if err != nil {
-		return nil, err
-	}
-	// The line's related objects are stale after update, so resolve fresh
-	// objects for the response.
+	// Resolve fresh objects for the update and the response.
 	dest, category, err := resolveDefaultLineRefs(ctx, budget, request.Body.DestAccountId, request.Body.CategoryId)
 	if err != nil {
 		return nil, err
 	}
+	err = line.Update(ctx, dest, category, BoolPtrToBool(request.Body.Income), nil, nil, nil, request.Body.Percent)
+	if err != nil {
+		return nil, err
+	}
 	// Send response
-	return PutBudgetBudgetIdPayeePayeeIdDefaultLineId200JSONResponse(marshalDefaultLine(line, dest, category)), nil
+	return PutBudgetBudgetIdPayeePayeeIdDefaultLineId200JSONResponse(marshalDefaultLine(line, dest, category, nil, nil, nil)), nil
 }
 
 func (s ApiServer) DeleteBudgetBudgetIdPayeePayeeIdDefaultLineId(ctx context.Context, request DeleteBudgetBudgetIdPayeePayeeIdDefaultLineIdRequestObject) (DeleteBudgetBudgetIdPayeePayeeIdDefaultLineIdResponseObject, error) {

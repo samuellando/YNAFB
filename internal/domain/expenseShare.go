@@ -23,6 +23,10 @@ func expenseShareFromRow(ctx context.Context, row data.ExpenseShare, service *Do
 	return share
 }
 
+func (s *DomainService) GetExpenseShare(ctx context.Context, id int) (*ExpenseShare, error) {
+	return nil, fmt.Errorf("expense share not implemented")
+}
+
 func (s *DomainService) createExpenseShare(ctx context.Context, defaultName string) (*ExpenseShare, error) {
 	return nil, fmt.Errorf("expense share not implemented")
 }
@@ -38,3 +42,8 @@ func (e *ExpenseShare) ID() int {
 func (e *ExpenseShare) DefaultName() string {
 	return e.row.DefaultName
 }
+
+func (s *ExpenseShare) MintCode(ctx context.Context) (*ExpenseShareCode, error) {
+	return nil, fmt.Errorf("expense share not implemented")
+}
+
