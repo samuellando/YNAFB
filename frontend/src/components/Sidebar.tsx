@@ -8,12 +8,18 @@ import {
   listBudgets,
   type Budget,
 } from '../lib/api/budget'
+import {
+  listShares,
+  type ExpenseShareMembership,
+} from '../lib/api/expenseShare'
 import { deauthenticate } from '../lib/api/auth'
 import { saveSelectedBudget } from '../lib/budgetSelection'
 import { formatMoney } from '../lib/money'
 import { useClickOutside } from '../lib/useClickOutside'
 import { ApiError } from '../lib/api/errors'
 import { CheckIcon, ChevronDownIcon, LogOutIcon, PlusIcon } from './icons'
+import ShareCreateDialog from './shares/ShareCreateDialog'
+import ShareJoinDialog from './shares/ShareJoinDialog'
 
 type SidebarProps = {
   budgetId: number
@@ -28,6 +34,7 @@ export default function Sidebar({ budgetId }: SidebarProps) {
   const [name, setName] = useState('')
   const [newAccountOpen, setNewAccountOpen] = useState(false)
   const [accountName, setAccountName] = useState('')
+  const [shareDialog, setShareDialog] = useState<'create' | 'join' | null>(null)
   const budgetMenuRef = useRef<HTMLDivElement>(null)
 
   useClickOutside(
@@ -43,6 +50,10 @@ export default function Sidebar({ budgetId }: SidebarProps) {
   const accounts = useQuery({
     queryKey: ['accounts', budgetId],
     queryFn: () => listAccounts(budgetId),
+  })
+  const shares = useQuery({
+    queryKey: ['expense-shares', budgetId],
+    queryFn: () => listShares(budgetId),
   })
 
   const activeBudget = budgets.data?.find((b) => b.id === budgetId)
@@ -98,11 +109,17 @@ export default function Sidebar({ budgetId }: SidebarProps) {
     }
   }
 
+  function goToShare(membership: ExpenseShareMembership) {
+    setShareDialog(null)
+    navigate(`/budget/${budgetId}/shares/${membership.expenseShareId}`)
+  }
+
   const accountItems = accounts.data ?? []
   const reconciled = new Set(accountItems.filter((a) => a.balance === a.reconciledBalance).map((a) => a.id))
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-800 bg-slate-900">
+    <>
+      <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-800 bg-slate-900">
       <div className="border-b border-slate-800 p-3">
         <h2 className="px-3 pb-2 text-xs font-semibold tracking-widest text-slate-500 uppercase">
           Budget
@@ -175,16 +192,65 @@ export default function Sidebar({ budgetId }: SidebarProps) {
       <nav className="border-b border-slate-800 p-3">
         <NavLink
           to={`/budget/${budgetId}`}
-          className={({ isActive }) =>
-            `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              isActive && !location.pathname.includes('/account/')
-                ? 'bg-slate-800'
-                : 'text-slate-200 hover:bg-slate-800/60'
-            }`
-          }
+            className={({ isActive }) =>
+              `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                isActive &&
+                !location.pathname.includes('/account/') &&
+                !location.pathname.includes('/shares/')
+                  ? 'bg-slate-800'
+                  : 'text-slate-200 hover:bg-slate-800/60'
+              }`
+            }
         >
           Monthly budget
         </NavLink>
+      </nav>
+
+      <nav className="border-b border-slate-800 p-3">
+        <h2 className="px-3 pb-2 text-xs font-semibold tracking-widest text-slate-500 uppercase">
+          Shares
+        </h2>
+        <ul className="space-y-1">
+          {(shares.data ?? []).map((membership) => (
+            <li key={membership.id}>
+              <NavLink
+                to={`/budget/${budgetId}/shares/${membership.expenseShareId}`}
+                className={({ isActive }) =>
+                  `block truncate rounded-lg px-3 py-2 text-sm transition ${
+                    isActive
+                      ? 'bg-slate-800 font-semibold text-emerald-400'
+                      : 'text-slate-200 hover:bg-slate-800/60'
+                  }`
+                }
+              >
+                {membership.name}
+              </NavLink>
+            </li>
+          ))}
+          {!shares.isPending && (shares.data ?? []).length === 0 && (
+            <li className="px-3 py-2 text-sm text-slate-500">No shares yet</li>
+          )}
+          <li className="flex gap-2 px-3 py-1">
+            <button
+              type="button"
+              onClick={() => setShareDialog('create')}
+              className="flex cursor-pointer items-center gap-1 text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
+            >
+              <PlusIcon className="h-4 w-4" />
+              New
+            </button>
+            <button
+              type="button"
+              onClick={() => setShareDialog('join')}
+              className="cursor-pointer text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
+            >
+              Join
+            </button>
+          </li>
+        </ul>
+        {shares.isError && (
+          <p className="px-3 text-sm text-red-400">Failed to load shares</p>
+        )}
       </nav>
 
       <div className="flex min-h-0 flex-1 flex-col p-3">
@@ -268,5 +334,22 @@ export default function Sidebar({ budgetId }: SidebarProps) {
         </button>
       </div>
     </aside>
+
+      {shareDialog === 'create' && (
+        <ShareCreateDialog
+          budgetId={budgetId}
+          onClose={() => setShareDialog(null)}
+          onCreated={goToShare}
+        />
+      )}
+
+      {shareDialog === 'join' && (
+        <ShareJoinDialog
+          budgetId={budgetId}
+          onClose={() => setShareDialog(null)}
+          onJoined={goToShare}
+        />
+      )}
+    </>
   )
 }

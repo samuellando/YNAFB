@@ -123,6 +123,9 @@ export type PayeeDefaultLineInput = {
   destAccountId?: number
   categoryId?: number
   income: boolean
+  expenseShareId?: number
+  splitBudgetId?: number
+  destBudgetId?: number
   percent: number
 }
 
@@ -139,6 +142,11 @@ export async function createPayeeDefaultLine(
         ...(input.destAccountId !== undefined ? { destAccountId: input.destAccountId } : {}),
         ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
         income: input.income,
+        ...(input.expenseShareId !== undefined
+          ? { expenseShareId: input.expenseShareId }
+          : {}),
+        ...(input.splitBudgetId !== undefined ? { splitBudgetId: input.splitBudgetId } : {}),
+        ...(input.destBudgetId !== undefined ? { destBudgetId: input.destBudgetId } : {}),
         percent: input.percent,
       },
     },
@@ -250,6 +258,9 @@ export type TransactionLineInput = {
   destAccountId?: number
   categoryId?: number
   income: boolean
+  expenseShareId?: number
+  splitBudgetId?: number
+  destBudgetId?: number
   outflow: number
   inflow: number
 }
@@ -259,6 +270,9 @@ function lineBody(input: TransactionLineInput) {
     ...(input.destAccountId !== undefined ? { destAccountId: input.destAccountId } : {}),
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     income: input.income,
+    ...(input.expenseShareId !== undefined ? { expenseShareId: input.expenseShareId } : {}),
+    ...(input.splitBudgetId !== undefined ? { splitBudgetId: input.splitBudgetId } : {}),
+    ...(input.destBudgetId !== undefined ? { destBudgetId: input.destBudgetId } : {}),
     outflow: input.outflow,
     inflow: input.inflow,
   }

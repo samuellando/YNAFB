@@ -22,6 +22,12 @@ export function transactionTarget(line: AccountTransactionLine): string {
   if (line.destAccountName) {
     return `@${line.destAccountName}`
   }
+  if (line.splitBudgetDisplayName) {
+    return `Split with ${line.splitBudgetDisplayName}`
+  }
+  if (line.destBudgetDisplayName) {
+    return `Settlement with ${line.destBudgetDisplayName}`
+  }
   if (line.income) {
     return 'Income'
   }
