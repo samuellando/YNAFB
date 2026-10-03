@@ -311,9 +311,6 @@ function ShareTransactionCard({
           <p className="text-sm text-slate-400">
             Settlement with {trx.settlementLine.destBudgetDisplayName}
           </p>
-          {mySplit === null && categorizedParent && (
-            <MyCategorizations trx={trx} onAdd={onAdd} onEdit={onEdit} />
-          )}
         </div>
       )}
 

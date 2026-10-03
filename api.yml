@@ -2136,6 +2136,7 @@ components:
         - budgetId
         - displayName
         - balance
+        - settlementBalance
       properties:
         budgetId:
           type: integer
@@ -2145,7 +2146,10 @@ components:
           description: "How this member is displayed to other members"
         balance:
           type: integer
-          description: "Net with this member (splits I tagged them minus splits they tagged me minus settlements I sent them plus settlements I received from them, outflow minus inflow; positive means they owe me)"
+          description: "Net with this member (splits I tagged them minus splits they tagged me minus settlements I sent them, outflow minus inflow; positive means they owe me)"
+        settlementBalance:
+          type: integer
+          description: "The difference of settlements I recorded vs what they recorded"
 
     shareMember:
       type: object

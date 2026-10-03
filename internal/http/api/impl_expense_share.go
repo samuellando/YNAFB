@@ -43,6 +43,7 @@ func marshalSummary(balance int, balances []domain.MemberBalance) ExpenseShareSu
 			BudgetId:    b.Budget.ID(),
 			DisplayName: b.DisplayName,
 			Balance:     b.Balance,
+			SettlementBalance: b.SettlementBalance,
 		})
 	}
 	return ExpenseShareSummary{
@@ -242,7 +243,7 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareShareId(ctx context.Context, req
 	if err != nil {
 		return nil, err
 	}
-	transactions, err := share.ListTransactions(ctx)
+	transactions, err := share.ListTransactionsWithMySettlements(ctx)
 	if err != nil {
 		return nil, err
 	}
