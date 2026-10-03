@@ -323,6 +323,17 @@ func (t *Trx) IsMirror() bool {
 	return t.mirrorSource != nil
 }
 
+// Returns true if the transaction is a read-only mirror of a transfer made in
+// another account. Mirrors cannot be updated, deleted, or extended.
+func (t *Trx) IsSettlement() bool {
+	for _, l := range t.Lines() {
+		if l.IsSettlement() {
+			return true
+		}
+	}
+	return false
+}
+
 // The account the funds were transferred from. Returns an error if the
 // transaction is not a mirror.
 func (t *Trx) SourceAccount() (*Account, error) {

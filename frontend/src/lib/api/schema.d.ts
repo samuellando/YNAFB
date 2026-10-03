@@ -2239,8 +2239,10 @@ export interface components {
             budgetId: number;
             /** @description How this member is displayed to other members */
             displayName: string;
-            /** @description Net with this member (splits I tagged them minus splits they tagged me minus settlements I sent them plus settlements I received from them, outflow minus inflow; positive means they owe me) */
+            /** @description Net with this member (splits I tagged them minus splits they tagged me minus settlements I sent them, outflow minus inflow; positive means they owe me) */
             balance: number;
+            /** @description The difference of settlements I recorded vs what they recorded */
+            settlementBalance: number;
         };
         shareMember: {
             /** @description The member budget id */

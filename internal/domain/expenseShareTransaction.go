@@ -72,7 +72,14 @@ func (t *ExpenseShareTransaction) SourceTrx() *Trx {
 	return t.sourceTrx
 }
 
+func (t *ExpenseShareTransaction) IsSettlement() bool {
+	return t.sourceTrx.IsSettlement()
+}
+
 func (t *ExpenseShareTransaction) MyCategorizations(ctx context.Context) ([]*SplitCategorization, error) {
+	if t.IsSettlement() {
+		return nil, nil 
+	}
 	return cache.Result(ctx, fmt.Sprintf("shareCategorizations-%d-%d-%d-%d", t.membership.budget.LoginID(), t.membership.budget.ID(), t.membership.share.ID(), t.sourceTrx.ID()), func() ([]*SplitCategorization, error) {
 		rows, err := t.membership.budget.service.repo.ListCategorizations(ctx, data.ListCategorizationsParams{
 			LoginID:        int64(t.membership.budget.LoginID()),
@@ -95,6 +102,9 @@ func (t *ExpenseShareTransaction) MyCategorizations(ctx context.Context) ([]*Spl
 }
 
 func (t *ExpenseShareTransaction) AddCategorization(ctx context.Context, category *Category, outflow, inflow int) (*SplitCategorization, error) {
+	if t.sourceTrx.IsSettlement() {
+		return nil, fmt.Errorf("Settlement transactions cannot be categorized")
+	}
 	defer cache.InvalidateResults(ctx)
 	categoryID := sql.NullInt64{}
 	if category != nil {

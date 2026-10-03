@@ -17,9 +17,10 @@ type ExpenseShareMembership struct {
 }
 
 type MemberBalance struct {
-	Budget      *Budget
-	DisplayName string
-	Balance     int
+	Budget            *Budget
+	DisplayName       string
+	Balance           int
+	SettlementBalance int
 }
 
 func expenseShareMembershipFromRow(ctx context.Context, row data.BudgetExpenseShare, budget *Budget, share *ExpenseShare) *ExpenseShareMembership {
@@ -188,10 +189,11 @@ func (m *ExpenseShareMembership) Balances(ctx context.Context) (int, []MemberBal
 		order = append(order, member.Budget().ID())
 	}
 	total := 0
-	add := func(budgetID int, amount int) {
+	add := func(budgetID int, amount int, settlementAmount int) {
 		total += amount
 		if pair, ok := byBudget[budgetID]; ok {
 			pair.Balance += amount
+			pair.SettlementBalance += settlementAmount
 		}
 	}
 	for _, trx := range transactions {
@@ -206,27 +208,25 @@ func (m *ExpenseShareMembership) Balances(ctx context.Context) (int, []MemberBal
 				otherID := split.Budget().ID()
 				switch {
 				case sourceID == m.budget.ID() && otherID != m.budget.ID():
-					add(otherID, amount)
+					add(otherID, amount, 0)
 				case otherID == m.budget.ID() && sourceID != m.budget.ID():
-					add(sourceID, -amount)
+					add(sourceID, -amount, 0)
 				}
 			}
 			if dest, err := line.DestBudget(); err == nil {
-				otherID := dest.Budget().ID()
+				destID := dest.Budget().ID()
 				switch {
-				case sourceID == m.budget.ID() && otherID != m.budget.ID():
-					add(otherID, -amount)
-				case otherID == m.budget.ID() && sourceID != m.budget.ID():
-					add(sourceID, amount)
+				case sourceID == m.budget.ID():
+					add(destID, amount, amount)
+				case destID == m.budget.ID():
+					add(sourceID, 0, amount)
 				}
 			}
 		}
 	}
 	balances := make([]MemberBalance, 0, len(order))
 	for _, budgetID := range order {
-		if pair := byBudget[budgetID]; pair.Balance != 0 {
-			balances = append(balances, *pair)
-		}
+		balances = append(balances, *byBudget[budgetID])
 	}
 	return total, balances, nil
 }
@@ -280,6 +280,21 @@ func (m *ExpenseShareMembership) ListTransactions(ctx context.Context) ([]*Expen
 		}
 		return shareTransactionsFromListRows(ctx, m, rows)
 	})
+}
+
+func (m *ExpenseShareMembership) ListTransactionsWithMySettlements(ctx context.Context) ([]*ExpenseShareTransaction, error) {
+	transactions, err := m.ListTransactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]*ExpenseShareTransaction, 0)
+	for _, t := range transactions {
+		if t.IsSettlement() && t.SourceBudget() != m.Budget() {
+			continue
+		}
+		res = append(res, t)
+	}
+	return res, nil
 }
 
 func (m *ExpenseShareMembership) GetTransaction(ctx context.Context, trxID int) (*ExpenseShareTransaction, error) {
