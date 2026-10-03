@@ -98,6 +98,32 @@ func marshalShareTransaction(trx *domain.ExpenseShareTransaction, categorization
 		TotalInflow:             trx.TotalInflow(),
 		Note:                    trx.Note(),
 	}
+	shareID := trx.Share().ID()
+	splitLines := make([]ExpenseShareSplitLine, 0)
+	for _, line := range trx.SourceTrx().Lines() {
+		share, err := line.Share()
+		if err != nil || share.ID() != shareID {
+			continue
+		}
+		if split, err := line.SplitBudget(); err == nil {
+			splitLines = append(splitLines, ExpenseShareSplitLine{
+				SplitBudgetId:          split.Budget().ID(),
+				SplitBudgetDisplayName: split.DisplayName(),
+				Outflow:                line.Outflow(),
+				Inflow:                 line.Inflow(),
+			})
+		}
+		if dest, err := line.DestBudget(); err == nil {
+			settlement := ExpenseShareSettlementLine{
+				DestBudgetId:          dest.Budget().ID(),
+				DestBudgetDisplayName: dest.DisplayName(),
+			}
+			resp.SettlementLine = &settlement
+		}
+	}
+	if len(splitLines) > 0 {
+		resp.SplitLines = &splitLines
+	}
 	if categorizations != nil {
 		resp.MyCategorizations = &categorizations
 	}

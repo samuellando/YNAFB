@@ -139,4 +139,33 @@ func TestExpenseShareTrxLineRefs(t *testing.T) {
 	if !found {
 		t.Fatalf("created line %d not found in account detail", created.Id)
 	}
+
+	// Share detail exposes the split breakdown with member budget ids.
+	w = ts.doReq(t, "GET", fmt.Sprintf("/api/v1/budget/%d/expense-share/%d",
+		budgetA.ID(), shareID), nil, http.StatusOK)
+	var shareDetail api.ExpenseShareDetail
+	decodeJSON(t, w, &shareDetail)
+	shareFound := false
+	for _, shareTrx := range shareDetail.Transactions {
+		if shareTrx.TrxId != trx.ID() {
+			continue
+		}
+		shareFound = true
+		if shareTrx.SplitLines == nil || len(*shareTrx.SplitLines) != 1 {
+			t.Fatalf("expected 1 split line, got %+v", shareTrx.SplitLines)
+		}
+		split := (*shareTrx.SplitLines)[0]
+		if split.SplitBudgetId != budgetB.ID() {
+			t.Fatalf("expected splitBudgetId %d, got %d", budgetB.ID(), split.SplitBudgetId)
+		}
+		if split.SplitBudgetDisplayName != "Bob" {
+			t.Fatalf("expected split display %q, got %q", "Bob", split.SplitBudgetDisplayName)
+		}
+		if split.Outflow != 5000 {
+			t.Fatalf("expected split outflow 5000, got %d", split.Outflow)
+		}
+	}
+	if !shareFound {
+		t.Fatalf("transaction %d not found in share detail", trx.ID())
+	}
 }
