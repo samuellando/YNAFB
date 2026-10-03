@@ -314,7 +314,7 @@ export default function Sidebar({ budgetId }: SidebarProps) {
           <li className="flex gap-2 px-3 py-1">
             <button
               type="button"
-              onClick={() => setShareDialog('create')}
+              onClick={() => setShareDialog('join')}
               className="flex cursor-pointer items-center gap-1 text-sm font-medium text-emerald-400 transition hover:text-emerald-300"
             >
               <PlusIcon className="h-4 w-4" />
