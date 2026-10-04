@@ -10,6 +10,7 @@ export type ExpenseShareMemberBalance =
 export type ShareMember = components['schemas']['shareMember']
 export type ExpenseShareCode = components['schemas']['expenseShareCode']
 export type ExpenseShareTransaction = components['schemas']['expenseShareTransaction']
+export type ExpenseShareSplitLine = components['schemas']['expenseShareSplitLine']
 export type SplitCategorization = components['schemas']['splitCategorization']
 export type Category = components['schemas']['category']
 
