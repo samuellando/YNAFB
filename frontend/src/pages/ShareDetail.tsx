@@ -20,6 +20,7 @@ import CategorizationDialog, {
 } from '../components/shares/CategorizationDialog'
 import ShareCodeDialog from '../components/shares/ShareCodeDialog'
 import ShareLeaveDialog from '../components/shares/ShareLeaveDialog'
+import ShareTransactionTable from '../components/shares/ShareTransactionTable'
 import ShareRenameDialog, {
   type ShareRenameDialogState,
 } from '../components/shares/ShareRenameDialog'
@@ -154,39 +155,16 @@ export default function ShareDetail() {
               )}
             </section>
 
-            <section className="mt-6">
-              <h2 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                Members
-              </h2>
-              <ul className="mt-2 space-y-1">
-                {detail.members.map((m) => (
-                  <li key={m.budgetId} className="text-sm text-slate-200">
-                    {m.displayName}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="mt-6">
-              <h2 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
+            <section className="mt-10">
+              <h2 className="text-l font-semibold tracking-widest text-slate-500 uppercase">
                 Transactions
               </h2>
-              {detail.transactions.length === 0 && (
-                <p className="mt-2 text-sm text-slate-500">No shared transactions yet.</p>
-              )}
-              <ul className="mt-2 space-y-4">
-                {detail.transactions.map((trx) => (
-                  <ShareTransactionCard
-                    key={trx.trxId}
-                    trx={trx}
-                    myBudgetId={detail.membership.budgetId}
-                    onAdd={() => setTarget({ trxId: trx.trxId, dialog: { mode: 'create' } })}
-                    onEdit={(line) =>
-                      setTarget({ trxId: trx.trxId, dialog: { mode: 'edit', line } })
-                    }
-                  />
-                ))}
-              </ul>
+              <ShareTransactionTable 
+                  budgetId={budget} 
+                  transactions={detail.transactions} 
+                  onAdd={(trxId) => setTarget({ trxId: trxId, dialog: { mode: 'create' } })}
+                  onEdit={(trxId, line) => setTarget({ trxId: trxId, dialog: { mode: 'edit', line } })}
+              />
             </section>
           </>
         )}
@@ -225,146 +203,5 @@ export default function ShareDetail() {
         />
       )}
     </>
-  )
-}
-
-function ShareTransactionCard({
-  trx,
-  myBudgetId,
-  onAdd,
-  onEdit,
-}: {
-  trx: ExpenseShareTransaction
-  myBudgetId: number
-  onAdd: () => void
-  onEdit: (line: SplitCategorization) => void
-}) {
-  const splitLines = trx.splitLines ?? []
-  const mySplit =
-    splitLines.find((line) => line.splitBudgetId === myBudgetId) ?? null
-  // The owner's portion is whatever the splits leave over. It is display
-  // only: categorizations are never recorded against it.
-  const splitOut = splitLines.reduce((sum, line) => sum + line.outflow, 0)
-  const splitIn = splitLines.reduce((sum, line) => sum + line.inflow, 0)
-  const ownerOut = trx.totalOutflow - splitOut
-  const ownerIn = trx.totalInflow - splitIn
-  const showOwner =
-    trx.settlementLine === undefined && (ownerOut !== 0 || ownerIn !== 0)
-  // Categorizations record my portion: nested under the split tagging me, or
-  // under a settlement naming me as counterparty. Otherwise (my own source
-  // transaction, or splits between other members) there is nothing to record.
-  const categorizedParent =
-    mySplit !== null ||
-    (trx.settlementLine !== undefined && trx.settlementLine.destBudgetId === myBudgetId)
-  return (
-    <li className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-100">{trx.payeeName}</p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {trx.sourceBudgetDisplayName} · {formatDate(trx.date)}
-            {trx.note !== '' && ` · ${trx.note}`}
-          </p>
-        </div>
-        <p className="shrink-0 text-sm font-medium tabular-nums text-slate-100">
-          {formatMoney(trx.totalOutflow !== 0 ? trx.totalOutflow : trx.totalInflow)}
-        </p>
-      </div>
-
-      {splitLines.length > 0 && (
-        <div className="mt-3 border-t border-slate-800 pt-2">
-          <h3 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-            Splits
-          </h3>
-          <ul className="mt-1 space-y-0.5">
-            {showOwner && (
-              <li className="flex items-center justify-between gap-2 text-sm">
-                <span className="truncate text-slate-400">
-                  {trx.sourceBudgetDisplayName} (owner)
-                </span>
-                <span className="shrink-0 tabular-nums text-slate-300">
-                  {formatMoney(ownerOut !== 0 ? ownerOut : ownerIn)}
-                </span>
-              </li>
-            )}
-            {splitLines.map((line) => (
-              <li key={line.splitBudgetId}>
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="truncate text-slate-400">
-                    Split with {line.splitBudgetDisplayName}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-slate-300">
-                    {formatMoney(line.outflow !== 0 ? line.outflow : line.inflow)}
-                  </span>
-                </div>
-                {mySplit !== null && line.splitBudgetId === mySplit.splitBudgetId && (
-                  <MyCategorizations trx={trx} onAdd={onAdd} onEdit={onEdit} />
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {trx.settlementLine && (
-        <div className="mt-3 border-t border-slate-800 pt-2">
-          <p className="text-sm text-slate-400">
-            Settlement with {trx.settlementLine.destBudgetDisplayName}
-          </p>
-        </div>
-      )}
-
-      {!categorizedParent && splitLines.length === 0 && !trx.settlementLine && (
-        <p className="mt-2 text-sm text-slate-500">No splits yet.</p>
-      )}
-    </li>
-  )
-}
-
-function MyCategorizations({
-  trx,
-  onAdd,
-  onEdit,
-}: {
-  trx: ExpenseShareTransaction
-  onAdd: () => void
-  onEdit: (line: SplitCategorization) => void
-}) {
-  return (
-    <div className="mt-1.5 mb-1 ml-3 border-l-2 border-slate-700 pl-3">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-          My categorizations
-        </h4>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex cursor-pointer items-center gap-1 text-sm font-medium text-emerald-400 hover:text-emerald-300"
-        >
-          <PlusIcon className="h-4 w-4" />
-          Add
-        </button>
-      </div>
-      {(trx.myCategorizations ?? []).length === 0 ? (
-        <p className="mt-1 text-sm text-slate-500">Not categorized yet.</p>
-      ) : (
-        <ul className="mt-1 space-y-1">
-          {(trx.myCategorizations ?? []).map((line) => (
-            <li key={line.id} className="flex items-center justify-between gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => onEdit(line)}
-                className="min-w-0 flex-1 cursor-pointer truncate text-left text-slate-200 hover:text-emerald-400"
-              >
-                {line.categoryName ?? 'Uncategorized'}
-              </button>
-              <span className="shrink-0 tabular-nums text-slate-300">
-                {formatMoney(line.outflow !== 0 ? line.outflow : line.inflow)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   )
 }
