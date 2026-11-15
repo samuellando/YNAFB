@@ -76,6 +76,40 @@ func (t *ExpenseShareTransaction) IsSettlement() bool {
 	return t.sourceTrx.IsSettlement()
 }
 
+func (t *ExpenseShareTransaction) SplitLines() ([]*TrxLine) {
+	if t.IsSettlement() {
+		return nil
+	}
+	res := make([]*TrxLine, 0)
+	res = append(res, &TrxLine{
+		trx: t.SourceTrx(),
+		share: t.Share(),
+		splitBudget: t.Membership(),
+	})
+	sum := 0
+	for _, l := range t.SourceTrx().Lines() {
+		if _, err := l.SplitBudget(); err == nil {
+			res = append(res, l)
+			sum += l.Inflow() - l.Outflow()
+		}
+	}
+	remainder := t.SourceTrx().TotalInflow() - t.SourceTrx().TotalOutflow() - sum
+	res[0].row = data.TrxLine{
+		Outflow: int64(remainder),
+		Inflow: int64(remainder),
+	}
+	return res
+}
+
+func (t *ExpenseShareTransaction) SettlementLine() (*TrxLine) {
+	for _, l := range t.SourceTrx().Lines() {
+		if _, err := l.DestBudget(); err == nil {
+			return l
+		}
+	}
+	return nil
+}
+
 func (t *ExpenseShareTransaction) MyCategorizations(ctx context.Context) ([]*SplitCategorization, error) {
 	if t.IsSettlement() {
 		return nil, nil 

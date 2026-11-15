@@ -40,9 +40,9 @@ func marshalSummary(balance int, balances []domain.MemberBalance) ExpenseShareSu
 	marshalled := make([]ExpenseShareMemberBalance, 0, len(balances))
 	for _, b := range balances {
 		marshalled = append(marshalled, ExpenseShareMemberBalance{
-			BudgetId:    b.Budget.ID(),
-			DisplayName: b.DisplayName,
-			Balance:     b.Balance,
+			BudgetId:          b.Budget.ID(),
+			DisplayName:       b.DisplayName,
+			Balance:           b.Balance,
 			SettlementBalance: b.SettlementBalance,
 		})
 	}
@@ -99,28 +99,23 @@ func marshalShareTransaction(trx *domain.ExpenseShareTransaction, categorization
 		TotalInflow:             trx.TotalInflow(),
 		Note:                    trx.Note(),
 	}
-	shareID := trx.Share().ID()
 	splitLines := make([]ExpenseShareSplitLine, 0)
-	for _, line := range trx.SourceTrx().Lines() {
-		share, err := line.Share()
-		if err != nil || share.ID() != shareID {
-			continue
+	for _, line := range trx.SplitLines() {
+		splitMembership, _ := line.SplitBudget()
+		splitLines = append(splitLines, ExpenseShareSplitLine{
+			SplitBudgetId:          splitMembership.Budget().ID(),
+			SplitBudgetDisplayName: splitMembership.DisplayName(),
+			Outflow:                line.Outflow(),
+			Inflow:                 line.Inflow(),
+		})
+	}
+	if trx.IsSettlement() {
+		dest, _ := trx.SettlementLine().DestBudget()
+		settlement := ExpenseShareSettlementLine{
+			DestBudgetId:          dest.Budget().ID(),
+			DestBudgetDisplayName: dest.DisplayName(),
 		}
-		if split, err := line.SplitBudget(); err == nil {
-			splitLines = append(splitLines, ExpenseShareSplitLine{
-				SplitBudgetId:          split.Budget().ID(),
-				SplitBudgetDisplayName: split.DisplayName(),
-				Outflow:                line.Outflow(),
-				Inflow:                 line.Inflow(),
-			})
-		}
-		if dest, err := line.DestBudget(); err == nil {
-			settlement := ExpenseShareSettlementLine{
-				DestBudgetId:          dest.Budget().ID(),
-				DestBudgetDisplayName: dest.DisplayName(),
-			}
-			resp.SettlementLine = &settlement
-		}
+		resp.SettlementLine = &settlement
 	}
 	if len(splitLines) > 0 {
 		resp.SplitLines = &splitLines
