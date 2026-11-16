@@ -86,17 +86,18 @@ func (t *ExpenseShareTransaction) SplitLines() ([]*TrxLine) {
 		share: t.Share(),
 		splitBudget: t.Membership(),
 	})
-	sum := 0
+	sumOut := 0
+	sumIn := 0
 	for _, l := range t.SourceTrx().Lines() {
 		if _, err := l.SplitBudget(); err == nil {
 			res = append(res, l)
-			sum += l.Inflow() - l.Outflow()
+			sumOut += l.Outflow()
+			sumIn += l.Inflow()
 		}
 	}
-	remainder := t.SourceTrx().TotalInflow() - t.SourceTrx().TotalOutflow() - sum
 	res[0].row = data.TrxLine{
-		Outflow: int64(remainder),
-		Inflow: int64(remainder),
+		Outflow: int64(t.SourceTrx().TotalOutflow() - sumOut),
+		Inflow: int64(t.SourceTrx().TotalInflow() - sumIn),
 	}
 	return res
 }
