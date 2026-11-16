@@ -1,4 +1,4 @@
-import type { ExpenseShareSplitLine, SplitCategorization } from '../../lib/api/expenseShare'
+import type { ExpenseShareSplitLine, SplitCategorization, ExpenseShareTransaction } from '../../lib/api/expenseShare'
 import { formatDate } from '../../lib/date'
 import { formatMoney } from '../../lib/money'
 import { CheckIcon, WarningIcon } from '../icons'
@@ -7,6 +7,8 @@ import { PlusIcon } from '../../components/icons'
 import { ReactNode, MouseEventHandler, HTMLDivElement } from 'react'
 
 type TransactionSplitLineProps = {
+  budgetId: number
+  transaction: ExpenseShareTransaction
   line: ExpenseShareSplitLine
   categorizations: SplitCategorization[]
   onAdd: () => void
@@ -35,7 +37,7 @@ function InflowCell({ value }: { value: number }) {
   )
 }
 
-export default function ShareTransactionSplitLine({ line, categorizations, onAdd, onEdit }: TransactionSplitLineProps) {
+export default function ShareTransactionSplitLine({ budgetId, transaction, line, categorizations, onAdd, onEdit }: TransactionSplitLineProps) {
     return <div>
         <Row  outflow={line.outflow} inflow={line.inflow}>
             {line.splitBudgetDisplayName}
@@ -48,7 +50,7 @@ export default function ShareTransactionSplitLine({ line, categorizations, onAdd
                 </Row>
         }
         )}
-        {categorizations && 
+        {categorizations && transaction.sourceBudgetId != budgetId &&
             <Row inflow={0} outflow={0} className="text-xs" onClick={onAdd}>
               <div
                 className="ml-auto flex items-center gap-1 font-medium text-emerald-400 hover:text-emerald-300"
