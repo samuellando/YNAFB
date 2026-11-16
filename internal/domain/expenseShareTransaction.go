@@ -76,15 +76,19 @@ func (t *ExpenseShareTransaction) IsSettlement() bool {
 	return t.sourceTrx.IsSettlement()
 }
 
-func (t *ExpenseShareTransaction) SplitLines() ([]*TrxLine) {
+func (t *ExpenseShareTransaction) SplitLines(ctx context.Context) ([]*TrxLine, error) {
 	if t.IsSettlement() {
-		return nil
+		return nil, nil
+	}
+	source, err := t.SourceBudget().GetExpenseShare(ctx, t.Share().ID())
+	if err != nil {
+		return nil, err
 	}
 	res := make([]*TrxLine, 0)
 	res = append(res, &TrxLine{
 		trx: t.SourceTrx(),
 		share: t.Share(),
-		splitBudget: t.Membership(),
+		splitBudget: source,
 	})
 	sumOut := 0
 	sumIn := 0
@@ -99,7 +103,10 @@ func (t *ExpenseShareTransaction) SplitLines() ([]*TrxLine) {
 		Outflow: int64(t.SourceTrx().TotalOutflow() - sumOut),
 		Inflow: int64(t.SourceTrx().TotalInflow() - sumIn),
 	}
-	return res
+	for _, r := range res {
+		fmt.Printf("%+v\n", r)
+	}
+	return res, nil
 }
 
 func (t *ExpenseShareTransaction) SettlementLine() (*TrxLine) {
