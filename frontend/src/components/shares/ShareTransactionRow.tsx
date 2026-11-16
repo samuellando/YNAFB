@@ -70,7 +70,9 @@ export default function ShareTransactionRow({ budgetId, transaction, onAdd, onEd
       </div>
         {transaction.splitLines && transaction.splitLines.map((line) => 
             <ExpenseShareTransactionSplitLine 
+                budgetId={budgetId}
                 line={line} 
+                transaction={transaction}
                 onAdd={() => {onAdd(transaction.trxId)}}
                 onEdit={(catId) => {onEdit(transaction.trxId, catId)}}
                 categorizations={budgetId === line.splitBudgetId ? transaction.myCategorizations : undefined} />
