@@ -88,7 +88,7 @@ func marshalCategorization(cat *domain.SplitCategorization) SplitCategorization 
 // marshalShareTransaction translates an ExpenseShareTransaction view to the
 // wire shape. Split lines, settlement and categorizations resolve live;
 // absent relations stay omitted until the domain layer fills them in.
-func marshalShareTransaction(trx *domain.ExpenseShareTransaction, categorizations []SplitCategorization) ExpenseShareTransaction {
+func marshalShareTransaction(ctx context.Context, trx *domain.ExpenseShareTransaction, categorizations []SplitCategorization) (ExpenseShareTransaction, error) {
 	resp := ExpenseShareTransaction{
 		SourceBudgetId:          trx.SourceBudget().ID(),
 		SourceBudgetDisplayName: trx.SourceBudgetDisplayName(),
@@ -100,7 +100,11 @@ func marshalShareTransaction(trx *domain.ExpenseShareTransaction, categorization
 		Note:                    trx.Note(),
 	}
 	splitLines := make([]ExpenseShareSplitLine, 0)
-	for _, line := range trx.SplitLines() {
+	lines, err := trx.SplitLines(ctx)
+	if err != nil {
+		return resp, err
+	}
+	for _, line := range lines {
 		splitMembership, _ := line.SplitBudget()
 		splitLines = append(splitLines, ExpenseShareSplitLine{
 			SplitBudgetId:          splitMembership.Budget().ID(),
@@ -123,7 +127,7 @@ func marshalShareTransaction(trx *domain.ExpenseShareTransaction, categorization
 	if categorizations != nil {
 		resp.MyCategorizations = &categorizations
 	}
-	return resp
+	return resp, nil
 }
 
 // resolveCategorizationCategory loads the category for a required wire ID.
@@ -261,7 +265,11 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareShareId(ctx context.Context, req
 		for _, cat := range cats {
 			marshalled = append(marshalled, marshalCategorization(cat))
 		}
-		trxs = append(trxs, marshalShareTransaction(trx, marshalled))
+		marshalledTrx, err := marshalShareTransaction(ctx, trx, marshalled)
+		if err != nil {
+			return nil, err
+		}
+		trxs = append(trxs, marshalledTrx)
 	}
 	return GetBudgetBudgetIdExpenseShareShareId200JSONResponse{
 		Membership:   marshalMembership(share),
