@@ -93,7 +93,7 @@ func marshalShareTransaction(ctx context.Context, trx *domain.ExpenseShareTransa
 		SourceBudgetDisplayName: trx.SourceBudgetDisplayName(),
 		TrxId:                   trx.SourceTrx().ID(),
 		PayeeName:               trx.PayeeName(),
-		Date:                    trx.Date(),
+		Date:                    trx.Date().Format("2006-01-02T15:04:05Z07:00"),
 		TotalOutflow:            trx.TotalOutflow(),
 		TotalInflow:             trx.TotalInflow(),
 		Note:                    trx.Note(),
