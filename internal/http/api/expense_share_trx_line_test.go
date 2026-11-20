@@ -151,12 +151,26 @@ func TestExpenseShareTrxLineRefs(t *testing.T) {
 			continue
 		}
 		shareFound = true
-		if shareTrx.SplitLines == nil || len(*shareTrx.SplitLines) != 1 {
-			t.Fatalf("expected 1 split line, got %+v", shareTrx.SplitLines)
+		if shareTrx.SplitLines == nil || len(*shareTrx.SplitLines) != 2 {
+			t.Fatalf("expected 2 split lines (source remainder + split), got %+v", shareTrx.SplitLines)
 		}
-		split := (*shareTrx.SplitLines)[0]
-		if split.SplitBudgetId != budgetB.ID() {
-			t.Fatalf("expected splitBudgetId %d, got %d", budgetB.ID(), split.SplitBudgetId)
+		byBudget := map[int]api.ExpenseShareSplitLine{}
+		for _, split := range *shareTrx.SplitLines {
+			byBudget[split.SplitBudgetId] = split
+		}
+		sourceSplit, ok := byBudget[budgetA.ID()]
+		if !ok {
+			t.Fatalf("expected source remainder line for budget %d in %+v", budgetA.ID(), shareTrx.SplitLines)
+		}
+		if sourceSplit.SplitBudgetDisplayName != "Alice" {
+			t.Fatalf("expected source display %q, got %q", "Alice", sourceSplit.SplitBudgetDisplayName)
+		}
+		if sourceSplit.Outflow != 5000 {
+			t.Fatalf("expected source remainder outflow 5000, got %d", sourceSplit.Outflow)
+		}
+		split, ok := byBudget[budgetB.ID()]
+		if !ok {
+			t.Fatalf("expected split line for budget %d in %+v", budgetB.ID(), shareTrx.SplitLines)
 		}
 		if split.SplitBudgetDisplayName != "Bob" {
 			t.Fatalf("expected split display %q, got %q", "Bob", split.SplitBudgetDisplayName)
