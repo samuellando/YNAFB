@@ -103,9 +103,6 @@ func (t *ExpenseShareTransaction) SplitLines(ctx context.Context) ([]*TrxLine, e
 		Outflow: int64(t.SourceTrx().TotalOutflow() - sumOut),
 		Inflow: int64(t.SourceTrx().TotalInflow() - sumIn),
 	}
-	for _, r := range res {
-		fmt.Printf("%+v\n", r)
-	}
 	return res, nil
 }
 
