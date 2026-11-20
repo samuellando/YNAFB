@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"samuellando.com/YNAFB/internal/cache"
 	"samuellando.com/YNAFB/internal/data"
@@ -44,8 +45,8 @@ func (t *ExpenseShareTransaction) PayeeName() string {
 	return t.sourceTrx.Payee().Name()
 }
 
-func (t *ExpenseShareTransaction) Date() string {
-	return t.sourceTrx.Date().Format("2006-01-02T15:04:05Z07:00")
+func (t *ExpenseShareTransaction) Date() time.Time {
+	return t.sourceTrx.Date()
 }
 
 func (t *ExpenseShareTransaction) TotalOutflow() int {

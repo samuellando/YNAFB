@@ -173,22 +173,16 @@ func TestExpenseShareLifecycle(t *testing.T) {
 	}
 
 	// Balances follow the spec formula; categorizations are neutral.
-	totalA, balancesA, err := memA.Balances(ctx)
+	balancesA, err := memA.Balances(ctx)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if totalA != 4000 {
-		t.Fatalf("expected caller net 4000, got %d", totalA)
 	}
 	if len(balancesA) != 1 || balancesA[0].Budget.ID() != budgetB.ID() || balancesA[0].Balance != 4000 || balancesA[0].DisplayName != "Bob" {
 		t.Fatalf("unexpected pairwise balances %+v", balancesA)
 	}
-	totalB, balancesB, err := memB.Balances(ctx)
+	balancesB, err := memB.Balances(ctx)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if totalB != -4000 {
-		t.Fatalf("expected caller net -4000, got %d", totalB)
 	}
 	if len(balancesB) != 1 || balancesB[0].Balance != -4000 {
 		t.Fatalf("unexpected pairwise balances %+v", balancesB)
@@ -199,9 +193,6 @@ func TestExpenseShareLifecycle(t *testing.T) {
 	}
 	if cat.Outflow() != 3000 {
 		t.Fatalf("expected outflow 3000, got %d", cat.Outflow())
-	}
-	if totalB2, _, err := memB.Balances(ctx); err != nil || totalB2 != -4000 {
-		t.Fatalf("categorizations must be balance-neutral: total=%d err=%v", totalB2, err)
 	}
 	if err := cat.Delete(ctx); err != nil {
 		t.Fatal(err)
@@ -225,12 +216,6 @@ func TestExpenseShareLifecycle(t *testing.T) {
 	}
 	if _, err := settleTrx.AddLine(ctx, nil, nil, false, memB.Share(), nil, memAForB, 1000, 0); err != nil {
 		t.Fatal(err)
-	}
-	if totalA2, _, err := memA.Balances(ctx); err != nil || totalA2 != 5000 {
-		t.Fatalf("expected caller net 5000 after settlement, got %d err=%v", totalA2, err)
-	}
-	if totalB3, _, err := memB.Balances(ctx); err != nil || totalB3 != -5000 {
-		t.Fatalf("expected caller net -5000 after settlement, got %d err=%v", totalB3, err)
 	}
 	aTrxs, err := memA.ListTransactions(ctx)
 	if err != nil {

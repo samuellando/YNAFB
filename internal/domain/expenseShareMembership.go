@@ -168,11 +168,29 @@ func (m *ExpenseShareMembership) Members(ctx context.Context) ([]*ExpenseShareMe
 }
 
 func (m *ExpenseShareMembership) Balances(ctx context.Context) ([]MemberBalance, error) {
-	members, err := m.Members(ctx)
+	transactions, err := m.ListTransactions(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return m.balances(ctx, transactions)
+}
+
+func (m *ExpenseShareMembership) BalancesAsOf(ctx context.Context, d time.Time) ([]MemberBalance, error) {
 	transactions, err := m.ListTransactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]*ExpenseShareTransaction, 0)
+	for _, t := range transactions {
+		if t.Date().Before(d) {
+			filtered = append(filtered, t)
+		}
+	}
+	return m.balances(ctx, filtered)
+}
+
+func (m *ExpenseShareMembership) balances(ctx context.Context, transactions []*ExpenseShareTransaction) ([]MemberBalance, error) {
+	members, err := m.Members(ctx)
 	if err != nil {
 		return nil, err
 	}
