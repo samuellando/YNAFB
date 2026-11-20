@@ -2229,8 +2229,6 @@ export interface components {
             transactions: components["schemas"]["expenseShareTransaction"][];
         };
         expenseShareSummary: {
-            /** @description Caller net (splits I tagged others minus splits others tagged me minus settlements I sent plus settlements I received, outflow minus inflow; positive means others owe me; categorizations are balance-neutral) */
-            balance: number;
             /** @description Pairwise nets with each other active member (self excluded, zero-activity omitted) */
             memberBalances: components["schemas"]["expenseShareMemberBalance"][];
         };
