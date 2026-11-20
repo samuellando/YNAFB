@@ -38,6 +38,7 @@ type fetchedData struct {
 	allocations []*Allocation
 	goals       []*Goal
 	categories  []*Category
+	shares      []*ExpenseShareMembership
 }
 
 func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
@@ -57,11 +58,16 @@ func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
 	if err != nil {
 		return nil, err
 	}
+	shares, err := b.ListExpenseShares(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return &fetchedData{
 		trxs:        trxs,
 		allocations: allocations,
 		goals:       goals,
 		categories:  categories,
+		shares:      shares,
 	}, nil
 }
 
@@ -74,6 +80,7 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 	}
 	trxs := fetchedData.trxs
 	allocations := fetchedData.allocations
+	shares := fetchedData.shares
 	// Accumulator variables
 	incomeBeforeMonth := 0
 	incomeThisMonth := 0
@@ -81,6 +88,8 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 	spentThisMonth := 0
 	uncategorized := 0
 	allocatedThisMonth := 0
+	expenseShareTrxs := 0
+	expenseShareDebt := 0
 	// Itterate over all transactions and allocations and accumulate
 	for _, trx := range trxs {
 		categorized := 0
@@ -94,6 +103,12 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 				if line.IsIncome() {
 					incomeBeforeMonth += lineAmount
 				}
+				if line.IsSettlement() {
+					expenseShareTrxs += lineAmount
+				}
+				if line.IsSplit() {
+					expenseShareTrxs += lineAmount
+				}
 			} else if timeInsideMonth(trx.Date(), startOfMonth, endOfMonth) {
 				if _, err := line.Category(); err == nil {
 					spentThisMonth -= lineAmount
@@ -101,13 +116,30 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 				if line.IsIncome() {
 					incomeThisMonth += lineAmount
 				}
-			}
+				if line.IsSettlement() {
+					expenseShareTrxs += lineAmount
+				}
+				if line.IsSplit() {
+					expenseShareTrxs += lineAmount
+				}
+			} 
 		}
 		uncategorized += abs(trx.TotalInflow() - trx.TotalOutflow() - categorized)
 	}
 	for _, a := range allocations {
 		if timeInsideMonth(a.Month(), startOfMonth, endOfMonth) {
 			allocatedThisMonth += a.Amount()
+		}
+	}
+	for _, share := range shares {
+		balances, err := share.BalancesAsOf(ctx, endOfMonth) 
+		if err != nil {
+			return summary, err
+		}
+		for _, b := range balances {
+			if b.Balance < 0 {
+				expenseShareDebt -= b.Balance
+			}
 		}
 	}
 	// Intermediate calculations
@@ -117,7 +149,7 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 	summary.Income = incomeThisMonth
 	summary.Spent = spentThisMonth
 	summary.Uncategorized = uncategorized
-	summary.ReadyToAssign = (incomeToEndOfMonth - spentBeforeMonth - allocatedThisMonth) - calculateCarryIn(fetchedData, month)
+	summary.ReadyToAssign = (incomeToEndOfMonth - spentBeforeMonth - allocatedThisMonth - expenseShareTrxs - expenseShareDebt) - calculateCarryIn(fetchedData, month)
 	return summary, nil
 }
 
