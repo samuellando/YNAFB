@@ -133,11 +133,8 @@ export default function ShareDetail() {
           <>
             <section className="mt-6 rounded-xl border border-slate-800 bg-slate-900 p-5">
               <h2 className="text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                Balance
+                Balances
               </h2>
-              <p className={`mt-1 text-2xl font-bold tabular-nums ${balanceTone(detail.summary.balance)}`}>
-                {formatMoney(detail.summary.balance)}
-              </p>
               {detail.summary.memberBalances.length > 0 && (
                 <ul className="mt-3 space-y-1">
                   {detail.summary.memberBalances.map((b) => (

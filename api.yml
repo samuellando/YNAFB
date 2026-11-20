@@ -2118,12 +2118,8 @@ components:
     expenseShareSummary:
       type: object
       required:
-        - balance
         - memberBalances
       properties:
-        balance:
-          type: integer
-          description: "Caller net (splits I tagged others minus splits others tagged me minus settlements I sent plus settlements I received, outflow minus inflow; positive means others owe me; categorizations are balance-neutral)"
         memberBalances:
           type: array
           description: "Pairwise nets with each other active member (self excluded, zero-activity omitted)"

@@ -338,6 +338,11 @@ func (l *TrxLine) Outflow() int {
 }
 
 // The Line is a settlement
+func (l *TrxLine) IsSplit() bool {
+	return l.splitBudget != nil
+}
+
+// The Line is a settlement
 func (l *TrxLine) IsSettlement() bool {
 	return l.destBudget != nil
 }

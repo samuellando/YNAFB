@@ -36,7 +36,7 @@ func marshalMembers(members []*domain.ExpenseShareMembership) []ShareMember {
 
 // marshalSummary translates a caller-relative balance and pairwise nets to
 // the wire shape.
-func marshalSummary(balance int, balances []domain.MemberBalance) ExpenseShareSummary {
+func marshalSummary(balances []domain.MemberBalance) ExpenseShareSummary {
 	marshalled := make([]ExpenseShareMemberBalance, 0, len(balances))
 	for _, b := range balances {
 		marshalled = append(marshalled, ExpenseShareMemberBalance{
@@ -47,7 +47,6 @@ func marshalSummary(balance int, balances []domain.MemberBalance) ExpenseShareSu
 		})
 	}
 	return ExpenseShareSummary{
-		Balance:        balance,
 		MemberBalances: marshalled,
 	}
 }
@@ -250,7 +249,7 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareShareId(ctx context.Context, req
 	if err != nil {
 		return nil, err
 	}
-	balance, balances, err := share.Balances(ctx)
+	balances, err := share.Balances(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +272,7 @@ func (s ApiServer) GetBudgetBudgetIdExpenseShareShareId(ctx context.Context, req
 	}
 	return GetBudgetBudgetIdExpenseShareShareId200JSONResponse{
 		Membership:   marshalMembership(share),
-		Summary:      marshalSummary(balance, balances),
+		Summary:      marshalSummary(balances),
 		Members:      marshalMembers(members),
 		Transactions: trxs,
 	}, nil

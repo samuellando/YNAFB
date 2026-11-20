@@ -167,14 +167,14 @@ func (m *ExpenseShareMembership) Members(ctx context.Context) ([]*ExpenseShareMe
 	})
 }
 
-func (m *ExpenseShareMembership) Balances(ctx context.Context) (int, []MemberBalance, error) {
+func (m *ExpenseShareMembership) Balances(ctx context.Context) ([]MemberBalance, error) {
 	members, err := m.Members(ctx)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	transactions, err := m.ListTransactions(ctx)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	byBudget := make(map[int]*MemberBalance, len(members))
 	order := make([]int, 0, len(members))
@@ -188,9 +188,7 @@ func (m *ExpenseShareMembership) Balances(ctx context.Context) (int, []MemberBal
 		}
 		order = append(order, member.Budget().ID())
 	}
-	total := 0
 	add := func(budgetID int, amount int, settlementAmount int) {
-		total += amount
 		if pair, ok := byBudget[budgetID]; ok {
 			pair.Balance += amount
 			pair.SettlementBalance += settlementAmount
@@ -228,7 +226,7 @@ func (m *ExpenseShareMembership) Balances(ctx context.Context) (int, []MemberBal
 	for _, budgetID := range order {
 		balances = append(balances, *byBudget[budgetID])
 	}
-	return total, balances, nil
+	return balances, nil
 }
 
 func (m *ExpenseShareMembership) Update(ctx context.Context, name, displayName *string) error {
