@@ -34,11 +34,14 @@ type MonthCategory struct {
 }
 
 type fetchedData struct {
-	trxs        []*Trx
-	allocations []*Allocation
-	goals       []*Goal
-	categories  []*Category
-	shares      []*ExpenseShareMembership
+	trxs                            []*Trx
+	allocations                     []*Allocation
+	goals                           []*Goal
+	categories                      []*Category
+	shares                          []*ExpenseShareMembership
+	shareTransactions               map[int][]*ExpenseShareTransaction
+	shareTransactionSplitLines      map[int][]*TrxLine
+	shareTransactionCategorizations map[int][]*SplitCategorization
 }
 
 func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
@@ -62,12 +65,37 @@ func (b *Budget) getCalculationData(ctx context.Context) (*fetchedData, error) {
 	if err != nil {
 		return nil, err
 	}
+	shareTransactions := make(map[int][]*ExpenseShareTransaction)
+	shareTransactionsCategorizations := make(map[int][]*SplitCategorization)
+	shareTransactionSplitLines := make(map[int][]*TrxLine)
+	for _, share := range shares {
+		trxs, err := share.ListTransactions(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, trx := range trxs {
+			cats, err := trx.MyCategorizations(ctx)
+			if err != nil {
+				return nil, err
+			}
+			shareTransactionsCategorizations[trx.SourceTrx().ID()] = cats
+			lines, err := trx.MySplitLines(ctx)
+			if err != nil {
+				return nil, err
+			}
+			shareTransactionSplitLines[trx.SourceTrx().ID()] = lines
+		}
+		shareTransactions[share.share.ID()] = trxs
+	}
 	return &fetchedData{
-		trxs:        trxs,
-		allocations: allocations,
-		goals:       goals,
-		categories:  categories,
-		shares:      shares,
+		trxs:                            trxs,
+		allocations:                     allocations,
+		goals:                           goals,
+		categories:                      categories,
+		shares:                          shares,
+		shareTransactions:               shareTransactions,
+		shareTransactionSplitLines:      shareTransactionSplitLines,
+		shareTransactionCategorizations: shareTransactionsCategorizations,
 	}, nil
 }
 
@@ -80,15 +108,16 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 	}
 	trxs := fetchedData.trxs
 	allocations := fetchedData.allocations
-	shares := fetchedData.shares
 	// Accumulator variables
 	incomeBeforeMonth := 0
 	incomeThisMonth := 0
 	spentBeforeMonth := 0
 	spentThisMonth := 0
+	settledBeforeMonth := 0
+	settledThisMonth := 0
 	uncategorized := 0
 	allocatedThisMonth := 0
-	expenseShareTrxs := 0
+	expenseShareLoaned := 0
 	expenseShareDebt := 0
 	// Itterate over all transactions and allocations and accumulate
 	for _, trx := range trxs {
@@ -103,11 +132,11 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 				if line.IsIncome() {
 					incomeBeforeMonth += lineAmount
 				}
-				if line.IsSettlement() {
-					expenseShareTrxs += lineAmount
-				}
 				if line.IsSplit() {
-					expenseShareTrxs += lineAmount
+					expenseShareLoaned -= lineAmount
+				}
+				if line.IsSettlement() {
+					settledBeforeMonth -= lineAmount
 				}
 			} else if timeInsideMonth(trx.Date(), startOfMonth, endOfMonth) {
 				if _, err := line.Category(); err == nil {
@@ -116,40 +145,55 @@ func (b *Budget) GetMonthSummary(ctx context.Context, month time.Time) (MonthSum
 				if line.IsIncome() {
 					incomeThisMonth += lineAmount
 				}
-				if line.IsSettlement() {
-					expenseShareTrxs += lineAmount
-				}
 				if line.IsSplit() {
-					expenseShareTrxs += lineAmount
+					expenseShareLoaned -= lineAmount
 				}
-			} 
+				if line.IsSettlement() {
+					settledThisMonth -= lineAmount
+				}
+			}
 		}
 		uncategorized += abs(trx.TotalInflow() - trx.TotalOutflow() - categorized)
 	}
+	// Splits in expense shares count as spending as well
+	for _, cs := range fetchedData.shareTransactionCategorizations {
+		categorized := 0
+		totalIn := 0
+		totalOut := 0
+		for trxID, c := range cs {
+			for _, s := range fetchedData.shareTransactionSplitLines[trxID] {
+				totalIn += s.Inflow()
+				totalOut += s.Outflow()
+			}
+			lineAmount := c.Inflow() - c.Outflow()
+			expenseShareDebt -= lineAmount
+			if c.Transaction().Date().Before(startOfMonth) {
+				spentBeforeMonth -= lineAmount
+			} else if timeInsideMonth(c.Transaction().Date(), startOfMonth, endOfMonth) {
+				spentThisMonth -= lineAmount
+			}
+		}
+		uncategorized += abs(totalIn - totalOut - categorized)
+	}
+	// Calculate allocation for this month
 	for _, a := range allocations {
 		if timeInsideMonth(a.Month(), startOfMonth, endOfMonth) {
 			allocatedThisMonth += a.Amount()
 		}
 	}
-	for _, share := range shares {
-		balances, err := share.BalancesAsOf(ctx, endOfMonth) 
-		if err != nil {
-			return summary, err
-		}
-		for _, b := range balances {
-			if b.Balance < 0 {
-				expenseShareDebt -= b.Balance
-			}
-		}
-	}
 	// Intermediate calculations
 	incomeToEndOfMonth := incomeBeforeMonth + incomeThisMonth
+	settlementsToEndOfMonth := settledBeforeMonth + settledThisMonth
+	overSettled := 0
+	if settlementsToEndOfMonth > expenseShareDebt {
+		overSettled = settlementsToEndOfMonth - expenseShareDebt
+	}
 	// Set the final values
 	summary.Allocated = allocatedThisMonth
 	summary.Income = incomeThisMonth
 	summary.Spent = spentThisMonth
 	summary.Uncategorized = uncategorized
-	summary.ReadyToAssign = (incomeToEndOfMonth - spentBeforeMonth - allocatedThisMonth - expenseShareTrxs - expenseShareDebt) - calculateCarryIn(fetchedData, month)
+	summary.ReadyToAssign = (incomeToEndOfMonth - spentBeforeMonth - allocatedThisMonth - expenseShareLoaned - overSettled) - calculateCarryIn(fetchedData, month)
 	return summary, nil
 }
 
@@ -289,6 +333,20 @@ func aggregateCategoryMonthlyEntrties(data *fetchedData) (time.Time, time.Time, 
 					monthlyTotals[cat.ID()][month] = &monthTotals{
 						spent: -1 * lineAmount,
 					}
+				}
+			}
+		}
+	}
+	for _, cats := range data.shareTransactionCategorizations {
+		for _, cat := range cats {
+			lineAmount := cat.Inflow() - cat.Outflow()
+			month := getStartOfMonth(cat.Transaction().Date())
+			minMonth, maxMonth = timeMinMax(minMonth, maxMonth, month)
+			if m, ok := monthlyTotals[cat.Category().ID()][month]; ok {
+				m.spent -= lineAmount
+			} else {
+				monthlyTotals[cat.Category().ID()][month] = &monthTotals{
+					spent: -1 * lineAmount,
 				}
 			}
 		}

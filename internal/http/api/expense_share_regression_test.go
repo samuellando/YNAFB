@@ -154,7 +154,7 @@ func TestExpenseShareLifecycle(t *testing.T) {
 	if cat.Outflow() != 4000 || cat.Inflow() != 0 {
 		t.Fatalf("unexpected categorization amounts %+v", cat)
 	}
-	catCategory, err := cat.Category()
+	catCategory := cat.Category()
 	if err != nil {
 		t.Fatal(err)
 	}
