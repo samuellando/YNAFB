@@ -3,7 +3,6 @@ package domain
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"samuellando.com/YNAFB/internal/cache"
 	"samuellando.com/YNAFB/internal/data"
@@ -60,11 +59,8 @@ func (s *SplitCategorization) ID() int {
 	return int(s.row.ID)
 }
 
-func (s *SplitCategorization) Category() (*Category, error) {
-	if s.row.CategoryID.Valid {
-		return s.category, nil
-	}
-	return nil, fmt.Errorf("Split categorization has no category")
+func (s *SplitCategorization) Category() *Category {
+	return s.category
 }
 
 func (s *SplitCategorization) Outflow() int {

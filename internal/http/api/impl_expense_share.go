@@ -63,12 +63,11 @@ func marshalCode(code *domain.ExpenseShareCode) ExpenseShareCode {
 // to the nullable wire ID/name. The entity exposes objects (not scalar FKs),
 // so the conversion lives here in the API layer.
 func categorizationCategory(cat *domain.SplitCategorization) (categoryID *int, categoryName *string) {
-	if category, err := cat.Category(); err == nil {
-		id := category.ID()
-		name := category.Name()
-		categoryID = &id
-		categoryName = &name
-	}
+	category := cat.Category()
+	id := category.ID()
+	name := category.Name()
+	categoryID = &id
+	categoryName = &name
 	return categoryID, categoryName
 }
 

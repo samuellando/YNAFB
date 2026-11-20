@@ -87,14 +87,14 @@ func (t *ExpenseShareTransaction) SplitLines(ctx context.Context) ([]*TrxLine, e
 	}
 	res := make([]*TrxLine, 0)
 	res = append(res, &TrxLine{
-		trx: t.SourceTrx(),
-		share: t.Share(),
+		trx:         t.SourceTrx(),
+		share:       t.Share(),
 		splitBudget: source,
 	})
 	sumOut := 0
 	sumIn := 0
 	for _, l := range t.SourceTrx().Lines() {
-		if _, err := l.SplitBudget(); err == nil {
+		if l.IsSplit() {
 			res = append(res, l)
 			sumOut += l.Outflow()
 			sumIn += l.Inflow()
@@ -102,12 +102,30 @@ func (t *ExpenseShareTransaction) SplitLines(ctx context.Context) ([]*TrxLine, e
 	}
 	res[0].row = data.TrxLine{
 		Outflow: int64(t.SourceTrx().TotalOutflow() - sumOut),
-		Inflow: int64(t.SourceTrx().TotalInflow() - sumIn),
+		Inflow:  int64(t.SourceTrx().TotalInflow() - sumIn),
 	}
 	return res, nil
 }
 
-func (t *ExpenseShareTransaction) SettlementLine() (*TrxLine) {
+func (t *ExpenseShareTransaction) MySplitLines(ctx context.Context) ([]*TrxLine, error) {
+	lines, err := t.SplitLines(ctx)
+	if err != nil {
+		return nil, err
+	}
+	myLines := make([]*TrxLine, 0)
+	for _, line := range lines {
+		dest, err := line.SplitBudget()
+		if err != nil {
+			return nil, err
+		}
+		if dest == t.membership {
+			myLines = append(myLines, line)
+		}
+	}
+	return lines, nil
+}
+
+func (t *ExpenseShareTransaction) SettlementLine() *TrxLine {
 	for _, l := range t.SourceTrx().Lines() {
 		if _, err := l.DestBudget(); err == nil {
 			return l
@@ -118,7 +136,7 @@ func (t *ExpenseShareTransaction) SettlementLine() (*TrxLine) {
 
 func (t *ExpenseShareTransaction) MyCategorizations(ctx context.Context) ([]*SplitCategorization, error) {
 	if t.IsSettlement() {
-		return nil, nil 
+		return nil, nil
 	}
 	return cache.Result(ctx, fmt.Sprintf("shareCategorizations-%d-%d-%d-%d", t.membership.budget.LoginID(), t.membership.budget.ID(), t.membership.share.ID(), t.sourceTrx.ID()), func() ([]*SplitCategorization, error) {
 		rows, err := t.membership.budget.service.repo.ListCategorizations(ctx, data.ListCategorizationsParams{
