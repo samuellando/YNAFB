@@ -219,7 +219,7 @@ func (m *ExpenseShareMembership) Balances(ctx context.Context) (int, []MemberBal
 				case sourceID == m.budget.ID():
 					add(destID, amount, amount)
 				case destID == m.budget.ID():
-					add(sourceID, -amount, -amount)
+					add(sourceID, 0, amount)
 				}
 			}
 		}
@@ -289,14 +289,10 @@ func (m *ExpenseShareMembership) ListTransactionsWithMySettlements(ctx context.C
 	}
 	res := make([]*ExpenseShareTransaction, 0)
 	for _, t := range transactions {
-		if t.IsSettlement() {
-			dest, _ := t.SettlementLine().DestBudget()
-			if t.SourceBudget() == m.Budget() || dest.Budget() == m.Budget() {
-				res = append(res, t)
-			}
-		} else {
-			res = append(res, t)
+		if t.IsSettlement() && t.SourceBudget() != m.Budget() {
+			continue
 		}
+		res = append(res, t)
 	}
 	return res, nil
 }
